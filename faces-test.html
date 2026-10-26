@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faces test</title>
+<style>
+  /* Developer page (T2.1): the 8 regulars and 4 generated customers in every mood. Not part of the game. */
+  body { margin: 0; padding: 12px; background: #23393a; color: #eef6f4; font: 14px/1.3 system-ui, sans-serif; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+  .bar button { font: inherit; padding: 6px 12px; border-radius: 16px; border: 1px solid #6b9; background: #2f4c4d; color: inherit; cursor: pointer; }
+  .bar button[aria-pressed="true"] { background: #6bb8a0; color: #10201f; }
+  .bar label { margin-left: 10px; }
+  table { border-collapse: collapse; }
+  th { font-weight: 600; padding: 2px 4px; text-align: center; font-size: 12px; }
+  th.mood { writing-mode: vertical-rl; transform: rotate(180deg); }
+  td { padding: 2px; }
+  canvas { display: block; width: 117px; height: 240px; border-radius: 6px; }
+  body.one canvas { width: 195px; height: 400px; }
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<table><thead id="head"></thead><tbody id="grid"></tbody></table>
+<script type="module">
+// Developer page: draws each test face as a 390 x 800 phone scene, shown small. Optional ?bumps draws the bumps and
+// the keep-out boxes from layoutFace / faceGeometry on top, to check they sit on bare skin.
+import { faceGeometry, layoutFace } from './js/pop/logic.js';
+import { makeFaceTexture, MOODS } from './js/pop/face.js';
+import { drawPimple } from './js/pop/art.js';
+import { REGULARS, makeCustomer } from './js/data/customers.js';
+
+const W = 390;
+const H = 800;
+const params = new URLSearchParams(location.search);
+let showBumps = params.has('bumps');
+let only = MOODS.includes(params.get('mood')) ? params.get('mood') : null;
+const people = [
+  ...REGULARS.map((c) => ({ name: c.id, face: c.face, bumps: c.bumps, seed: c.id.length * 977 + c.chapter })),
+  ...[11, 22, 33, 44].map((seed, i) => { const c = makeCustomer(seed, { chapter: 2 + i }); return { name: `gen ${seed}`, face: c.face, bumps: c.bumps, seed }; }),
+];
+
+/**
+ * Draw one person in one mood into a new canvas (with bumps and keep-out boxes when asked).
+ * @param {object} p the person {face, bumps, seed}
+ * @param {string} mood the mood
+ * @returns {HTMLCanvasElement} the canvas
+ */
+function faceCanvas(p, mood) {
+  const face = faceGeometry(W, H, p.face);
+  const tex = makeFaceTexture(W, H, 1, face, p.face, { mood, redness: mood === 'grim' || mood === 'ow' ? 1 : mood === 'relief' ? 0.3 : 0, seed: p.seed });
+  if (showBumps) {
+    const ctx = tex.getContext('2d');
+    if (mood === 'grim' || mood === 'ow') for (const b of layoutFace({ seed: p.seed, face, count: p.bumps }).pimples) drawPimple(ctx, b, 0, 1, 0);
+    ctx.strokeStyle = 'rgba(0,120,255,0.8)';
+    ctx.lineWidth = 2;
+    for (const k of face.keepOut) ctx.strokeRect(k.x, k.y, k.w, k.h);
+  }
+  tex.title = `${p.name}: ${JSON.stringify(p.face)}`;
+  return tex;
+}
+
+/** Fill the table: one row per mood (or only the chosen one), one column per person. @returns {void} */
+function render() {
+  document.body.classList.toggle('one', Boolean(only));
+  const head = document.getElementById('head');
+  const grid = document.getElementById('grid');
+  head.replaceChildren();
+  grid.replaceChildren();
+  const hr = head.insertRow();
+  hr.append(document.createElement('th'));
+  for (const p of people) { const th = document.createElement('th'); th.textContent = p.name; hr.append(th); }
+  for (const mood of only ? [only] : MOODS) {
+    const tr = grid.insertRow();
+    const th = document.createElement('th');
+    th.className = 'mood';
+    th.textContent = mood;
+    tr.append(th);
+    for (const p of people) tr.insertCell().append(faceCanvas(p, mood));
+  }
+  for (const b of document.querySelectorAll('#bar button')) b.setAttribute('aria-pressed', String((b.dataset.mood || null) === only));
+}
+
+/** Build the mood switch and the bumps checkbox. @returns {void} */
+function buildBar() {
+  const bar = document.getElementById('bar');
+  for (const m of ['', ...MOODS]) {
+    const b = document.createElement('button');
+    b.dataset.mood = m;
+    b.textContent = m || 'all moods';
+    b.addEventListener('click', () => { only = m || null; render(); });
+    bar.append(b);
+  }
+  const label = document.createElement('label');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = showBumps;
+  box.addEventListener('change', () => { showBumps = box.checked; render(); });
+  label.append(box, ' bumps and keep-out boxes');
+  bar.append(label);
+}
+
+buildBar();
+render();
+</script>
+</body>
+</html>

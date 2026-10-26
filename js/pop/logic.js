@@ -1,60 +1,58 @@
-// The "pimple popper" play mode of the popper game: the pure rules, kept apart so they can be
-// tested in Node. Which mode the player chose (remembered per account on this phone), the popping-sound switch, how
-// many pimples an answer earns (Icelandic work earns golden bonus pimples), the bigger round every five answers, the
-// pimples kept for later after "Skip popping", where pimples sit on a skin patch and on the big face at the end, how
-// squeezing builds pressure, and which pimple a finger touches. No DOM, no audio, no timers here.
+// The pop scene's pure rules, kept apart so they can be tested in Node: the popping-sound switch, the kinds of bump,
+// where the face sits in the scene (face geometry), where the bumps go on that face (never on the eyes, brows or
+// mouth, never under the hair, never touching each other, each with a fingertip-sized tap target), the nose strip,
+// how squeezing builds pressure, which bump a finger touches, and the face's mood. No DOM, no audio, no timers here.
+// The kinds of bump (hold time, size, goo, tools, pay) live in data/bumps.js.
+import { bumpInfo, isImplemented } from '../data/bumps.js';
 
-export const MODE_CLASSIC = 'classic';
-export const MODE_POP = 'pop';
 const POP_SOUND_KEY = 'popper.popSound'; // "on" or "off"; nothing stored = on
 
-/** The kinds of pimple. hold = seconds of squeezing before it pops; r = radius range in px on a 200 px high patch. */
-export const PIMPLE_TYPES = {
-  whitehead: { hold: 0.7, r: [19, 24] },
-  red: { hold: 0.95, r: [21, 27] }, // a pink, swollen one; it bursts with cream-coloured goo (never blood)
-  blackhead: { hold: 0.6, r: [10, 13] }, // pulled out with tweezers
-  big: { hold: 1.5, r: [34, 40] },
-  gold: { hold: 0.8, r: [19, 23] }, // the Icelandic bonus: sparkly, pops with glitter
+/** How much one tap or key press (without holding) adds to the pressure: three of them pop a bump. */
+export const TAP_STEP = 0.34;
+
+/** The face half-width (px) at which the bump radii in data/bumps.js are used as they are; bigger faces get bigger bumps. */
+export const FACE_UNIT = 165;
+/** The smallest tap target a bump gets, in CSS px (a fingertip; SPEC section 3). */
+export const MIN_TAP = 44;
+/** The smallest drawn bump radius in CSS px (so even a blackhead is easy to see and aim at). */
+export const MIN_BUMP_R = 11;
+/** Bumps on one face in the demo (SPEC D4: 6 to 10 per customer). */
+export const FACE_BUMPS = 8;
+
+/**
+ * Where the parts of the placeholder face sit, in face units: u = -1 (left edge of the face) .. 1, v = -1 (top) .. 1
+ * (chin). The drawing (face.js) and the bump layout both read these, so bumps never land on a feature.
+ */
+export const FACE_FEATURES = {
+  hairTop: -0.86, // hairline in the middle of the forehead
+  hairCurve: 0.3, // how far the hairline dips towards the temples (v grows by hairCurve * u * u)
+  eyeU: 0.36, // eye centres at u = -eyeU and +eyeU
+  eyeV: -0.14,
+  eyeS: 0.16, // half the eye width, in rx units
+  browV: -0.36,
+  noseV: 0.16, // nose tip
+  mouthV: 0.5,
+  mouthW: 0.28, // half the mouth width, in rx units
 };
 
-/** At most this many pimples in the bank of each kind (so a long skip does not pile up hundreds). */
-export const BANK_MAX = { small: 10, big: 6, gold: 6 };
-
-/** Pops per answer: every card is Icelandic; writing or commenting on the Icelandic earns golden bonus pimples. */
-const POPS = { ok: { small: 1, gold: 0 }, comment: { small: 1, gold: 1 }, edit: { small: 2, gold: 1 } };
-
-/**
- * The storage key for the chosen mode of one account.
- * @param {string} uid the account id
- * @returns {string} the key
- */
-export function modeKey(uid) {
-  return `popper.mode.${uid || 'anon'}`;
-}
-
-/**
- * The remembered play mode of an account (Classic when nothing is stored). Never throws.
- * @param {Storage|undefined} storage e.g. localStorage
- * @param {string} uid the account id
- * @returns {'classic'|'pop'} the mode
- */
-export function loadMode(storage, uid) {
-  try { return storage?.getItem(modeKey(uid)) === MODE_POP ? MODE_POP : MODE_CLASSIC; } catch { return MODE_CLASSIC; }
-}
+// Face parts (T2.1): how each part id from data/customers.js FACE_PARTS changes the geometry. The drawing in face.js
+// and the bump layout read the same numbers, so bumps stay on bare skin for every shape, hair style and accessory.
+/** Head shape -> height of the bare-skin oval divided by its width (the drawn head outline always contains this oval). */
+export const SHAPE_ASPECT = { round: 1.2, oval: 1.3, square: 1.26, heart: 1.3, long: 1.4, chubby: 1.18 };
+/** Hair style -> [hairTop, hairCurve]: where the hairline sits (bald and mohawk show more forehead). */
+export const HAIRLINES = {
+  bald: [-1.05, 0.3], short: [-0.88, 0.3], curly: [-0.86, 0.3], long: [-0.9, 0.34], bun: [-0.92, 0.3],
+  ponytail: [-0.92, 0.3], mohawk: [-0.98, 0.3], afro: [-0.86, 0.28], bob: [-0.84, 0.3],
+};
+/** Headwear -> how low its lower edge reaches in the middle of the forehead (it follows the hairline curve). */
+export const HEADWEAR_LINES = { beanie: -0.84, 'pilot-cap': -0.84, hat: -0.88, headband: -0.9 };
+/** Eye style -> half the eye width in rx units. */
+export const EYE_SIZES = { round: 0.16, wide: 0.19, sleepy: 0.16, sparkly: 0.18, squint: 0.15, tiny: 0.1 };
+/** Mouth style -> half the mouth width in rx units. */
+export const MOUTH_WIDTHS = { smile: 0.27, flat: 0.25, wobbly: 0.26, grin: 0.31, small: 0.17, open: 0.27 };
 
 /**
- * Remember the play mode of an account. Never throws.
- * @param {Storage|undefined} storage e.g. localStorage
- * @param {string} uid the account id
- * @param {'classic'|'pop'} mode the mode
- * @returns {void}
- */
-export function saveMode(storage, uid, mode) {
-  try { storage?.setItem(modeKey(uid), mode === MODE_POP ? MODE_POP : MODE_CLASSIC); } catch { /* blocked storage: only this visit */ }
-}
-
-/**
- * Whether the popping sounds are on (on when nothing is stored). Separate from the game's other sound switch.
+ * Whether the popping sounds are on (on when nothing is stored).
  * @param {Storage|undefined} storage e.g. localStorage
  * @returns {boolean} true = on
  */
@@ -73,69 +71,7 @@ export function savePopSoundOn(storage, on) {
 }
 
 /**
- * The pimples one answer earns: OK 1, Comment 1 plus a golden bonus, Edit 2 plus a golden bonus; an answer to one of
- * our open Icelandic questions (the "doubts" batch) earns one more golden bonus.
- * @param {string} status 'ok', 'edit' or 'comment'
- * @param {string} [batch] 'ui' or 'doubts'
- * @returns {{small: number, gold: number}} plain pimples and golden bonus pimples
- */
-export function popsFor(status, batch) {
-  const base = POPS[status];
-  if (!base) return { small: 0, gold: 0 };
-  return { small: base.small, gold: base.gold + (batch === 'doubts' ? 1 : 0) };
-}
-
-/**
- * What an answer brings in pimple mode: the face finale at the end of a batch, a big round every five answers, or a
- * few pimples.
- * @param {string} status the answer
- * @param {string[]} milestones from the session ('five', 'done', ...)
- * @param {string} [batch] the batch
- * @returns {{face: boolean, small: number, big: number, gold: number}} the round
- */
-export function roundFor(status, milestones = [], batch) {
-  if (milestones.includes('done')) return { face: true, small: 0, big: 0, gold: 0 };
-  const p = popsFor(status, batch);
-  return { face: false, small: p.small, big: milestones.includes('five') ? 2 : 0, gold: p.gold };
-}
-
-/**
- * Add a round to the bank of pimples waiting to be popped (capped).
- * @param {{small: number, big: number, gold: number}} bank what waits
- * @param {{small?: number, big?: number, gold?: number}} round what to add
- * @returns {{small: number, big: number, gold: number}} the new bank
- */
-export function bankAdd(bank, round) {
-  const out = {};
-  for (const k of ['small', 'big', 'gold']) out[k] = Math.min(BANK_MAX[k], (bank?.[k] ?? 0) + (round?.[k] ?? 0));
-  return out;
-}
-
-/**
- * How many pimples wait in the bank.
- * @param {{small: number, big: number, gold: number}} bank the bank
- * @returns {number} the total
- */
-export function bankCount(bank) {
-  return (bank?.small ?? 0) + (bank?.big ?? 0) + (bank?.gold ?? 0);
-}
-
-/**
- * Take one patch's worth of pimples out of the bank. A patch with big pimples is a "big round" and ends with a
- * blackhead strip to peel off.
- * @param {{small: number, big: number, gold: number}} bank the bank
- * @returns {{take: {small: number, big: number, gold: number, strip: boolean}, rest: {small: number, big: number, gold: number}}} the patch and what is left
- */
-export function bankTake(bank) {
-  const b = bankAdd({}, bank);
-  const big = Math.min(2, b.big);
-  const small = Math.min(big ? 2 : 5, b.small); // what does not fit comes on the next patch
-  const gold = Math.min(big ? 1 : 2, b.gold);
-  return { take: { small, big, gold, strip: big > 0 }, rest: { small: b.small - small, big: b.big - big, gold: b.gold - gold } };
-}
-
-/**
- * A small seeded random number generator (mulberry32), so a patch looks the same in tests and screenshots.
+ * A small seeded random number generator (mulberry32), so a face looks the same in tests and screenshots.
  * @param {number} seed any whole number
  * @returns {() => number} a function giving numbers 0..1
  */
@@ -151,15 +87,127 @@ export function rng(seed) {
 }
 
 /**
- * The radius of a pimple type for a patch size.
- * @param {string} type a key of PIMPLE_TYPES
- * @param {() => number} rand random numbers
- * @param {number} scale patch size / 200 (0.85 .. 1.4)
- * @returns {number} radius in px
+ * Keep a number between two limits.
+ * @param {number} x the number
+ * @param {number} lo lowest
+ * @param {number} hi highest
+ * @returns {number} the clamped number
  */
-function radiusFor(type, rand, scale) {
-  const [a, b] = PIMPLE_TYPES[type].r;
-  return (a + rand() * (b - a)) * scale;
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+/**
+ * How big the head is in the scene (T1.0b, SPEC D10): the head (forehead to chin) is about 70 percent of the scene
+ * height, but never wider than about two thirds of the scene, so the studio room shows around it in both phone
+ * orientations (above the head and shoulders in portrait, at the sides in landscape).
+ */
+export const FACE_FIT = {
+  heightPart: 0.35, // ry = this part of the scene height (so the head, 2 * ry, is 70 percent of it)
+  widthPart: 0.34, // rx is at most this part of the scene width (the hair and ears stick out a little further)
+  smallRx: 128, // ...but on narrow phones rx may grow to this (at most 0.4 of the width), so 8 bumps still fit
+  maxRy: 0.39, // ry never more than this part of the height, so hair and shoulders still fit (big heads, size > 1)
+  centre: 0.5, // where the face centre likes to sit, as a part of the scene height
+  topRoom: 0.05, // room above the hair, as a part of the scene height
+  chinMax: 0.88, // the chin stays above this part of the height, so some shoulders always show
+};
+
+/**
+ * Where the head sits in a scene of a given size: a head-and-shoulders picture with the room (backdrop) around it,
+ * in portrait or landscape (see FACE_FIT).
+ * @param {number} width scene width in CSS px
+ * @param {number} height scene height in CSS px
+ * @param {{size?: number, shape?: string, hair?: string, eyes?: string, mouth?: string, accessories?: string[]}} [spec]
+ *   the face spec (face part ids from data/customers.js FACE_PARTS); size scales the head (0.7 .. 1.15, 1 = as big as
+ *   fits). Unknown or missing ids fall back to an oval head, short hair, round eyes and a smile.
+ * @returns {{width: number, height: number, cx: number, cy: number, rx: number, ry: number, unit: number,
+ *   features: object, keepOut: {x: number, y: number, w: number, h: number}[]}} the face geometry in CSS px
+ *   (cx, cy = face centre, rx, ry = half-width and half-height of the bare-skin oval, unit = bump size factor,
+ *   features = FACE_FEATURES adjusted for this face's parts, keepOut = boxes around the eyes, brows, mouth and any
+ *   accessory lying on the face (glasses, moustache, clown nose, flower) where no bump may sit)
+ */
+export function faceGeometry(width, height, spec = {}) {
+  const size = clamp(Number(spec.size) || 1, 0.7, 1.15);
+  const shape = SHAPE_ASPECT[spec.shape] ? spec.shape : 'oval';
+  const aspect = SHAPE_ASPECT[shape];
+  const F = FACE_FIT;
+  const byWidth = Math.max(width * F.widthPart, Math.min(width * 0.4, F.smallRx)) * aspect;
+  const ry = Math.min(Math.min(byWidth, height * F.heightPart) * size, height * F.maxRy, width * 0.41 * aspect);
+  const rx = ry / aspect;
+  const cx = width / 2;
+  // Room for the hair above and some shoulders below; otherwise near the middle.
+  const lo = ry * 1.12 + height * F.topRoom;
+  const hi = Math.min(height - ry * 1.2, height * F.chinMax - ry);
+  const cy = clamp(height * F.centre, lo, Math.max(lo, hi));
+  const acc = Array.isArray(spec.accessories) ? spec.accessories : [];
+  const [hairTop0, hairCurve] = HAIRLINES[spec.hair] ?? HAIRLINES.short;
+  // A hat, cap or band hides the hair line; its lower edge then counts as the hairline.
+  const hairTop = Math.max(hairTop0, ...acc.map((a) => HEADWEAR_LINES[a] ?? -9));
+  const f = {
+    ...FACE_FEATURES, shape, aspect, hairTop, hairCurve,
+    eyeS: EYE_SIZES[spec.eyes] ?? FACE_FEATURES.eyeS, mouthW: MOUTH_WIDTHS[spec.mouth] ?? FACE_FEATURES.mouthW,
+  };
+  /** A keep-out box from face units. @param {number} u0 left @param {number} v0 top @param {number} u1 right @param {number} v1 bottom @returns {object} box in px */
+  const box = (u0, v0, u1, v1) => ({ x: cx + u0 * rx, y: cy + v0 * ry, w: (u1 - u0) * rx, h: (v1 - v0) * ry });
+  const glasses = acc.includes('glasses') || acc.includes('sunglasses');
+  const keepOut = [];
+  for (const s of [-1, 1]) { // each eye with its eyebrow (and lens), with room for the brows to move with the mood
+    const inner = glasses ? 0.22 : 0.25; // lenses are at most 0.21 wide, so the nose between them stays free
+    const outer = glasses ? 0.28 : 0.25;
+    const [u0, u1] = s < 0 ? [-f.eyeU - outer, -f.eyeU + inner] : [f.eyeU - inner, f.eyeU + outer];
+    keepOut.push(box(u0, f.browV - 0.1, u1, f.eyeV + (glasses ? 0.2 : 0.12)));
+  }
+  keepOut.push(box(-(f.mouthW + 0.06), f.mouthV - 0.1, f.mouthW + 0.06, f.mouthV + 0.12));
+  if (glasses) {
+    keepOut.push(box(-0.12, f.eyeV - 0.07, 0.12, f.eyeV + 0.03)); // the bridge over the nose
+    for (const s of [-1, 1]) keepOut.push(box(s > 0 ? f.eyeU + 0.2 : -1.02, f.eyeV - 0.08, s > 0 ? 1.02 : -f.eyeU - 0.2, f.eyeV + 0.01)); // the arms
+  }
+  if (acc.includes('moustache')) keepOut.push(box(-0.36, f.noseV + 0.08, 0.36, f.noseV + 0.3));
+  if (acc.includes('clown-nose')) {
+    const n = 0.13; // the ball's radius plus a little, in rx units
+    keepOut.push({ x: cx - n * rx, y: cy + f.noseV * ry - n * rx, w: 2 * n * rx, h: 2 * n * rx });
+  }
+  if (acc.includes('flower')) keepOut.push(box(0.56, -1.05, 1.05, -0.58)); // tucked in the hair above the right temple
+  return { width, height, cx, cy, rx, ry, unit: rx / FACE_UNIT, features: f, keepOut };
+}
+
+/**
+ * How to move things from one face geometry to another of the same person (the window was resized or the phone
+ * turned): a uniform scale and a shift, so every point keeps its place on the face (same face units u, v).
+ * @param {{cx: number, cy: number, rx: number}} from the old face geometry
+ * @param {{cx: number, cy: number, rx: number}} to the new face geometry (same face spec, other scene size)
+ * @returns {{s: number, tx: number, ty: number}} new x = x * s + tx, new y = y * s + ty, new radius = r * s
+ */
+export function faceMap(from, to) {
+  const s = to.rx / from.rx;
+  return { s, tx: to.cx - from.cx * s, ty: to.cy - from.cy * s };
+}
+
+/**
+ * Turn face units into scene px.
+ * @param {{cx: number, cy: number, rx: number, ry: number}} face the face geometry
+ * @param {number} u -1 (left edge) .. 1
+ * @param {number} v -1 (top) .. 1 (chin)
+ * @returns {{x: number, y: number}} the point in CSS px
+ */
+export function facePoint(face, u, v) {
+  return { x: face.cx + u * face.rx, y: face.cy + v * face.ry };
+}
+
+/**
+ * Whether a round bump fits on bare skin: inside the face oval (with a margin) and below the hairline.
+ * @param {object} face the face geometry
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} r radius
+ * @returns {boolean} true when it is all on skin
+ */
+export function onSkin(face, x, y, r) {
+  const m = r * 1.15 + 2;
+  const ex = (x - face.cx) / Math.max(1, face.rx - m);
+  const ey = (y - face.cy) / Math.max(1, face.ry - m);
+  if (ex * ex + ey * ey > 1) return false;
+  const u = (x - face.cx) / face.rx;
+  const hairline = face.cy + (face.features.hairTop + face.features.hairCurve * u * u + 0.07) * face.ry; // the fringe tufts hang a little below the line
+  return y - r * 1.1 > hairline;
 }
 
 /**
@@ -171,103 +219,154 @@ function radiusFor(type, rand, scale) {
  * @param {number} gap extra space
  * @returns {boolean} true when they overlap
  */
-function hitsBox(x, y, r, box, gap) {
+export function hitsBox(x, y, r, box, gap = 0) {
   if (!box) return false;
-  return x + r + gap > box.x && x - r - gap < box.x + box.w && y + r + gap > box.y && y - r - gap < box.y + box.h;
+  const nx = clamp(x, box.x, box.x + box.w);
+  const ny = clamp(y, box.y, box.y + box.h);
+  return Math.hypot(x - nx, y - ny) < r + gap;
 }
 
 /**
- * Where the pimples sit on a skin patch: spread out, never touching each other, the edges or the strip.
- * @param {{seed: number, width: number, height: number, small?: number, big?: number, gold?: number, strip?: boolean,
- *   avoid?: {x: number, y: number, r: number}[]}} o the patch (avoid = pimples already there, when more are added)
- * @returns {{pimples: object[], strip: {x: number, y: number, w: number, h: number, dots: {x: number, y: number}[]}|null}} the layout
+ * The radius of the circle a finger can tap to reach a bump on its own (never smaller than MIN_TAP / 2).
+ * @param {number} r the bump's drawn radius
+ * @returns {number} radius in CSS px
  */
-export function layoutPatch({ seed, width, height, small = 0, big = 0, gold = 0, strip = false, avoid = [] }) {
+export function tapRadius(r) {
+  return Math.max(r, MIN_TAP / 2);
+}
+
+/**
+ * The smallest distance two bumps' centres may have: their pictures (with the pink halo) do not touch, and their
+ * fingertip tap circles do not overlap.
+ * @param {number} a radius of one bump
+ * @param {number} b radius of the other
+ * @returns {number} distance in CSS px
+ */
+export function minGap(a, b) {
+  return Math.max((a + b) * 1.3 + 6, tapRadius(a) + tapRadius(b) + 4);
+}
+
+/**
+ * Where the blackhead strip goes on the face: across the nose.
+ * @param {object} face the face geometry
+ * @param {number} seed random seed for the dots under it
+ * @returns {{x: number, y: number, w: number, h: number, dots: {x: number, y: number}[]}} the strip
+ */
+export function noseStrip(face, seed) {
+  const rand = rng(seed + 7);
+  const w = face.rx * 0.56;
+  const h = face.ry * 0.12;
+  const s = { x: face.cx - w / 2, y: face.cy + face.ry * (face.features.noseV - 0.14), w, h, dots: [] };
+  for (let i = 0; i < 9; i += 1) s.dots.push({ x: s.x + w * 0.12 + rand() * w * 0.76, y: s.y + h * 0.25 + rand() * h * 0.5 });
+  return s;
+}
+
+/** Where bumps like to sit, in face units, in the order they are filled (forehead, cheeks, nose, chin, jaw, temple). */
+const ZONES = [
+  { name: 'nose', u: [-0.07, 0.07], v: [0.0, 0.12] },
+  { name: 'cheekL', u: [-0.7, -0.46], v: [0.08, 0.3] },
+  { name: 'cheekR', u: [0.46, 0.7], v: [0.08, 0.3] },
+  { name: 'forehead', u: [-0.14, 0.14], v: [-0.7, -0.5] },
+  { name: 'chin', u: [-0.16, 0.16], v: [0.72, 0.84] },
+  { name: 'jawL', u: [-0.68, -0.4], v: [0.46, 0.72] },
+  { name: 'jawR', u: [0.4, 0.68], v: [0.46, 0.72] },
+  { name: 'temple', u: [0.4, 0.62], v: [-0.68, -0.52] }, // the side is picked at random
+];
+/** Anywhere on the face, used only when a bump does not fit in its own zone. */
+const ANYWHERE = { name: 'any', u: [-0.8, 0.8], v: [-0.72, 0.9] };
+
+/**
+ * Which kind each bump on a face is: the nose gets a blackhead, one cheek a big one, one other spot a golden one, the
+ * rest whiteheads and pink ones. So every face has all five kinds once it has 4 or more bumps.
+ * @param {string[]} zones the zone name of each bump
+ * @param {() => number} rand random numbers
+ * @returns {string[]} the kind of each bump
+ */
+function typesFor(zones, rand) {
+  const flip = rand() < 0.5 ? 1 : 0;
+  const types = zones.map((z, i) => ((i + flip) % 2 ? 'whitehead' : 'red')); // taking 3 of these still leaves both kinds
+  const take = (want) => {
+    const free = zones.map((z, i) => i).filter((i) => (!want || want.includes(zones[i])) && !['blackhead', 'big', 'gold'].includes(types[i]));
+    return free.length ? free[Math.floor(rand() * free.length)] : -1;
+  };
+  const steps = [['blackhead', ['nose']], ['big', ['cheekL', 'cheekR']], ['gold', null]];
+  for (const [type, want] of steps) {
+    if (!isImplemented(type)) continue; // a kind switched off in data/bumps.js is never placed
+    let i = take(want);
+    if (i < 0) i = take(null);
+    if (i >= 0) types[i] = type;
+  }
+  return types;
+}
+
+/**
+ * Where the bumps sit on a face: one per zone (forehead, cheeks, nose, chin, jaw, temple), each on bare skin, off the
+ * eyes, brows and mouth, off the nose strip, and far enough apart that every bump has its own fingertip tap circle.
+ * A bump that does not fit shrinks a little (never below MIN_BUMP_R) and, as a last resort, may go anywhere on the face.
+ * @param {{seed: number, face: object, count?: number, strip?: boolean}} o the random seed, the face geometry from
+ *   faceGeometry(), how many bumps, and whether there is a blackhead strip on the nose
+ * @returns {{pimples: {id: string, type: string, x: number, y: number, r: number, axis: number, hold: number,
+ *   zone: string}[], strip: object|null}} the layout in scene px
+ */
+export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false }) {
   const rand = rng(seed);
-  const scale = Math.max(0.85, Math.min(1.4, Math.min(width, height) / 200));
-  let box = null;
-  if (strip) {
-    const w = Math.min(width * 0.42, 150 * scale);
-    const h = 40 * scale;
-    box = { x: (width - w) / 2, y: height - h - 10 * scale, w, h, dots: [] };
-    for (let i = 0; i < 9; i += 1) box.dots.push({ x: box.x + 12 * scale + rand() * (w - 24 * scale), y: box.y + 10 * scale + rand() * (h - 20 * scale) });
+  const box = strip ? noseStrip(face, seed) : null;
+  const templeSide = rand() < 0.5 ? -1 : 1;
+  const zones = [];
+  for (let i = 0; i < count; i += 1) {
+    const z = ZONES[i % ZONES.length];
+    zones.push(z.name === 'temple' ? { ...z, u: [z.u[0] * templeSide, z.u[1] * templeSide].sort((a, b) => a - b) } : z);
   }
-  const types = [];
-  for (let i = 0; i < big; i += 1) types.push('big');
-  for (let i = 0; i < gold; i += 1) types.push('gold');
-  for (let i = 0; i < small; i += 1) {
-    const k = rand();
-    types.push(k < 0.42 ? 'whitehead' : k < 0.82 ? 'red' : 'blackhead');
-  }
-  const pimples = [];
-  const placed = [...avoid];
-  types.forEach((type, i) => {
-    let r = radiusFor(type, rand, scale);
-    let best = null;
-    // Look for a free spot; when the patch is crowded, try again with a slightly smaller pimple.
-    for (let level = 0; level < 5 && !best; level += 1) {
-      for (let tries = 0; tries < 160; tries += 1) {
-        const x = r * 1.3 + rand() * Math.max(1, width - r * 2.6);
-        const y = r * 1.3 + rand() * Math.max(1, height - r * 2.6);
-        if (hitsBox(x, y, r, box, 8 * scale)) continue;
-        if (placed.every((p) => Math.hypot(p.x - x, p.y - y) > (p.r + r) * 1.4 + 6)) { best = { x, y }; break; }
-      }
-      if (!best) r *= 0.85;
-    }
-    if (!best) best = { x: r * 1.3 + rand() * Math.max(1, width - r * 2.6), y: r * 1.3 + rand() * Math.max(1, (box ? box.y : height) - r * 2.6) };
-    const p = { id: `p${seed}-${i}`, type, x: best.x, y: best.y, r, axis: rand() * Math.PI, hold: PIMPLE_TYPES[type].hold };
-    pimples.push(p);
-    placed.push(p);
+  const types = typesFor(zones.map((z) => z.name), rand);
+  const items = zones.map((zone, i) => {
+    const [a, b] = bumpInfo(types[i]).radius;
+    return { i, zone, type: types[i], r: Math.max(MIN_BUMP_R, (a + rand() * (b - a)) * face.unit) };
   });
-  return { pimples, strip: box };
-}
-
-/**
- * The places on the big face where it may break out: forehead, cheeks, nose sides, chin and jaw; never on the eyes,
- * the eyebrows or the mouth. Positions are in face units: u = -1 (left edge) .. 1, v = -1 (top) .. 1 (chin).
- * @param {number} seed any whole number
- * @returns {{u: number, v: number, type: string, size: number}[]} 16 spots (size scales the radius)
- */
-export function faceSpots(seed) {
-  const rand = rng(seed);
-  const zones = [
-    { n: 5, u: [-0.55, 0.55], v: [-0.66, -0.5] }, // forehead (under the fringe)
-    { n: 3, u: [-0.72, -0.4], v: [0.1, 0.42] }, // left cheek
-    { n: 3, u: [0.4, 0.72], v: [0.1, 0.42] }, // right cheek
-    { n: 2, u: [-0.24, 0.24], v: [0.74, 0.86] }, // chin
-    { n: 2, u: [-0.62, 0.62], v: [0.55, 0.68] }, // jaw
-    { n: 1, u: [0.14, 0.2], v: [0.12, 0.22] }, // beside the nose
-  ];
-  const kinds = ['big', 'red', 'whitehead', 'gold', 'red', 'whitehead', 'big', 'red', 'whitehead', 'blackhead', 'gold', 'whitehead', 'red', 'red', 'whitehead', 'blackhead'];
-  const spots = [];
-  let i = 0;
-  for (const z of zones) {
-    for (let k = 0; k < z.n; k += 1) {
-      let u = 0;
-      let v = 0;
-      for (let tries = 0; tries < 60; tries += 1) {
-        u = z.u[0] + rand() * (z.u[1] - z.u[0]);
-        v = z.v[0] + rand() * (z.v[1] - z.v[0]);
-        if (spots.every((s) => Math.hypot(s.u - u, s.v - v) > 0.2)) break;
-      }
-      // Jaw spots on the sides only (the mouth sits in the middle).
-      if (z.v[0] === 0.55 && Math.abs(u) < 0.42) u = Math.sign(u || 1) * (0.42 + rand() * 0.2);
-      spots.push({ u, v, type: kinds[i % kinds.length], size: 0.85 + rand() * 0.3 });
-      i += 1;
+  // The biggest first, so they get the roomiest places.
+  const order = [...items].sort((p, q) => q.r - p.r);
+  const placed = [];
+  /**
+   * Whether a bump may sit at a point.
+   * @param {number} x centre x
+   * @param {number} y centre y
+   * @param {number} r radius
+   * @returns {boolean} true when the spot is free
+   */
+  const fits = (x, y, r) => onSkin(face, x, y, r)
+    && !face.keepOut.some((k) => hitsBox(x, y, r * 1.1, k, 2))
+    && !hitsBox(x, y, r, box, 8)
+    && placed.every((p) => Math.hypot(p.x - x, p.y - y) >= minGap(p.r, r));
+  /**
+   * Look for a free point in a zone.
+   * @param {{u: number[], v: number[]}} zone the zone in face units
+   * @param {number} r radius
+   * @param {number} tries how many random points to try
+   * @returns {{x: number, y: number}|null} the point, or null
+   */
+  const search = (zone, r, tries) => {
+    for (let k = 0; k < tries; k += 1) {
+      const pt = facePoint(face, zone.u[0] + rand() * (zone.u[1] - zone.u[0]), zone.v[0] + rand() * (zone.v[1] - zone.v[0]));
+      if (fits(pt.x, pt.y, r)) return pt;
     }
+    return null;
+  };
+  for (const it of order) {
+    let r = it.r;
+    let pt = null;
+    for (let level = 0; level < 4 && !pt; level += 1) {
+      pt = search(it.zone, r, 120);
+      if (!pt) r = Math.max(MIN_BUMP_R, r * 0.9);
+    }
+    if (!pt) pt = search(ANYWHERE, r, 600);
+    if (!pt) { r = MIN_BUMP_R; pt = search(ANYWHERE, r, 1200); }
+    if (!pt) pt = facePoint(face, (it.zone.u[0] + it.zone.u[1]) / 2, (it.zone.v[0] + it.zone.v[1]) / 2); // never seen in tests
+    placed.push({ ...it, x: pt.x, y: pt.y, r });
   }
-  return spots;
-}
-
-/**
- * Whether a face spot would sit on an eye, an eyebrow or the mouth (used by the tests and as a safety net).
- * @param {{u: number, v: number}} s the spot
- * @returns {boolean} true when it is in a place where pimples must not be
- */
-export function onFeature({ u, v }) {
-  const eye = Math.abs(v + 0.2) < 0.17 && Math.abs(Math.abs(u) - 0.38) < 0.24;
-  const mouth = Math.abs(v - 0.5) < 0.12 && Math.abs(u) < 0.36;
-  return eye || mouth;
+  placed.sort((p, q) => p.i - q.i);
+  const pimples = placed.map((p) => ({
+    id: `f${seed}-${p.i}`, type: p.type, x: p.x, y: p.y, r: p.r, axis: rand() * Math.PI, hold: bumpInfo(p.type).hold, zone: p.zone.name,
+  }));
+  return { pimples, strip: box };
 }
 
 /**
@@ -275,7 +374,7 @@ export function onFeature({ u, v }) {
  * @param {number} pressure now, 0..1
  * @param {number} dt seconds since the last step
  * @param {boolean} holding whether the finger is still down
- * @param {number} hold seconds a full squeeze takes for this pimple
+ * @param {number} hold seconds a full squeeze takes for this bump
  * @returns {number} the new pressure, 0..1 (1 = it pops)
  */
 export function pressureStep(pressure, dt, holding, hold) {
@@ -284,36 +383,55 @@ export function pressureStep(pressure, dt, holding, hold) {
 }
 
 /**
- * Pressure after one key press or tap without holding (three presses pop a pimple).
+ * Seconds of holding a kind of bump needs before it pops (from data/bumps.js).
+ * @param {string} type a bump id, e.g. 'big'
+ * @returns {number} seconds (1 for an unknown kind, so nothing breaks)
+ */
+export function holdTime(type) {
+  return bumpInfo(type)?.hold ?? 1;
+}
+
+/**
+ * Pressure after one key press or tap without holding (three presses pop a bump).
  * @param {number} pressure now
  * @returns {number} the new pressure
  */
 export function tapPressure(pressure) {
-  return Math.min(1, pressure + 0.34);
+  return Math.min(1, pressure + TAP_STEP);
 }
 
 /**
- * The pimple a finger touches: the nearest one still there, within a generous distance for fingers.
- * @param {{x: number, y: number, r: number, popped?: boolean}[]} pimples the pimples
+ * The bump a finger touches: first the one whose own tap circle holds the touch; otherwise, within a generous distance
+ * for fingers (at least MIN_TAP / 2 + 4 px), the one whose edge is nearest (so a small bump next to a big one can still be hit).
+ * @param {{x: number, y: number, r: number, popped?: boolean}[]} pimples the bumps
  * @param {number} x touch x
  * @param {number} y touch y
- * @returns {object|null} the pimple, or null
+ * @returns {object|null} the bump, or null
  */
 export function hitTest(pimples, x, y) {
+  // First choice: the bump whose own tap circle holds the touch (the nearest centre if several do).
+  let own = null;
+  let ownD = Infinity;
+  for (const p of pimples) {
+    if (p.popped) continue;
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d <= tapRadius(p.r) && d < ownD) { own = p; ownD = d; }
+  }
+  if (own) return own;
   let best = null;
   let bestD = Infinity;
   for (const p of pimples) {
     if (p.popped) continue;
     const d = Math.hypot(p.x - x, p.y - y);
-    if (d <= Math.max(p.r * 2, 26) && d < bestD) { best = p; bestD = d; }
+    if (d <= Math.max(p.r * 2, MIN_TAP / 2 + 4) && d - p.r < bestD) { best = p; bestD = d - p.r; }
   }
   return best;
 }
 
 /**
- * How the big face looks while it is being cleared.
- * @param {number} cleared pimples popped
- * @param {number} total pimples at the start
+ * How the face looks while it is being cleared.
+ * @param {number} cleared bumps popped
+ * @param {number} total bumps at the start
  * @param {boolean} [healed] the last cream is on
  * @returns {'sad'|'meh'|'happy'|'glow'} the mood
  */
@@ -323,13 +441,4 @@ export function faceMood(cleared, total, healed = false) {
   if (f < 0.34) return 'sad';
   if (f < 0.8) return 'meh';
   return 'happy';
-}
-
-/**
- * The steps of a patch after the popping: peel the strip (big rounds and the face), wipe it clean, then the cream.
- * @param {boolean} hasStrip whether the patch has a blackhead strip
- * @returns {string[]} the steps in order
- */
-export function stepsFor(hasStrip) {
-  return hasStrip ? ['pop', 'strip', 'wipe', 'cream'] : ['pop', 'wipe', 'cream'];
 }

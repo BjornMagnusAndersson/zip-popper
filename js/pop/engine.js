@@ -1,12 +1,15 @@
-// The moving part of the pimple-popper mode (T2.17d): one canvas scene with a skin patch (or the big face) and its
-// pimples. Press and hold a pimple and pressure builds: two finger dents push in, the skin around it stretches (a
-// small mesh warp of the skin picture), the head swells and shines, and then it pops with a wet sound, a buzz, worms
-// and drops of glossy goo (and splats on the "lens" for the big ones). Blackheads are pulled out with tweezers; big
-// rounds and the face have a blackhead strip to peel off. When everything is out: wipe the goo away with a cotton pad,
+// The moving part of the pop scene: one canvas with the full face (its picture is the "texture") and its bumps.
+// Press and hold a bump and pressure builds: two finger dents push in, the skin around it stretches (a
+// small mesh warp of the picture), the head swells and shines, and then it pops with a wet sound, a buzz, worms
+// and drops of glossy goo (and splats on the "lens" for the big ones). Blackheads are pulled out with tweezers; a
+// face may have a blackhead strip on the nose to peel off. When everything is out: wipe the goo away with a cotton pad,
 // then cream goes on and a clean sweep leaves the skin smooth. Reduced motion: no wobble, no splats, fades instead of
 // sweeps, still fully playable. Keyboard: Enter or Space squeezes the next pimple, peels, or wipes for you.
-// The drawing loop only runs while something moves; dispose() stops it.
-import { pressureStep, tapPressure, hitTest, rng } from './logic.js';
+// The drawing loop only runs while something moves; dispose() stops it. resize() moves everything to a new scene size
+// (phone turned, window resized) without starting over. The face picture may be see-through around the person, so the
+// studio room drawn behind the canvas (backdrop.js) shows through.
+import { pressureStep, tapPressure, hitTest, rng, holdTime } from './logic.js';
+import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
   drawTweezers, drawFinger,
@@ -22,6 +25,22 @@ const WIPE_DONE = 0.8; // part of the goo that must be wiped before it counts as
  * @returns {number} eased value
  */
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+/**
+ * A bump ready for the scene: its own copy with pressure and animation state, and its hold time from data/bumps.js
+ * when the layout did not give one.
+ * @param {object} p a bump like those from layoutFace
+ * @param {boolean} reduced reduced motion (it appears at once)
+ * @returns {object} the scene's bump
+ */
+const sceneBump = (p, reduced) => ({ ...p, hold: p.hold ?? holdTime(p.type), pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0 });
+
+/**
+ * Whether a bump comes out with tweezers (a pull, no goo) instead of a squeeze.
+ * @param {object} p the bump
+ * @returns {boolean} true for tweezer bumps (blackheads)
+ */
+const pulled = (p) => bumpInfo(p.type)?.needsTool === 'tweezers';
 
 /**
  * The affine map that takes three source points to three destination points.
@@ -46,14 +65,17 @@ function affine(s, d) {
  * @param {{width: number, height: number, dpr?: number, texture: HTMLCanvasElement, pimples: object[], strip?: object|null,
  *   reduced?: boolean, sound?: {play: (name: string, o?: object) => void}, buzz?: (p: number|number[]) => void,
  *   onPop?: (p: object, left: number) => void, onStep?: (step: string) => void, onDone?: () => void}} o options
- * @returns {object} add(pimples), left(), step(), setTexture(tex), targets(), stripBox(), keyPress(), dispose()
+ * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), size(), keyPress(),
+ *   dispose()
  */
 export function createPopScene(canvas, o) {
-  const w = o.width;
-  const h = o.height;
+  let w = o.width; // changed only by resize()
+  let h = o.height;
   const dpr = o.dpr ?? Math.min(2, globalThis.devicePixelRatio || 1);
   const reduced = Boolean(o.reduced);
-  const scale = Math.max(0.6, Math.min(1.6, Math.min(w, h) / 260));
+  /** Size factor for goo, pad and tools at a scene size. @param {number} sw width @param {number} sh height @returns {number} factor */
+  const sizeFactor = (sw, sh) => Math.max(0.6, Math.min(1.6, Math.min(sw, sh) / 260));
+  let scale = sizeFactor(w, h);
   const rand = rng(Math.round(w * 13 + h * 7 + o.pimples.length));
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
@@ -64,7 +86,7 @@ export function createPopScene(canvas, o) {
   let time = 0;
   let disposed = false;
   let step = 'pop'; // pop (pimples and strip, any order) | wipe | cream | done
-  const pimples = o.pimples.map((p) => ({ ...p, pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0 }));
+  const pimples = o.pimples.filter((p) => isImplemented(p.type)).map((p) => sceneBump(p, reduced)); // unbuilt kinds are skipped
   const strip = o.strip ? { ...o.strip, q: 0, lift: 0, off: false, flying: false } : null;
   const marks = []; // pink spots where pimples were (healed by the cream)
   const strands = []; // goo worms
@@ -269,7 +291,8 @@ export function createPopScene(canvas, o) {
    * @returns {void}
    */
   function squirt(p) {
-    const gold = p.type === 'gold';
+    const info = bumpInfo(p.type);
+    const gold = info?.goo === 'gold';
     const count = p.type === 'big' ? 2 : 1;
     for (let i = 0; i < count; i += 1) {
       const ang = -Math.PI / 2 + (rand() - 0.5) * 2.6;
@@ -279,7 +302,7 @@ export function createPopScene(canvas, o) {
         speed: max / (p.type === 'big' ? 0.55 : 0.35), w: p.r * (p.type === 'big' ? 0.3 : 0.42), gold, pts: [],
       });
     }
-    const n = { whitehead: 4, red: 6, big: 12, gold: 8 }[p.type] ?? 4;
+    const n = info?.drops ?? 4;
     for (let i = 0; i < n; i += 1) {
       const a = rand() * Math.PI * 2;
       const v = (30 + rand() * 110) * scale;
@@ -303,7 +326,7 @@ export function createPopScene(canvas, o) {
     p.pressure = 0;
     if (hold?.p === p) hold = null;
     if (keyHold?.p === p) keyHold = null;
-    if (p.type === 'blackhead') {
+    if (pulled(p)) {
       tweezers.push({ x: p.x, y: p.y, t: 0, r: p.r });
       play('tweeze');
       buzz(14);
@@ -312,8 +335,8 @@ export function createPopScene(canvas, o) {
       play(p.type === 'big' ? 'pop_big' : p.type === 'gold' ? 'pop_gold' : 'pop_small');
       buzz(p.type === 'big' ? [30, 40, 50] : 24);
     }
-    marks.push({ x: p.x, y: p.y, r: p.r * (p.type === 'blackhead' ? 0.9 : 1.1) });
-    if (!reduced) { p.wob = p.type === 'blackhead' ? 0 : 0.55; p.wobV = 0; }
+    marks.push({ x: p.x, y: p.y, r: p.r * (pulled(p) ? 0.9 : 1.1) });
+    if (!reduced) { p.wob = pulled(p) ? 0 : 0.55; p.wobV = 0; }
     const left = pimples.filter((q) => !q.popped).length;
     try { o.onPop?.(p, left); } catch (e) { console.warn('onPop failed:', e); }
     maybeNextStep();
@@ -350,10 +373,36 @@ export function createPopScene(canvas, o) {
     const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
     for (const s of strands) drawStrand(dc, s);
     for (const b of blobs) drawDrop(dc, b);
+    let found = scanGoo(dirt, dc);
+    if (!found) {
+      // No pixel access: count the goo by its positions instead.
+      const cols = Math.ceil(w / WIPE_CELL);
+      const cells = new Uint8Array(cols * Math.ceil(h / WIPE_CELL));
+      let count = 0;
+      for (const s of [...strands.flatMap((st) => st.pts), ...blobs]) {
+        const i = Math.floor(s.y / WIPE_CELL) * cols + Math.floor(s.x / WIPE_CELL);
+        if (cells[i] === 0) { cells[i] = 1; count += 1; }
+      }
+      found = { cells, cols, rows: Math.ceil(h / WIPE_CELL), count };
+    }
+    strands.length = 0;
+    blobs.length = 0;
+    const { cells, cols, rows, count } = found;
+    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad: { x: w - 40 * scale, y: h - 40 * scale }, last: null, id: null, auto: null, fade: 0 };
+    setStep('wipe');
+  }
+
+  /**
+   * Which cells of the goo layer still have goo on them (cells WIPE_CELL px wide).
+   * @param {HTMLCanvasElement} dirt the goo layer (scene size times dpr)
+   * @param {CanvasRenderingContext2D} dc its context
+   * @returns {{cells: Uint8Array, cols: number, rows: number, count: number}|null} 1 = goo in that cell; null = no pixel access
+   */
+  function scanGoo(dirt, dc) {
     const cols = Math.ceil(w / WIPE_CELL);
     const rows = Math.ceil(h / WIPE_CELL);
     const cells = new Uint8Array(cols * rows); // 1 = goo here, 2 = wiped
-    let dirty = 0;
+    let count = 0;
     try {
       const data = dc.getImageData(0, 0, dirt.width, dirt.height).data;
       for (let r = 0; r < rows; r += 1) {
@@ -364,20 +413,75 @@ export function createPopScene(canvas, o) {
               if (data[(Math.floor(yy * dpr) * dirt.width + Math.floor(xx * dpr)) * 4 + 3] > 40) { found = true; break; }
             }
           }
-          if (found) { cells[r * cols + c] = 1; dirty += 1; }
+          if (found) { cells[r * cols + c] = 1; count += 1; }
         }
       }
     } catch {
-      // No pixel access: count the goo by its positions instead.
-      for (const s of [...strands.flatMap((st) => st.pts), ...blobs]) {
-        const i = Math.floor(s.y / WIPE_CELL) * cols + Math.floor(s.x / WIPE_CELL);
-        if (cells[i] === 0) { cells[i] = 1; dirty += 1; }
-      }
+      return null;
     }
-    strands.length = 0;
-    blobs.length = 0;
-    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, dirty), clean: 0, pad: { x: w - 40 * scale, y: h - 40 * scale }, last: null, id: null, auto: null, fade: 0 };
-    setStep('wipe');
+    return { cells, cols, rows, count };
+  }
+
+  /**
+   * The scene got a new size (window resized, phone turned): move and scale everything so each bump, mark, bit of
+   * goo and the strip keep their places on the face. Nothing is made new: popped bumps stay popped.
+   * @param {number} width new width in CSS px
+   * @param {number} height new height in CSS px
+   * @param {HTMLCanvasElement} tex the face picture for the new size
+   * @param {{s: number, tx: number, ty: number}} m the move (logic.js faceMap): x' = x * s + tx, y' = y * s + ty, r' = r * s
+   * @returns {void}
+   */
+  function resize(width, height, tex, m) {
+    const { s, tx, ty } = m;
+    /** Move a thing that has x and y (and optionally a size field). @param {object} p the thing @param {string[]} [sizes] fields to scale @returns {void} */
+    const mv = (p, sizes = ['r']) => {
+      p.x = p.x * s + tx;
+      p.y = p.y * s + ty;
+      for (const k of sizes) if (typeof p[k] === 'number') p[k] *= s;
+    };
+    const oldW = w;
+    const oldH = h;
+    w = width;
+    h = height;
+    scale = sizeFactor(w, h);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    texture = tex;
+    for (const p of pimples) mv(p);
+    for (const k of marks) mv(k);
+    for (const st of strands) {
+      mv(st, ['len', 'max', 'speed', 'w']);
+      st.curl /= s; // the same bend over the longer or shorter worm
+      st.sag /= s;
+      for (const pt of st.pts) mv(pt, []);
+    }
+    for (const d of drops) mv(d, ['vx', 'vy', 'r']);
+    for (const b of blobs) mv(b);
+    for (const sp of splats) mv(sp, ['r', 'drip']);
+    for (const tw of tweezers) mv(tw);
+    if (strip) {
+      mv(strip, ['w', 'h']);
+      for (const d of strip.dots) mv(d, []);
+    }
+    if (peel) peel.x0 = peel.x0 * s + tx;
+    if (cream) for (const d of cream.dollops) mv(d);
+    if (wipe) {
+      // Redraw the goo layer at the new size and count again what is left; keep the share already wiped.
+      const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
+      dc.save();
+      dc.translate(tx, ty);
+      dc.scale(s, s);
+      dc.drawImage(wipe.dirt, 0, 0, oldW, oldH);
+      dc.restore();
+      const done = Math.min(0.99, wipe.clean / wipe.dirty);
+      const found = scanGoo(dirt, dc) ?? { cells: new Uint8Array(Math.ceil(w / WIPE_CELL) * Math.ceil(h / WIPE_CELL)), cols: Math.ceil(w / WIPE_CELL), rows: Math.ceil(h / WIPE_CELL), count: 0 };
+      const dirty = Math.max(1, Math.round(found.count / (1 - done)));
+      Object.assign(wipe, { dirt, dc, cells: found.cells, cols: found.cols, rows: found.rows, dirty, clean: dirty - found.count, last: null });
+      mv(wipe.pad, []);
+      if (found.count === 0 && !wipe.fade) wipe.fade = 0.0001;
+    }
+    render();
+    kick();
   }
 
   /**
@@ -417,7 +521,7 @@ export function createPopScene(canvas, o) {
     kick();
   }
 
-  /** Wipe for the player (keyboard): the pad sweeps back and forth across the patch. @returns {void} */
+  /** Wipe for the player (keyboard): the pad sweeps back and forth across the scene. @returns {void} */
   function autoWipe() {
     if (!wipe || wipe.fade || wipe.auto) return;
     wipe.auto = { t: 0 };
@@ -564,7 +668,7 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) {
       const a = (p.popped ? 0 : p.pressure) + p.wob;
       const shake = !reduced && !p.popped && p.pressure > 0.8 ? Math.sin(time * 70) * 0.03 : 0;
-      if (p.type !== 'blackhead' && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
+      if (!pulled(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
     }
     for (const m of marks) {
       const alpha = sx === null ? fadeAll : m.x < sx ? 0 : 1;
@@ -582,7 +686,7 @@ export function createPopScene(canvas, o) {
     }
     // Tweezers: open over a blackhead while it is squeezed, then pull the plug up and away.
     for (const p of pimples) {
-      if (p.type === 'blackhead' && !p.popped && p.pressure > 0.02) drawTweezers(ctx, p.x, p.y, 1 - p.pressure, scale);
+      if (pulled(p) && !p.popped && p.pressure > 0.02) drawTweezers(ctx, p.x, p.y, 1 - p.pressure, scale);
     }
     for (const tw of tweezers) {
       const up = smooth(tw.t / 0.6) * 46 * scale;
@@ -721,13 +825,13 @@ export function createPopScene(canvas, o) {
 
   return {
     /**
-     * Add more pimples while the patch is open (they grow in). Only while popping.
-     * @param {object[]} list pimples from layoutPatch
+     * Add more bumps while popping (they grow in). Only while popping.
+     * @param {object[]} list bumps like those from layoutFace
      * @returns {boolean} true when they were added
      */
     add(list) {
       if (step !== 'pop') return false;
-      for (const p of list) pimples.push({ ...p, pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0 });
+      for (const p of list) if (isImplemented(p.type)) pimples.push(sceneBump(p, reduced)); // unbuilt kinds are skipped
       kick();
       return true;
     },
@@ -743,6 +847,9 @@ export function createPopScene(canvas, o) {
      * @returns {void}
      */
     setTexture(tex) { texture = tex; kick(); if (!raf) render(); },
+    resize,
+    /** The scene size now. @returns {{w: number, h: number}} CSS px */
+    size: () => ({ w, h }),
     keyPress,
     /** Stop the loop and the listeners. @returns {void} */
     dispose() {

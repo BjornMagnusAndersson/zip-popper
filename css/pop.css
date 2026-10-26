@@ -1,71 +1,78 @@
-/* The pimple-popper play mode of the popper game: the bottom sheet with the skin patch and the full-screen
-   face finale. Loaded by pop-mode.js itself (not in index.html), only when someone plays Pimple popper.
-   The mode choice, the in-game switch and the chip live in review.css (they show in Classic too).
-   The skin and pimples are drawn on canvas. */
+/* The pop scene (pop-mode.js): a header with the title, bumps left, the sound switch and "New face"; the stage with
+   the studio room (backdrop canvas) and the face canvas on top; the hint line; and the "all clear" card at the end.
+   Fills its container. Portrait and desktop: header, stage and hint stacked. A phone held sideways (landscape, low
+   height): the stage fills everything and a smaller header and the hint float over the room at the sides, so the face
+   stays big (SPEC D10). The face and bumps are drawn on canvas. Every button is at least 44 px for fingers. */
 
-/* ---- The sheet ---- */
-.pop-layer { position: relative; z-index: 40; }
-.pop-sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-width: 560px; margin: 0 auto;
-  height: 300px; display: flex; flex-direction: column; overflow: hidden;
-  background: #2b1d1a; color: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
-  padding-bottom: env(safe-area-inset-bottom); transform: translateY(105%);
+.pop-game {
+  position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
+  background: #5c6857; color: #102a28; font-family: system-ui, sans-serif;
 }
-.pop-sheet.is-open { transform: none; }
-@media (prefers-reduced-motion: no-preference) {
-  .pop-sheet { transition: transform 240ms cubic-bezier(.2, .9, .3, 1); }
-  .pop-finale { transition: opacity 260ms ease-out; }
+.pop-head {
+  flex: none; display: flex; align-items: center; gap: 8px; position: relative; z-index: 2;
+  padding: calc(6px + env(safe-area-inset-top)) 10px 6px 14px; background: rgba(16, 42, 40, 0.88); color: #fff;
 }
-.pop-sheet__head { flex: none; display: flex; align-items: center; gap: 8px; height: 64px; padding: 6px 10px 6px 14px; overflow: hidden; }
-.pop-finale .pop-sheet__head { height: auto; min-height: 64px; }
-.pop-sheet__titles { flex: 1; min-width: 0; overflow: hidden; }
-.pop-sheet__title { margin: 0; font-weight: 800; font-size: 1.02rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pop-sheet__count { display: flex; align-items: center; gap: 8px; white-space: nowrap; margin: 2px 0 0; font-size: 0.85rem; color: #f3d9cf; min-height: 1.3em; }
-.pop-bonus[hidden] { display: none; }
-.pop-finale .pop-sheet__title { white-space: normal; }
-.pop-bonus {
-  display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 0.76rem; font-weight: 800; line-height: 1.6;
-  background: linear-gradient(135deg, #ffe58a, #f5b82e); color: #5a3a00; vertical-align: 1px; white-space: nowrap;
-}
-.pop-sheet .pop-sound, .pop-finale .pop-sound { color: #fff; background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.25); }
-.pop-sheet .pop-sound--off, .pop-finale .pop-sound--off { color: #c9b3ab; }
-.pop-skip {
-  flex: none; min-height: 40px; padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 0.9rem; font-weight: 700;
-  color: #fff; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); cursor: pointer;
-}
-.pop-skip:hover { background: rgba(255, 255, 255, 0.24); }
-.pop-skip:focus-visible, .pop-canvas:focus-visible { outline: 3px solid #ffd166; outline-offset: -3px; }
-.pop-sheet__stage { flex: 1; min-height: 0; display: flex; justify-content: center; overflow: hidden; }
-.pop-canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: pointer; }
-.pop-sheet__foot { flex: none; display: flex; align-items: center; gap: 10px; height: 56px; padding: 6px 10px 6px 14px; }
-.pop-sheet__hint { flex: 1; min-width: 0; margin: 0; font-size: 0.88rem; line-height: 1.3; color: #f3d9cf; max-height: 100%; overflow: hidden; }
-.pop-finale .pop-sheet__foot { height: auto; min-height: 56px; }
+.pop-titles { flex: 1; min-width: 0; }
+.pop-title { margin: 0; font-weight: 800; font-size: 1.05rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-count { margin: 2px 0 0; font-size: 0.85rem; color: #f3d9cf; min-height: 1.3em; white-space: nowrap; }
 
-/* While the sheet is open the answer buttons sit right above it in one slim row, so answering never has to wait
-   and the Icelandic line stays in view. */
-.review-page.has-pop-sheet { padding-bottom: var(--pop-h, 300px); }
-.review-page.has-pop-sheet .review-actions {
-  bottom: var(--pop-h, 300px); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 10px; padding-bottom: 8px;
+.pop-btn {
+  flex: none; min-width: 44px; min-height: 44px; padding: 6px 14px; border-radius: 999px; font: inherit; font-size: 0.92rem;
+  font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); cursor: pointer;
 }
-.review-page.has-pop-sheet .review-actions > .review-actions__row { display: contents; }
-.review-page.has-pop-sheet .review-actions > .review-actions__row--small { display: none; }
-.review-page.has-pop-sheet .review-actions .review-btn { min-height: 48px; padding: 4px 6px; font-size: 0.9rem; }
+.pop-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.pop-btn:focus-visible, .pop-canvas:focus-visible { outline: 3px solid #ffd166; outline-offset: -3px; }
+.pop-sound { display: grid; place-items: center; width: 44px; padding: 0; }
+.pop-sound svg { width: 24px; height: 24px; }
+.pop-sound--off { color: #c9b3ab; }
 
-/* ---- The face finale ---- */
-.pop-finale {
-  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #a7d1cc; color: #102a28;
-  opacity: 0;
+/* The stage: the room canvas and the face canvas lie on top of each other, both the stage's full size. */
+.pop-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.pop-backdrop, .pop-canvas { position: absolute; left: 0; top: 0; display: block; }
+.pop-backdrop { pointer-events: none; }
+.pop-canvas {
+  touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; /* no blue flash over the face on Android after each press */
 }
-.pop-finale.is-open { opacity: 1; }
-.pop-finale__head { background: rgba(16, 42, 40, 0.86); color: #fff; padding-top: calc(8px + env(safe-area-inset-top)); }
-.pop-finale__stage { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
-.pop-finale__foot { background: rgba(16, 42, 40, 0.86); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
-.pop-finale__foot .pop-sheet__hint { color: #fff; }
-.pop-finale__done {
-  position: absolute; left: 16px; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto;
+.pop-btn { -webkit-tap-highlight-color: transparent; }
+
+.pop-foot { flex: none; position: relative; z-index: 2; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); background: rgba(16, 42, 40, 0.88); color: #fff; }
+.pop-foot[hidden] { display: none; }
+.pop-hint { margin: 0; font-size: 0.9rem; line-height: 1.3; min-height: 2.6em; }
+
+.pop-done {
+  position: absolute; z-index: 3; left: 16px; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto;
   display: grid; gap: 10px; padding: 16px; text-align: center; border-radius: 20px; background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); color: #102a28;
 }
-.pop-finale__done[hidden] { display: none; }
-.pop-finale__done-text { margin: 0; font-size: 1.25rem; font-weight: 800; }
-.pop-finale__done .review-btn { color: #062b2b; background: #5eead4; border-color: #5eead4; }
+.pop-done[hidden] { display: none; }
+.pop-done__text { margin: 0; font-size: 1.25rem; font-weight: 800; }
+.pop-btn--main { color: #062b2b; background: #5eead4; border-color: #5eead4; }
+.pop-btn--main:hover { background: #7ff0de; }
+
+/* A phone held sideways: the room and face use the whole height; the header splits into a small title card at the
+   top left and the buttons at the top right; the hint is a small card at the bottom left. The face sits in the middle
+   (about a third of the width), so these cards only cover the room at the sides. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .pop-stage { position: absolute; inset: 0; }
+  .pop-head {
+    position: absolute; top: 0; left: 0; right: 0; align-items: flex-start; background: none; pointer-events: none;
+    padding: calc(8px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 0 calc(10px + env(safe-area-inset-left));
+  }
+  .pop-head > * { pointer-events: auto; }
+  .pop-titles {
+    flex: 0 1 auto; max-width: 28%; margin-right: auto; padding: 5px 12px 6px; border-radius: 14px;
+    background: rgba(16, 42, 40, 0.82);
+  }
+  .pop-title { font-size: 0.95rem; }
+  .pop-count { font-size: 0.8rem; min-height: 1.2em; }
+  .pop-head .pop-btn { background: rgba(16, 42, 40, 0.82); }
+  .pop-head .pop-btn:hover { background: rgba(40, 72, 68, 0.9); }
+  .pop-foot {
+    position: absolute; left: calc(10px + env(safe-area-inset-left)); bottom: calc(10px + env(safe-area-inset-bottom));
+    max-width: min(30%, 270px); padding: 8px 12px; border-radius: 14px; background: rgba(16, 42, 40, 0.82);
+  }
+  .pop-hint { font-size: 0.82rem; min-height: 0; }
+  .pop-done { left: auto; right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); max-width: 26%; padding: 12px; }
+  .pop-done__text { font-size: 1.05rem; }
+}
