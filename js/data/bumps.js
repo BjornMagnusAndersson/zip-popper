@@ -62,6 +62,23 @@ export const BUMPS = {
   },
 };
 
+/**
+ * Decoys (T1.3b, SPEC D12-6): moles, freckles and beauty marks drawn as part of the face. They are not bumps: they
+ * never pop, never count as "left", and pressing one with a squeezing, pulling or strip tool gives an Ow.
+ * - counts: chance of 0, 1, 2 or 3 decoys on a face (adds up to 1).
+ * - kinds: weight = how often this kind is picked; radius = [smallest, biggest] drawn radius on a FACE_UNIT face
+ *   (like bumps); dots = [fewest, most] tiny dots in a freckle cluster (the whole cluster is ONE decoy).
+ */
+export const DECOYS = {
+  counts: [0.2, 0.35, 0.3, 0.15],
+  kinds: {
+    mole: { weight: 3, radius: [4.5, 6] }, // a small dark raised dot
+    beauty: { weight: 2, radius: [2.6, 3.4] }, // a tiny dark dot
+    freckles: { weight: 3, radius: [9, 12], dots: [3, 5] }, // 3 to 5 tiny dots
+    suspicious: { weight: 1, radius: [9, 11] }, // bigger, brown and flat: looks a bit like a bump, but is not one
+  },
+};
+
 /** Every bump id, in table order. */
 export const BUMP_IDS = Object.keys(BUMPS);
 

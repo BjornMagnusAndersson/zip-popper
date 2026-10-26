@@ -292,7 +292,7 @@ export function createPopMode({
   function showOw(c, at) {
     c.round = registerOw(c.round);
     drawCount();
-    const bubble = el('p', 'pop-ow', t('pop.ow'));
+    const bubble = el('p', 'pop-ow', t(at.type === 'decoy' ? 'pop.owDecoy' : 'pop.ow')); // a mole is not a bump
     bubble.setAttribute('aria-hidden', 'true'); // the counter line says it for screen readers
     bubble.style.left = `${at.x}px`;
     bubble.style.top = `${at.y}px`;
@@ -437,7 +437,7 @@ export function createPopMode({
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
       width: w, height: h, dpr, reduced: prefersReducedMotion(), sound, buzz,
-      texture: faceTexture(c), pimples: lay.pimples, strip: lay.strip,
+      texture: faceTexture(c), pimples: lay.pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       onOw: (at) => { if (current === c) showOw(c, at); },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },

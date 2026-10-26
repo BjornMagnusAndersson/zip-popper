@@ -12,7 +12,7 @@
 // cotton pad squeeze, tweezers pull blackheads, the nose strip sticks on the dotty nose and is peeled off, the warm
 // cloth held on the face fills a warm meter (bumps pop faster for a while), the patch sticks on popped spots. The wrong
 // tool on a bump is an "Ow": no pressure, no pop, ouch lines, and onOw tells the controller (wince, counter).
-import { pressureStep, tapPressure, hitTest, rng, holdTime, grownRadius } from './logic.js';
+import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
@@ -21,7 +21,7 @@ import {
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
-  drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints,
+  drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
 } from './art.js';
 
 const GRID = 8; // mesh cells across the squeezed area
@@ -92,7 +92,7 @@ function affine(s, d) {
 /**
  * Create a pimple scene on a canvas.
  * @param {HTMLCanvasElement} canvas the canvas (its CSS size should be width x height)
- * @param {{width: number, height: number, dpr?: number, texture: HTMLCanvasElement, pimples: object[], strip?: object|null,
+ * @param {{width: number, height: number, dpr?: number, texture: HTMLCanvasElement, pimples: object[], strip?: object|null, decoys?: object[],
  *   reduced?: boolean, sound?: {play: (name: string, o?: object) => void}, buzz?: (p: number|number[]) => void,
  *   onPop?: (p: object, left: number) => void, onStep?: (step: string) => void, onDone?: () => void,
  *   tool?: string, face?: {cx: number, cy: number, rx: number, ry: number}, tools?: string[],
@@ -126,6 +126,9 @@ export function createPopScene(canvas, o) {
   const pimples = o.pimples.filter((p) => isImplemented(p.type)).map((p) => sceneBump(p, reduced)); // unbuilt kinds are skipped
   // The nose strip: tiny dots on the nose until the strip is stuck on (nose strip tool), then peeled off.
   const strip = o.strip ? { ...o.strip, q: 0, lift: 0, off: false, flying: false, stuck: false } : null;
+  // Decoys (T1.3b): moles, freckles and beauty marks on the skin. They never pop and never count as left; pressing
+  // one with a squeezing, pulling or strip tool is an Ow. They stay on the face to the end.
+  const decoys = (o.decoys ?? []).map((d) => ({ ...d, dots: d.dots ?? [] }));
   let tool = toolInfo(o.tool)?.implemented ? o.tool : START_TOOL; // the tool in hand
   const usable = Array.isArray(o.tools) ? o.tools : null; // tools the keyboard may pick
   const face = o.face ? { cx: o.face.cx, cy: o.face.cy, rx: o.face.rx, ry: o.face.ry } : null; // the skin oval
@@ -526,6 +529,7 @@ export function createPopScene(canvas, o) {
     for (const hn of horns) mv(hn);
     for (const hr of hairs) mv(hr, ['reach']);
     for (const pa of patches) mv(pa);
+    for (const d of decoys) mv(d);
     if (face) Object.assign(face, { cx: face.cx * s + tx, cy: face.cy * s + ty, rx: face.rx * s, ry: face.ry * s });
     if (warmHold) mv(warmHold, []);
     for (const st of strands) {
@@ -653,6 +657,7 @@ export function createPopScene(canvas, o) {
       if (p.type === 'gold' && !p.popped && !reduced) busy = true; // it twinkles
       if (p.ouch !== undefined && time - p.ouch < 0.7) busy = true; // ouch lines after an Ow
     }
+    if (decoys.some((d) => d.ouch !== undefined && time - d.ouch < 0.7)) busy = true; // ouch lines round a pressed mole
     // The warm meter: fills while the warm cloth is held on the face, then slowly cools.
     const warmBefore = warmth;
     warmth = warmStep(warmth, dt, Boolean(warmHold) && step === 'pop');
@@ -793,6 +798,7 @@ export function createPopScene(canvas, o) {
       ctx.restore();
     }
     if (irr.level > 0.02 && face) drawIrritation(irr.level); // redder, blotchy cheeks while irritated (no motion)
+    for (const d of decoys) drawDecoy(ctx, d); // moles, freckles and beauty marks are part of the skin
     for (const m of marks) {
       const alpha = sx === null ? fadeAll : m.x < sx ? 0 : 1;
       if (alpha > 0) drawMark(ctx, m, alpha);
@@ -853,6 +859,10 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) { // ouch lines round a bump that got the wrong tool
       const age = p.ouch === undefined ? Infinity : time - p.ouch;
       if (age < 0.7) drawOuch(ctx, p.x, p.y, p.r, age / 0.7, reduced);
+    }
+    for (const d of decoys) { // ouch lines round a decoy that was pressed
+      const age = d.ouch === undefined ? Infinity : time - d.ouch;
+      if (age < 0.7) drawOuch(ctx, d.x, d.y, Math.max(d.r, 9 * scale), age / 0.7, reduced);
     }
     if (strip && !strip.off && strip.stuck) {
       ctx.save();
@@ -989,8 +999,9 @@ export function createPopScene(canvas, o) {
   }
 
   /**
-   * A wrong-tool or rough press: no pressure and no pop; ouch lines, the "ow" sound, a buzz, and the controller is told.
-   * @param {object} p the bump
+   * A wrong-tool or rough press, or a press on a decoy: no pressure and no pop; ouch lines, the "ow" sound, a buzz,
+   * the irritation rise, and the controller is told.
+   * @param {object} p the bump or decoy (type 'decoy')
    * @returns {void}
    */
   function ow(p) {
@@ -1047,6 +1058,8 @@ export function createPopScene(canvas, o) {
       if (hitTest(pimples, pt.x, pt.y)) note('patchFirst');
       return false;
     }
+    const decoy = hitDecoy(decoys, pimples, pt.x, pt.y); // a mole or freckles: never a bump, always an Ow
+    if (decoy && !onStrip) { ow(decoy); return false; }
     const p = hitTest(pimples, pt.x, pt.y);
     if (use === 'strip') {
       if (onStrip || (p && p.zone === 'nose' && strip && !strip.off)) { // stick the strip on the nose
@@ -1146,6 +1159,7 @@ export function createPopScene(canvas, o) {
   canvas.addEventListener('pointercancel', onUp);
   // Debug and smoke-test hook: where the pimples still are (scene coordinates = CSS pixels of the canvas).
   canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type }));
+  canvas.popDecoys = () => decoys.map((d) => ({ x: d.x, y: d.y, r: d.r, kind: d.kind })); // for browser checks, like popTargets
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
   canvas.popStep = () => step;
   canvas.popTool = () => tool;

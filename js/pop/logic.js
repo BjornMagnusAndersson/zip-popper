@@ -3,7 +3,7 @@
 // mouth, never under the hair, never touching each other, each with a fingertip-sized tap target), the nose strip,
 // how squeezing builds pressure, which bump a finger touches, and the face's mood. No DOM, no audio, no timers here.
 // The kinds of bump (hold time, size, goo, tools, pay) live in data/bumps.js.
-import { BUMP_IDS, bumpInfo, isImplemented } from '../data/bumps.js';
+import { BUMP_IDS, bumpInfo, isImplemented, DECOYS } from '../data/bumps.js';
 
 const POP_SOUND_KEY = 'popper.popSound'; // "on" or "off"; nothing stored = on
 
@@ -412,7 +412,91 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false }) {
     }
     return b;
   });
-  return { pimples, strip: box };
+  return { pimples, strip: box, decoys: layoutDecoys(seed, face, pimples, box) };
+}
+
+/** Where decoys may sit, in face units: cheeks, temples, jaw, chin and beside the mouth (the classic beauty mark). */
+const DECOY_AREA = { u: [-0.82, 0.82], v: [-0.62, 0.88] };
+
+/**
+ * The decoys on a face (T1.3b): 0 to 3 moles, beauty marks, freckle clusters or a suspicious mole (data/bumps.js
+ * DECOYS). Each is on bare skin, off the eyes, brows, mouth, accessories and nose strip, and its fingertip tap circle
+ * overlaps no bump's tap circle (room is kept for a growing bump's full size) and no other decoy's. A decoy that finds
+ * no free spot is left out. It uses its own random numbers, so the bumps of a seed stay where they were before.
+ * @param {number} seed the face's random seed
+ * @param {object} face the face geometry from faceGeometry()
+ * @param {{x: number, y: number, r: number, rMax?: number}[]} pimples the bumps already laid out
+ * @param {{x: number, y: number, w: number, h: number}|null} strip the nose strip, or null
+ * @returns {{id: string, type: 'decoy', kind: string, x: number, y: number, r: number,
+ *   dots: {u: number, v: number, s: number}[]}[]} the decoys in scene px (dots: freckle offsets and sizes as parts of r)
+ */
+export function layoutDecoys(seed, face, pimples, strip) {
+  const rand = rng(seed * 31 + 977);
+  let n = 0;
+  for (let roll = rand(), acc = 0; n < DECOYS.counts.length; n += 1) {
+    acc += DECOYS.counts[n];
+    if (roll < acc) break;
+  }
+  n = Math.min(n, DECOYS.counts.length - 1);
+  const kinds = Object.entries(DECOYS.kinds);
+  const total = kinds.reduce((s, [, k]) => s + k.weight, 0);
+  const out = [];
+  // The nose, from between the brows to below the tip: a mole there sits right between the eyes or looks like a blackhead.
+  const f = face.features;
+  const nose = { x: face.cx - 0.24 * face.rx, y: face.cy + (f.browV - 0.04) * face.ry, w: 0.48 * face.rx, h: (f.noseV - f.browV + 0.2) * face.ry };
+  for (let i = 0; i < n; i += 1) {
+    let pick = rand() * total;
+    const [kind, info] = kinds.find(([, k]) => (pick -= k.weight) < 0) ?? kinds[0];
+    if (kind === 'suspicious' && out.some((d) => d.kind === 'suspicious')) continue; // one suspicious mole is enough
+    const r = (info.radius[0] + rand() * (info.radius[1] - info.radius[0])) * face.unit;
+    const tap = tapRadius(r);
+    /** Whether a decoy may sit at a point. @param {number} x centre x @param {number} y centre y @returns {boolean} free */
+    const fits = (x, y) => onSkin(face, x, y, r + 3)
+      && !face.keepOut.some((k) => hitsBox(x, y, r * 1.2 + 4, k, 2))
+      && !hitsBox(x, y, tap, strip, 4)
+      && !hitsBox(x, y, r + 2, nose)
+      && pimples.every((p) => Math.hypot(p.x - x, p.y - y) >= tapRadius(p.rMax ?? p.r) + tap + 4)
+      && out.every((d) => Math.hypot(d.x - x, d.y - y) >= tapRadius(d.r) + tap + 4);
+    let pt = null;
+    for (let k = 0; k < 300 && !pt; k += 1) {
+      const q = facePoint(face, DECOY_AREA.u[0] + rand() * (DECOY_AREA.u[1] - DECOY_AREA.u[0]),
+        DECOY_AREA.v[0] + rand() * (DECOY_AREA.v[1] - DECOY_AREA.v[0]));
+      if (fits(q.x, q.y)) pt = q;
+    }
+    if (!pt) continue;
+    const dots = [];
+    if (info.dots) {
+      const m = info.dots[0] + Math.floor(rand() * (info.dots[1] - info.dots[0] + 1));
+      for (let j = 0; j < m; j += 1) {
+        const a = (j / m) * Math.PI * 2 + rand() * 0.9;
+        const d = 0.25 + rand() * 0.55;
+        dots.push({ u: Math.cos(a) * d, v: Math.sin(a) * d, s: 0.16 + rand() * 0.1 });
+      }
+    }
+    out.push({ id: `d${seed}-${i}`, type: 'decoy', kind, x: pt.x, y: pt.y, r, axis: rand() * Math.PI, dots });
+  }
+  return out;
+}
+
+/**
+ * The decoy a finger touches, if any: one whose tap circle holds the touch, but never when the touch is inside a
+ * bump's own tap circle (the bump wins). Used before hitTest, so a press on a mole is never taken as a near-miss bump.
+ * @param {{x: number, y: number, r: number}[]} decoys the decoys
+ * @param {{x: number, y: number, r: number, popped?: boolean}[]} pimples the bumps
+ * @param {number} x touch x
+ * @param {number} y touch y
+ * @returns {object|null} the decoy, or null
+ */
+export function hitDecoy(decoys, pimples, x, y) {
+  if (!decoys?.length) return null;
+  if (pimples.some((p) => !p.popped && Math.hypot(p.x - x, p.y - y) <= tapRadius(p.r))) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const d of decoys) {
+    const dist = Math.hypot(d.x - x, d.y - y);
+    if (dist <= tapRadius(d.r) && dist < bestD) { best = d; bestD = dist; }
+  }
+  return best;
 }
 
 /**

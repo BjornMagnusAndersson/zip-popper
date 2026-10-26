@@ -354,6 +354,45 @@ export function drawMark(ctx, m, alpha = 1) {
 }
 
 /**
+ * A decoy drawn as part of the skin (T1.3b): a small raised mole, a tiny beauty mark, a freckle cluster, or a bigger
+ * flat brown "suspicious mole". No redness glow and no shine like a bump; dark tones with some see-through, so they
+ * read on light and dark skin alike.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{kind: string, x: number, y: number, r: number, axis?: number, dots?: {u: number, v: number, s: number}[]}} d the decoy
+ * @returns {void}
+ */
+export function drawDecoy(ctx, d) {
+  const { x, y, r } = d;
+  ctx.save();
+  if (d.kind === 'freckles') {
+    ctx.fillStyle = 'rgba(122,70,38,0.72)';
+    for (const f of d.dots ?? []) {
+      ctx.beginPath(); ctx.arc(x + f.u * r, y + f.v * r, Math.max(1.3, f.s * r), 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (d.kind === 'beauty') {
+    ctx.fillStyle = 'rgba(42,24,18,0.9)';
+    ctx.beginPath(); ctx.arc(x, y, Math.max(1.8, r), 0, Math.PI * 2); ctx.fill();
+  } else if (d.kind === 'suspicious') { // flat and brown, a bit lopsided: two overlapping soft ovals, no shine
+    ctx.translate(x, y);
+    ctx.rotate(d.axis ?? 0);
+    ctx.fillStyle = 'rgba(112,68,40,0.82)';
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(78,46,28,0.55)';
+    ctx.beginPath(); ctx.ellipse(r * 0.22, r * 0.08, r * 0.6, r * 0.5, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(64,36,22,0.5)';
+    ctx.lineWidth = Math.max(1, r * 0.1);
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2); ctx.stroke();
+  } else { // mole: a small dark raised dot with a soft little highlight
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, 'rgba(110,72,52,0.95)');
+    g.addColorStop(1, 'rgba(46,26,18,0.95)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(2.4, r), 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
  * A worm of glossy goo (like toothpaste out of a tube): outline, body and a shiny streak.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {{pts: {x: number, y: number}[], w: number, gold?: boolean, tip?: boolean}} s the strand (tip = dark blackhead tip)
