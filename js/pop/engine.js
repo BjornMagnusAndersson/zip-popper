@@ -101,12 +101,14 @@ function affine(s, d) {
  *   onOw?: (o: {x: number, y: number, type: string, tool: string}) => void, onWarm?: (warmth: number) => void,
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
+ *   irritation?: {rise: number, drain: number} (how touchy the customer is, T3.1b; 1 and 1 = normal),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
  *   useful ('patchFirst' = a patch on a bump that is not popped yet)
  * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), size(), keyPress(),
- *   setTool(id), tool(), warmth(), irritation(), halt(), dispose()
+ *   setTool(id), tool(), setTools(ids), warmth(), irritation(), halt(), dispose(). A bump may carry hold (seconds) and
+ *   roughMul (part of the rough-press chance left after mastery, round-logic.js applyMastery).
  */
 export function createPopScene(canvas, o) {
   let w = o.width; // changed only by resize()
@@ -133,12 +135,14 @@ export function createPopScene(canvas, o) {
   // one with a squeezing, pulling or strip tool is an Ow. They stay on the face to the end.
   const decoys = (o.decoys ?? []).map((d) => ({ ...d, dots: d.dots ?? [] }));
   let tool = toolInfo(o.tool)?.implemented ? o.tool : START_TOOL; // the tool in hand
-  const usable = Array.isArray(o.tools) ? o.tools : null; // tools the keyboard may pick
+  let usable = Array.isArray(o.tools) ? o.tools : null; // tools the keyboard may pick (setTools changes it)
   const face = o.face ? { cx: o.face.cx, cy: o.face.cy, rx: o.face.rx, ry: o.face.ry } : null; // the skin oval
   let warmth = 0; // the warm meter, 0..1
   let warmSent = 0; // the warmth last told to onWarm
   let warmHold = null; // {id, x, y} the warm cloth held on the face
   let irr = irritationStart(); // the irritation meter (T1.2b): Ows and cold pops fill it, it calms by itself
+  // How touchy this customer is (T3.1b, round-logic.js irritationScales): rises are multiplied by rise, calming by drain.
+  const irrScale = { rise: o.irritation?.rise > 0 ? o.irritation.rise : 1, drain: o.irritation?.drain > 0 ? o.irritation.drain : 1 };
   let irrSent = 0; // the level last told to onIrritation
   let halted = false; // true after halt(): the customer stormed off, presses do nothing
   const roll = typeof o.random === 'function' ? o.random : Math.random; // the rough-press dice
@@ -459,7 +463,7 @@ export function createPopScene(canvas, o) {
    */
   function pop(p) {
     if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
-      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth));
+      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth) * (p.roughMul ?? 1));
       if (p.tool === 'cottonPad') irr = irritationSoothe(irr, 'pad');
     }
     p.popped = true;
@@ -740,7 +744,7 @@ export function createPopScene(canvas, o) {
     if (warmth > 0 || warmHold) busy = true;
     // The irritation meter calms by itself after a quiet while, faster with the warm cloth or after a cotton pad.
     if (step === 'pop' && irr.level > 0) {
-      irr = irritationStep(irr, dt, { warm: Boolean(warmHold) });
+      irr = irritationStep(irr, dt, { warm: Boolean(warmHold), drain: irrScale.drain });
       busy = true;
       tellIrritation();
     }
@@ -1072,7 +1076,7 @@ export function createPopScene(canvas, o) {
    */
   function raiseIrritation(amount) {
     if (!(amount > 0)) return;
-    irr = irritationRise(irr, amount);
+    irr = irritationRise(irr, amount * irrScale.rise);
     tellIrritation(true);
   }
 
@@ -1100,7 +1104,7 @@ export function createPopScene(canvas, o) {
     raiseIrritation(IRRITATION.perOw);
     play('ow_customer');
     buzz([20, 40, 20]);
-    try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool }); } catch (e) { console.warn('onOw failed:', e); }
+    try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool, id: p.id }); } catch (e) { console.warn('onOw failed:', e); }
     kick();
   }
 
@@ -1166,7 +1170,7 @@ export function createPopScene(canvas, o) {
     const out = pressOutcome(tool, p.type);
     if (out === 'ow') { ow(p); return false; }
     if (out !== 'squeeze' && out !== 'pull') return false;
-    if (roll() < roughChance(tool, p.type, warmth, irr.level)) { ow(p); return false; } // a rough press on a cold bump
+    if (roll() < roughChance(tool, p.type, warmth, irr.level) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it)
     if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
     hold = { p, id: e.pointerId, since: time };
     play('squish', { level: 0.1 });
@@ -1416,6 +1420,16 @@ export function createPopScene(canvas, o) {
     },
     /** The tool in hand. @returns {string} a tool id */
     tool: () => tool,
+    /**
+     * Change the tools the player has (T3.1b: a tool was bought). The keyboard picks only from these; a tool in hand
+     * that is no longer in the list is put down for fingers.
+     * @param {string[]} ids tool ids
+     * @returns {void}
+     */
+    setTools(ids) {
+      usable = Array.isArray(ids) ? [...ids] : null;
+      if (usable && !usable.includes(tool)) tool = START_TOOL;
+    },
     /** The warm meter now. @returns {number} 0..1 */
     warmth: () => warmth,
     /** The irritation meter now (T1.2b). @returns {number} 0..1 */

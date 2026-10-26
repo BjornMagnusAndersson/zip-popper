@@ -90,6 +90,21 @@
 .pop-irr { flex: none; position: relative; width: 56px; height: 7px; margin-top: 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
 .pop-irr__fill { display: block; height: 100%; background: #ffb07a; transform: scaleX(0); transform-origin: left; transition: transform 0.2s linear, background 0.2s; }
 .pop-irr--high .pop-irr__fill { background: #ff4f7b; }
+/* The customer's request (T3.1b): a small speech-bubble pill under the counter line; green when done, grey and
+   struck through when missed. A hurry request shows its seconds left in a little badge. */
+.pop-req {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin: 4px 0 0; padding: 3px 10px; border-radius: 12px;
+  font-size: 0.78rem; line-height: 1.25; color: #102a28; background: #fff3c4; width: fit-content; max-width: 100%;
+}
+.pop-req[hidden] { display: none; }
+.pop-req__text { font-weight: 700; }
+.pop-req__time:empty, .pop-req__state:empty { display: none; }
+.pop-req__time { font-weight: 800; font-variant-numeric: tabular-nums; padding: 0 6px; border-radius: 999px; background: #ffd166; }
+.pop-req__state { font-weight: 900; }
+.pop-req--done { background: #b9f6e4; }
+.pop-req--done .pop-req__state::before { content: "\2713  "; }
+.pop-req--missed { background: #e4dedb; color: #5b4f4a; }
+.pop-req--missed .pop-req__text { text-decoration: line-through; }
 /* The customer storms off (SPEC D15): the face huffs off to the side; with reduced motion it only fades. */
 .pop-canvas--storm { pointer-events: none; animation: pop-storm 0.7s ease-in forwards; }
 @keyframes pop-storm {

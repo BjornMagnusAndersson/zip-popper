@@ -5,27 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#f48fb1">
-<title>Popper</title>
+<title>Zit Happens</title>
+<link rel="stylesheet" href="./css/app.css">
+<link rel="stylesheet" href="./css/comic.css">
 <link rel="stylesheet" href="./css/pop.css">
 <style>
-  html, body { height: 100%; margin: 0; background: #5c6857; }
-  #game { height: 100vh; height: 100dvh; }
+  html, body { height: 100%; margin: 0; background: #f48fb1; overflow: hidden; }
+  #game { position: relative; height: 100vh; height: 100dvh; overflow: hidden; }
 </style>
 </head>
 <body>
 <main id="game"></main>
 <script type="module">
-// The pop scene demo: one full face to clear. Serve this folder with: npx serve src (ES modules need http, not file://)
-// Optional for testing: ?seed=123 (always the same first face), ?nostrip (no dotty nose for the nose strip tool;
-// every demo face has one so all tools can be tried), ?tier=1 (the studio room behind the face: 0 dingy, 1 better, 2 spa).
+// The game (T3.1c): the app router in js/game/app.js shows every screen. Serve this folder with: npx serve src
+// (ES modules need http, not file://). Testing flags: see the top of js/game/app.js (?test, ?chapter=N&customer=M,
+// ?money=, ?rep=, ?name=, ?seed=). ?demo shows the old pop demo instead (?demo&seed=123&tier=1&career&nostrip).
 import { loadStrings, t } from './js/core/strings.js';
-import { createPopMode } from './js/pop/pop-mode.js';
 await loadStrings('en');
-document.title = t('pop.region');
+document.title = t('ui.title.name');
 const params = new URLSearchParams(location.search);
-const tier = Math.max(0, Math.min(2, Math.floor(Number(params.get('tier')) || 0)));
-const pop = createPopMode({ t, storage: localStorage, seed: Number(params.get('seed')) || undefined, strip: !params.has('nostrip'), tier, career: params.has('career') }); // ?career = a round that can fail (SPEC D15)
-pop.mount(document.getElementById('game'));
+const host = document.getElementById('game');
+if (params.has('demo')) {
+  // The old pop demo (the page before T3.1c): random faces, every tool, "New face".
+  const { createPopMode } = await import('./js/pop/pop-mode.js');
+  const tier = Math.max(0, Math.min(2, Math.floor(Number(params.get('tier')) || 0)));
+  createPopMode({ t, storage: localStorage, seed: Number(params.get('seed')) || undefined, strip: !params.has('nostrip'), tier, career: params.has('career') }).mount(host);
+} else {
+  const { startApp } = await import('./js/game/app.js');
+  globalThis.popperApp = startApp(host); // a handle for the browser console and screenshot runs
+}
 </script>
 <script type="module">
 import { registerServiceWorker } from './js/core/pwa.js';

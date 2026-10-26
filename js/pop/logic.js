@@ -278,18 +278,34 @@ const ANYWHERE = { name: 'any', u: [-0.8, 0.8], v: [-0.72, 0.9] };
 /** The extra kinds that only turn up on some faces (data/bumps.js `spawn`), e.g. the Evil Horn. */
 const SPAWN_KINDS = BUMP_IDS.filter((id) => bumpInfo(id).spawn);
 
+/** The two plain kinds every face is mostly made of. */
+const PLAIN_KINDS = ['whitehead', 'red'];
+/**
+ * How often a face in a customer round (a list of allowed kinds) gets a golden bump (ECONOMY.md section 6: gold is
+ * rare). First guess. Faces without a list (demo, free play) keep one golden bump each.
+ */
+export const ROUND_GOLD_CHANCE = 0.35;
+
 /**
  * Which kind each bump on a face is: the nose gets a blackhead, one cheek a big one, one other spot a golden one, the
  * rest whiteheads and pink ones. So every face has all five kinds once it has 4 or more bumps. Then the extra kinds
  * (data/bumps.js `spawn`, e.g. the Evil Horn) may each replace a whitehead or pink one, by their chance and at most
  * maxPerFace times, but only while both whiteheads and pink ones stay on the face.
+ * With a list of allowed kinds (a customer round, T3.1b) only those kinds are placed: the plain part uses the allowed
+ * plain kinds (or the first allowed kind when neither plain kind is allowed), and gold turns up only now and then
+ * (ROUND_GOLD_CHANCE). Without a list the random numbers are drawn exactly as before, so old seeds keep their faces.
  * @param {string[]} zones the zone name of each bump
  * @param {() => number} rand random numbers
+ * @param {string[]|null} [allowed] the kinds that may be placed (null = every built kind)
  * @returns {string[]} the kind of each bump
  */
-function typesFor(zones, rand) {
+function typesFor(zones, rand, allowed = null) {
+  /** Whether a kind may be placed on this face. @param {string} t kind @returns {boolean} true when it may */
+  const ok = (t) => isImplemented(t) && (!allowed || allowed.includes(t));
+  let plain = PLAIN_KINDS.filter(ok);
+  if (!plain.length) plain = [allowed?.find(ok) ?? 'whitehead'];
   const flip = rand() < 0.5 ? 1 : 0;
-  const types = zones.map((z, i) => ((i + flip) % 2 ? 'whitehead' : 'red')); // taking 3 of these still leaves both kinds
+  const types = zones.map((z, i) => plain[(i + flip + 1) % plain.length]); // taking 3 of these still leaves both kinds
   /** How many bumps of a kind there are now. @param {string} t kind @returns {number} count */
   const countOf = (t) => types.filter((x) => x === t).length;
   /**
@@ -300,18 +316,19 @@ function typesFor(zones, rand) {
    */
   const take = (want, keepBoth = false) => {
     const free = zones.map((z, i) => i).filter((i) => (!want || want.includes(zones[i]))
-      && (types[i] === 'whitehead' || types[i] === 'red') && (!keepBoth || countOf(types[i]) > 1));
+      && plain.includes(types[i]) && (!keepBoth || countOf(types[i]) > 1));
     return free.length ? free[Math.floor(rand() * free.length)] : -1;
   };
   const steps = [['blackhead', ['nose']], ['big', ['cheekL', 'cheekR']], ['gold', null]];
   for (const [type, want] of steps) {
-    if (!isImplemented(type)) continue; // a kind switched off in data/bumps.js is never placed
+    if (!ok(type)) continue; // a kind switched off in data/bumps.js (or not allowed for this customer) is never placed
+    if (type === 'gold' && allowed && rand() >= ROUND_GOLD_CHANCE) continue; // gold is rare in customer rounds
     let i = take(want);
     if (i < 0) i = take(null);
     if (i >= 0) types[i] = type;
   }
   for (const type of SPAWN_KINDS) {
-    if (!isImplemented(type)) continue;
+    if (!ok(type)) continue;
     const { chance = 0, maxPerFace = 1, zones: want = null } = bumpInfo(type).spawn;
     for (let n = 0; n < maxPerFace; n += 1) {
       if (rand() >= chance) continue;
@@ -341,12 +358,14 @@ export function grownRadius(r0, rMax, seconds, age) {
  * Where the bumps sit on a face: one per zone (forehead, cheeks, nose, chin, jaw, temple), each on bare skin, off the
  * eyes, brows and mouth, off the nose strip, and far enough apart that every bump has its own fingertip tap circle.
  * A bump that does not fit shrinks a little (never below MIN_BUMP_R) and, as a last resort, may go anywhere on the face.
- * @param {{seed: number, face: object, count?: number, strip?: boolean}} o the random seed, the face geometry from
- *   faceGeometry(), how many bumps, and whether there is a blackhead strip on the nose
+ * @param {{seed: number, face: object, count?: number, strip?: boolean, allowed?: string[]|null, decoys?: boolean}} o
+ *   the random seed, the face geometry from faceGeometry(), how many bumps, whether there is a blackhead strip on the
+ *   nose, the bump kinds that may be placed (a customer round, T3.1b; null = every built kind) and whether the face
+ *   may have decoys (moles, freckles; default yes)
  * @returns {{pimples: {id: string, type: string, x: number, y: number, r: number, axis: number, hold: number,
  *   zone: string}[], strip: object|null}} the layout in scene px
  */
-export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false }) {
+export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allowed = null, decoys = true }) {
   const rand = rng(seed);
   const box = strip ? noseStrip(face, seed) : null;
   const templeSide = rand() < 0.5 ? -1 : 1;
@@ -355,7 +374,7 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false }) {
     const z = ZONES[i % ZONES.length];
     zones.push(z.name === 'temple' ? { ...z, u: [z.u[0] * templeSide, z.u[1] * templeSide].sort((a, b) => a - b) } : z);
   }
-  const types = typesFor(zones.map((z) => z.name), rand);
+  const types = typesFor(zones.map((z) => z.name), rand, Array.isArray(allowed) ? allowed : null);
   const items = zones.map((zone, i) => {
     const [a, b] = bumpInfo(types[i]).radius;
     return { i, zone, type: types[i], r: Math.max(MIN_BUMP_R, (a + rand() * (b - a)) * face.unit) };
@@ -412,7 +431,7 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false }) {
     }
     return b;
   });
-  return { pimples, strip: box, decoys: layoutDecoys(seed, face, pimples, box) };
+  return { pimples, strip: box, decoys: decoys ? layoutDecoys(seed, face, pimples, box) : [] };
 }
 
 /** Where decoys may sit, in face units: cheeks, temples, jaw, chin and beside the mouth (the classic beauty mark). */

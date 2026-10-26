@@ -1,0 +1,129 @@
+// Chapter data (T4.4): the six story chapters of version 1 in order, with their opening strip, what kind of chapter
+// they are, who the customers are, and what the end of chapter 5 does (SPEC section 4, ECONOMY.md section 6, STORY.md).
+// Pure data and tiny lookups. No DOM, no text shown to the player: every title and line is a string KEY (strings/en.json).
+// The rules that walk through these chapters live in game/chapter-logic.js.
+
+/** The two small special modes inside the story (built by later jobs): ch1 torchlight pop, ch4 phone scroll. */
+export const SPECIAL_MODES = ['torchlight', 'phoneScroll'];
+
+/**
+ * The tutorial customer of chapter 0: the husband on the sofa. He has no entry in customers.js, so his lines are
+ * chapter keys (chapter.0.husband.*). Same shape as a customer from data/customers.js. Three whitehead bumps only.
+ */
+export const HUSBAND = {
+  id: 'husband',
+  regular: true,
+  nameKey: 'chapter.0.husband.name',
+  introKey: 'chapter.0.husband.intro',
+  resultKeys: { happy: 'chapter.0.husband.happy', ok: 'chapter.0.husband.ok', ow: 'chapter.0.husband.ow' },
+  deadlineKey: 'chapter.0.husband.deadline',
+  face: {
+    shape: 'square', skinTone: 'light', hair: 'short', hairColor: 'brown',
+    eyes: 'round', brows: 'thick', mouth: 'flat', accessories: [],
+  },
+  bumps: 3,
+  bumpTypes: ['whitehead'],
+  chapter: 0,
+};
+
+/**
+ * The five blocks of the career chapter (ECONOMY.md sections 6 and 7). from/to are customer numbers (1 based, both
+ * included). bumps = [fewest, most] bumps per face. types = every bump type allowed in the block (adds up block by
+ * block). newTypes = what is new in this block (so the screen can hint at it). difficulty multiplies how much a cold
+ * pop adds to the irritation meter. requests = whether a customer may ask for a request (from customer 4).
+ */
+export const CAREER_BANDS = [
+  { from: 1, to: 3, bumps: [5, 6], types: ['whitehead', 'red'], newTypes: ['whitehead', 'red'], difficulty: 0.6, requests: false },
+  { from: 4, to: 6, bumps: [6, 7], types: ['whitehead', 'red', 'blackhead'], newTypes: ['blackhead'], difficulty: 0.8, requests: true },
+  { from: 7, to: 9, bumps: [7, 8], types: ['whitehead', 'red', 'blackhead', 'big', 'gold'], newTypes: ['big', 'gold'], difficulty: 1.0, requests: true },
+  { from: 10, to: 12, bumps: [8, 9], types: ['whitehead', 'red', 'blackhead', 'big', 'gold', 'hair', 'horn'], newTypes: ['hair', 'horn'], difficulty: 1.15, requests: true },
+  { from: 13, to: 15, bumps: [9, 10], types: ['whitehead', 'red', 'blackhead', 'big', 'gold', 'hair', 'horn'], newTypes: [], difficulty: 1.3, requests: true },
+];
+
+/** The shop items that open when the career starts (ECONOMY.md section 3); gloves are NOT here, they are free at the end. */
+export const CAREER_SHOP_TOOLS = ['cottonPad', 'tweezers', 'noseStrip', 'patch', 'warmCloth'];
+
+/**
+ * A roster entry says who customer number n of a chapter is:
+ * - {who: 'husband'}: the tutorial husband (HUSBAND above)
+ * - {who: 'regular', id}: a named regular from data/customers.js
+ * - {who: 'generic', seed}: a face built by the seeded generator makeCustomer(seed, {chapter})
+ * @param {number} count how many customers
+ * @param {number} baseSeed seeds are baseSeed + n
+ * @param {Object<number, string>} regulars customer number (1 based) to regular id
+ * @returns {object[]} the roster
+ */
+function makeRoster(count, baseSeed, regulars) {
+  const roster = [];
+  for (let n = 1; n <= count; n++) {
+    roster.push(regulars[n] ? { who: 'regular', id: regulars[n] } : { who: 'generic', seed: baseSeed + n });
+  }
+  return roster;
+}
+
+/**
+ * The chapters, in play order. Fields:
+ * - id: 0 to 5. titleKey: string key. strip: id of the opening comic strip (data/comics).
+ * - kind: 'tutorial' | 'special' | 'armor' | 'support' | 'career'.
+ * - special: for kind 'special', the id of the small special mode played after the strip (no customers).
+ * - customers: roster (see makeRoster); empty for special chapters.
+ * - difficulty: the irritation difficulty of every customer (career chapters use CAREER_BANDS instead).
+ * - after: steps that come after the last customer (only chapter 5): the hygiene scare (gloves unlock), the teaser
+ *   strip, then the "To be continued" screen.
+ * - shop: tool ids that become buyable when the chapter starts.
+ */
+export const CHAPTERS = [
+  {
+    id: 0, titleKey: 'chapter.0.title', strip: 'strip0', kind: 'tutorial',
+    customers: [{ who: 'husband' }], difficulty: 0.6, after: [], shop: [],
+  },
+  {
+    id: 1, titleKey: 'chapter.1.title', strip: 'strip1', kind: 'special', special: 'torchlight',
+    customers: [], difficulty: 1.0, after: [], shop: [],
+  },
+  {
+    id: 2, titleKey: 'chapter.2.title', strip: 'strip2', kind: 'armor',
+    customers: makeRoster(3, 200, { 1: 'pete', 2: 'nils' }), difficulty: 1.0, after: [], shop: [],
+  },
+  {
+    id: 3, titleKey: 'chapter.3.title', strip: 'strip3', kind: 'support',
+    customers: makeRoster(3, 300, { 1: 'cora', 2: 'greta' }), difficulty: 1.0, after: [], shop: [],
+  },
+  {
+    id: 4, titleKey: 'chapter.4.title', strip: 'strip4', kind: 'special', special: 'phoneScroll',
+    customers: [], difficulty: 1.0, after: [], shop: [],
+  },
+  {
+    id: 5, titleKey: 'chapter.5.title', strip: 'strip5', kind: 'career',
+    // 15 customers: the support-group friend first, the named regulars spread out, Pete, Dave and Cleo close the chapter.
+    customers: makeRoster(15, 1000, { 1: 'cora', 5: 'penny', 8: 'gus', 13: 'pete', 14: 'dave', 15: 'cleo' }),
+    difficulty: 1.0,
+    after: [
+      { type: 'scare', unlocks: ['gloves'] },
+      { type: 'teaser', strip: 'books' },
+      { type: 'end', textKey: 'chapter.toBeContinued' },
+    ],
+    shop: CAREER_SHOP_TOOLS,
+  },
+];
+
+/** The last chapter of version 1. */
+export const LAST_CHAPTER = CHAPTERS.length - 1;
+
+/**
+ * Looks up a chapter by number.
+ * @param {number} id chapter number (0 to 5)
+ * @returns {object|null} the chapter, or null for an unknown id
+ */
+export function getChapter(id) {
+  return Number.isInteger(id) && id >= 0 && id < CHAPTERS.length ? CHAPTERS[id] : null;
+}
+
+/**
+ * The career block a customer number belongs to.
+ * @param {number} n customer number, 1 based
+ * @returns {object|null} the entry from CAREER_BANDS, or null outside 1 to 15
+ */
+export function careerBand(n) {
+  return CAREER_BANDS.find((b) => n >= b.from && n <= b.to) ?? null;
+}

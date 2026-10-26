@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Screens test</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/comic.css">
+<style>
+  /* Developer page (T3.1a): pick a screen and look at it with sample data. Turn the phone to see the sideways layout.
+     Options: ?screen=<id>, ?name=<player name>, ?still (reduced motion), ?bare (hide this bar), ?tab=studio,
+     ?money=<coins>, ?rep=<reputation>, ?click=<css selector to click after the screen is shown>. */
+  html, body { height: 100%; margin: 0; background: #23393a; }
+  body { display: flex; flex-direction: column; font: 14px/1.3 system-ui, sans-serif; color: #eef6f4; }
+  #bar { flex: none; display: flex; gap: 6px; align-items: center; padding: 6px 8px; overflow-x: auto; white-space: nowrap; background: #23393a; }
+  #bar[hidden] { display: none; }
+  #bar button, #bar label { flex: none; font: inherit; padding: 6px 12px; border-radius: 16px; border: 1px solid #6b9; background: #2f4c4d; color: inherit; }
+  #bar button { cursor: pointer; }
+  #bar button.on { background: #5eead4; color: #062b2b; }
+  #log { flex: none; color: #ffd27a; margin-left: 8px; }
+  #stage { flex: 1; min-height: 0; position: relative; }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<div id="stage"></div>
+<script type="module">
+// Developer page: shows every non-pop screen (js/screens/*) with sample data. The buttons of the screens only write what
+// they report into the log (nothing is saved); the shop really buys with the economy rules so Buy can be tried out.
+import { loadStrings, t } from './js/core/strings.js';
+import { defaultSave, normalizeSave } from './js/core/save.js';
+import { economyFromSave, buy } from './js/game/economy.js';
+import { REGULARS } from './js/data/customers.js';
+import { describeRequest } from './js/game/requests.js';
+import { factForCustomer } from './js/data/facts.js';
+import { playComic } from './js/game/comic.js';
+import { ARTS } from './js/game/comic-art.js';
+import { STRIP as strip0 } from './js/data/comics/strip-0.js';
+import { STRIP as strip1 } from './js/data/comics/strip-1.js';
+import { STRIP as strip2 } from './js/data/comics/strip-2.js';
+import { STRIP as strip3 } from './js/data/comics/strip-3.js';
+import { STRIP as strip4 } from './js/data/comics/strip-4.js';
+import { STRIP as strip5 } from './js/data/comics/strip-5.js';
+import { STRIP as books } from './js/data/comics/strip-books.js';
+import { STRIP as mlamp } from './js/data/comics/strip-mlamp.js';
+import { STRIP as mplant } from './js/data/comics/strip-mplant.js';
+import { STRIP as mapron } from './js/data/comics/strip-mapron.js';
+import { STRIP as mtweezers } from './js/data/comics/strip-mtweezers.js';
+import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
+import { STRIP as mmastery } from './js/data/comics/strip-mmastery.js';
+import { createTitleScreen } from './js/screens/title.js';
+import { createNameScreen } from './js/screens/name.js';
+import { createMenuScreen } from './js/screens/menu.js';
+import { createCustomerIntroScreen } from './js/screens/customer-intro.js';
+import { createResultScreen } from './js/screens/result.js';
+import { createShopScreen } from './js/screens/shop.js';
+import { createComicsScreen } from './js/screens/comics.js';
+import { createSettingsScreen } from './js/screens/settings.js';
+import { createAboutScreen } from './js/screens/about.js';
+
+const params = new URLSearchParams(location.search);
+await loadStrings('en');
+const reducedMotion = params.has('still');
+const playerName = params.get('name') ?? 'Maja';
+const bar = document.getElementById('bar');
+const stage = document.getElementById('stage');
+const log = document.createElement('span');
+log.id = 'log';
+
+/** Write what a screen reported into the log (developer page only). @param {string} text what happened @returns {void} */
+const say = (text) => { log.textContent = text; };
+
+const STRIPS = [
+  [strip0, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'], [strip5, 'chapter'],
+  [books, 'teaser'], [mlamp, 'milestone'], [mplant, 'milestone'], [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'],
+];
+const seen = ['strip0', 'strip1', 'strip2', 'mlamp'];
+let eco = economyFromSave(normalizeSave({
+  ...defaultSave(0), money: Number(params.get('money') ?? 120), reputation: Number(params.get('rep') ?? 16),
+  items: { tweezers: { needsScrub: false }, lamp: { needsScrub: true } }, unlockedTools: ['fingers', 'tweezers'],
+}));
+const penny = REGULARS.find((r) => r.id === 'penny') ?? REGULARS[0];
+const payout = { popCoins: 27, tip: 15, combo: 8, requestBonus: 10, total: 60 };
+
+/** Each screen: id, a button label, and how to build it. */
+const SCREENS = [
+  ['title', () => createTitleScreen({ t, reducedMotion, onStart: () => say('onStart'), onAbout: () => say('onAbout') })],
+  ['name', () => createNameScreen({ t, reducedMotion, onDone: (n) => say(`onDone("${n}")`) })],
+  ['menu', () => createMenuScreen({
+    t, reducedMotion, playerName, chapterTitleKey: 'chapter.5.title',
+    onContinue: () => say('onContinue'), onFreePlay: () => say('onFreePlay'), onComics: () => say('onComics'),
+    onShop: () => say('onShop'), onSettings: () => say('onSettings'), onAbout: () => say('onAbout'),
+  })],
+  ['intro', () => createCustomerIntroScreen({ t, reducedMotion, customer: penny, playerName, step: { n: 5, total: 15 }, onStart: () => say('onStart') })],
+  ['intro+request', () => createCustomerIntroScreen({
+    t, reducedMotion, customer: penny, playerName, step: { n: 5, total: 15 },
+    request: describeRequest({ type: 'hurry', timeLimit: 42 }), onStart: () => say('onStart'),
+  })],
+  ['result 3', () => createResultScreen({
+    t, reducedMotion, stars: 3, payout, reputationChange: 3, factKey: factForCustomer(2), reactionKey: penny.resultKeys.happy, playerName,
+    onContinue: () => say('onContinue'),
+  })],
+  ['result 1', () => createResultScreen({
+    t, reducedMotion, stars: 1, payout: { popCoins: 18, tip: 0, combo: 0, requestBonus: 0, total: 18 }, reputationChange: 1,
+    factKey: factForCustomer(5), onContinue: () => say('onContinue'),
+  })],
+  ['result fail', () => createResultScreen({
+    t, reducedMotion, failed: true, skipPenalty: 3, onTryAgain: () => say('onTryAgain'), onNext: () => say('onNext'),
+  })],
+  ['shop', () => {
+    const shop = createShopScreen({
+      t, reducedMotion, state: eco, tab: params.get('tab') ?? 'tools', onBack: () => say('onBack'),
+      onBuy: (id) => { eco = buy(eco, id); say(`onBuy("${id}")`); shop.update({ state: eco }); },
+    });
+    return shop;
+  }],
+  ['comics', () => createComicsScreen({
+    t, reducedMotion, seen,
+    strips: STRIPS.map(([s, kind]) => ({ id: s.id, titleKey: s.title, kind })),
+    onBack: () => say('onBack'),
+    onPlay: (id) => {
+      say(`onPlay("${id}")`);
+      const strip = STRIPS.find(([s]) => s.id === id)?.[0];
+      if (strip) playComic(strip, { name: playerName, reducedMotion, arts: ARTS, onClose: () => say('comic closed') });
+    },
+  })],
+  ['settings', () => {
+    const screen = createSettingsScreen({
+      t, reducedMotion, playerName, settings: { sound: true, music: false, vibration: true, reducedMotion: false },
+      onName: (n) => say(`onName("${n}")`), onToggle: (k, v) => say(`onToggle(${k}, ${v})`),
+      onExport: () => { say('onExport'); screen.update({ notice: { key: 'ui.settings.exported' } }); },
+      onImport: (text) => { say(`onImport(${text.length} characters)`); screen.update({ notice: { key: 'ui.settings.importFailed' } }); },
+      onReset: () => say('onReset'), onBack: () => say('onBack'),
+    });
+    return screen;
+  }],
+  ['about', () => createAboutScreen({ t, reducedMotion, onBack: () => say('onBack') })],
+];
+
+let current = null;
+const buttons = new Map();
+
+/** Show one screen by id (the old one is disposed first). @param {string} id screen id @returns {void} */
+function show(id) {
+  current?.dispose();
+  const entry = SCREENS.find(([n]) => n === id) ?? SCREENS[0];
+  current = entry[1]();
+  stage.append(current.node);
+  for (const [n, b] of buttons) b.classList.toggle('on', n === entry[0]);
+  say('');
+}
+
+for (const [id] of SCREENS) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = id;
+  b.addEventListener('click', () => show(id));
+  buttons.set(id, b);
+  bar.append(b);
+}
+bar.append(log);
+if (params.has('bare')) bar.hidden = true;
+show(params.get('screen') ?? 'title');
+if (params.get('click')) document.querySelector(params.get('click'))?.click();
+</script>
+</body>
+</html>

@@ -17,7 +17,15 @@
 // "whole face" buttons, the mouse wheel, or the keys + - 0 and arrows (engine.js has the gesture rule). The room
 // behind zooms along. Every new customer starts at the whole face again.
 // Keyboard: Tab to the face, Enter or Space squeezes the next bump, peels or wipes. All text comes from t().
-// Nothing here is sent anywhere.
+// Three ways to play (T3.1b):
+// - the demo (the old path, what index.html uses today): random faces, every built tool, "New face" button.
+// - startRound(...): ONE customer driven by the game: exactly their bumps and bump kinds, only the tools the player
+//   owns, hold times and rough chance from skill by use, a touchier or calmer irritation meter (difficulty), and the
+//   customer's request in a small banner that shows done or missed live. No "New face" button. When the customer is
+//   done (all bumps handled and the cleanup finished) or stormed off and the player chose Try again or Next customer,
+//   onFinish is called once with everything the game needs (round-logic.js finishPayload).
+// - startFree(...): free play: random faces, the owned tools, never fails, no onFinish, "New face" button.
+// The pure rules for rounds live in round-logic.js. Nothing here is sent anywhere.
 import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
@@ -25,7 +33,10 @@ import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
 import { drawBackdrop, nextBackdropChange } from './backdrop.js';
 import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
-import { createRound, registerPop, registerOw, registerCleanup, registerFail } from '../game/scoring.js';
+import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
+import {
+  applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
+} from './round-logic.js';
 
 /** How much reputation "Next customer" after a fail costs (first guess; reputation itself comes in T3.x). */
 export const FAIL_REPUTATION_HIT = 1;
@@ -88,25 +99,35 @@ function buzz(pattern) {
 /**
  * Create the pop scene.
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
- *   count?: number, tier?: number, career?: boolean, onReputationHit?: (amount: number) => void}} o the text lookup
+ *   count?: number, tier?: number, career?: boolean, onReputationHit?: (amount: number) => void,
+ *   reducedMotion?: boolean}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
  *   bumps per face, the studio tier for the room behind (0..2), career = a Story/Career round that can fail (free play
- *   when false), and the reputation hook called by "Next customer" after a fail
+ *   when false), the reputation hook called by "Next customer" after a fail, and reducedMotion = true for the calm
+ *   version whatever the phone says (the player's Settings switch)
  * @returns {{node: HTMLElement, mount: (host: HTMLElement) => void, newFace: () => void, unlock: () => void,
- *   setTier: (tier: number) => void, results: () => object[], dispose: () => void}} the scene's element and its controls
+ *   setTier: (tier: number) => void, results: () => object[], startRound: (o: object) => void,
+ *   startFree: (o?: object) => void, setUnlockedTools: (list: string[]) => void, dispose: () => void}} the scene's
+ *   element and its controls (startRound and startFree: see their own comments below)
  */
 export function createPopMode({
   t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, career = false,
-  onReputationHit = () => {},
+  onReputationHit = () => {}, reducedMotion = false,
 }) {
-  const mode = career ? 'career' : 'free';
+  /** Calm version: the player's own setting (reducedMotion, T3.1c) or the phone's. @returns {boolean} true = less motion */
+  const still = () => reducedMotion === true || prefersReducedMotion();
   const results = []; // every finished or failed customer's round data (game/scoring.js), newest last
   const sound = createSound({ sfxOn: loadPopSoundOn(storage), onChange: (s) => savePopSoundOn(storage, s.sfxOn) });
   let seed = Number.isFinite(firstSeed) && firstSeed > 0 ? Math.floor(firstSeed) : 1 + Math.floor(Math.random() * 2e9);
-  let current = null; // {scene, canvas, w, h, dpr, face, spec, seed, total, healed}
+  let freshSeed = true; // the next face uses `seed` as it is (the first face, or after startFree with a seed)
+  let current = null; // {scene, canvas, w, h, dpr, face, spec, seed, total, healed, round, owed, ...}
   let disposed = false;
+  let ready = false; // mounted and measured: faces can be laid out
   let tier = firstTier;
+  // How faces are made now: 'demo' (the old path), 'round' (one customer, startRound) or 'free' (startFree).
+  // round: {customer, setup, holdFactors, roughReductions, irritation, request, onFinish, failMode, seed}
+  let cfg = { kind: 'demo', failMode: career ? 'career' : 'free', unlockedTools: null };
   const backdrop = el('canvas', 'pop-backdrop'); // the studio room, behind the face canvas
   backdrop.setAttribute('aria-hidden', 'true');
   const back = { w: 0, h: 0, dpr: 1, timer: 0, start: performance.now() };
@@ -131,7 +152,17 @@ export function createPopMode({
   irrMeter.append(irrFill);
   const countLine = el('div', 'pop-countline');
   countLine.append(count_, irrMeter);
-  titles.append(title, countLine);
+  // The customer's request (T3.1b): a small banner under the counter line, only in a round with a request. The text
+  // stays; a mark says done or missed (read out once), and a hurry request counts its seconds down (not read out).
+  const reqBox = el('p', 'pop-req');
+  reqBox.hidden = true;
+  const reqText = el('span', 'pop-req__text');
+  const reqTime = el('span', 'pop-req__time');
+  reqTime.setAttribute('aria-hidden', 'true');
+  const reqState = el('span', 'pop-req__state');
+  reqState.setAttribute('aria-live', 'polite');
+  reqBox.append(reqText, reqTime, reqState);
+  titles.append(title, countLine, reqBox);
   const newBtn = button('pop-btn pop-new', t('pop.newFace'), () => newFace(true));
   head.append(titles, soundSwitch(), newBtn);
   const stage = el('div', 'pop-stage');
@@ -143,28 +174,43 @@ export function createPopMode({
   done.append(el('p', 'pop-done__text', t('pop.finale.done')), button('pop-btn pop-btn--main', t('pop.newFace'), () => newFace(true)));
   // The tool bar: one button per tool (picture and name); the one in hand is pressed. The warm cloth shows its meter.
   let toolId = START_TOOL;
-  const toolIds = toolBarIds({ demo: true });
+  let toolIds = toolBarIds({ demo: true });
   const bar = el('div', 'pop-tools');
   bar.setAttribute('role', 'toolbar');
   bar.setAttribute('aria-label', t('pop.tools'));
   const toolButtons = new Map();
   let warmFill = null;
-  for (const id of toolIds) {
-    const b = button('pop-tool', '', () => pickTool(id));
-    const name = t(`tool.${id}.name`);
-    b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TOOL_ICONS[id] ?? ''}</svg>`;
-    b.append(el('span', 'pop-tool__name', name));
-    b.title = name;
-    b.setAttribute('aria-pressed', String(id === toolId));
-    if (id === 'warmCloth') {
-      const meter = el('span', 'pop-tool__meter');
-      meter.setAttribute('aria-hidden', 'true');
-      warmFill = el('span', 'pop-tool__fill');
-      meter.append(warmFill);
-      b.append(meter);
+  buildToolBar(toolIds);
+
+  /**
+   * Fill the tool bar with one button per tool in the list (the old buttons go). If the tool in hand is not in the
+   * list any more, fingers are picked up instead.
+   * @param {string[]} ids tool ids, in bar order
+   * @returns {void}
+   */
+  function buildToolBar(ids) {
+    toolIds = [...ids];
+    toolButtons.clear();
+    warmFill = null;
+    bar.replaceChildren();
+    if (!toolIds.includes(toolId)) toolId = START_TOOL;
+    for (const id of toolIds) {
+      const b = button('pop-tool', '', () => pickTool(id));
+      const name = t(`tool.${id}.name`);
+      b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TOOL_ICONS[id] ?? ''}</svg>`;
+      b.append(el('span', 'pop-tool__name', name));
+      b.title = name;
+      b.setAttribute('aria-pressed', String(id === toolId));
+      if (id === 'warmCloth') {
+        const meter = el('span', 'pop-tool__meter');
+        meter.setAttribute('aria-hidden', 'true');
+        warmFill = el('span', 'pop-tool__fill');
+        meter.append(warmFill);
+        b.append(meter);
+      }
+      toolButtons.set(id, b);
+      bar.append(b);
     }
-    toolButtons.set(id, b);
-    bar.append(b);
   }
   // The fail overlay (SPEC D15): the customer stormed off. Try again (same customer) or Next customer.
   const fail = el('div', 'pop-fail');
@@ -174,8 +220,8 @@ export function createPopMode({
   fail.append(
     el('p', 'pop-fail__title', t('pop.fail.title')),
     el('p', 'pop-fail__text', t('pop.fail.text')),
-    button('pop-btn pop-btn--main', t('pop.fail.again'), () => newFace(true, true)),
-    button('pop-btn', t('pop.fail.next'), () => nextAfterFail()),
+    button('pop-btn pop-btn--main', t('pop.fail.again'), () => (cfg.kind === 'round' ? finishRound(current, 'again') : newFace(true, true))),
+    button('pop-btn', t('pop.fail.next'), () => (cfg.kind === 'round' ? finishRound(current, 'next') : nextAfterFail())),
   );
   // Zoom buttons (T1.4, SPEC D9): the whole face is always the start; +, - and "whole face" are an optional extra
   // for small bumps. They float over the room beside the face (pop.css). Two fingers, the wheel and keys do the same.
@@ -317,6 +363,8 @@ export function createPopMode({
     newBtn.disabled = true; // only the two fail choices now
     c.scene?.halt();
     c.round = registerFail(c.round);
+    c.popEnd ??= elapsedFor(c); // the round's clock stops here
+    drawRequest(c);
     clearTimeout(c.winceTimer);
     c.wince = true;
     c.scene?.setTexture(faceTexture(c));
@@ -331,7 +379,7 @@ export function createPopMode({
       sound.play('splat'); // the door slams
       fail.hidden = false;
       fail.querySelector('button')?.focus({ preventScroll: true });
-    }, prefersReducedMotion() ? 250 : 700);
+    }, still() ? 250 : 700);
   }
 
   /** After a fail: take the reputation hit (a hook for now) and show the next customer. @returns {void} */
@@ -354,7 +402,9 @@ export function createPopMode({
    */
   function showOw(c, at) {
     c.round = registerOw(c.round);
+    if (at.id && at.type !== 'decoy') c.owed.add(at.id); // this bump's pop will not count as clean
     drawCount();
+    drawRequest(c);
     const bubble = el('p', 'pop-ow', t(at.type === 'decoy' ? 'pop.owDecoy' : 'pop.ow')); // a mole is not a bump
     bubble.setAttribute('aria-hidden', 'true'); // the counter line says it for screen readers
     const sp = c.scene?.toScreen(at.x, at.y) ?? at; // where the bump is on screen (zoomed or not)
@@ -378,6 +428,57 @@ export function createPopMode({
     if (!scene || scene.step() !== 'pop') { count_.textContent = ''; return; }
     const ows = current.round?.owCount ?? 0;
     count_.textContent = ows ? t('pop.leftOws', { left: scene.left(), ows }) : t('pop.left', { n: scene.left() });
+  }
+
+  /**
+   * Seconds the customer has been popped so far: from the first look at the face to the last bump handled (or the
+   * storm-off); after that the clock stands still.
+   * @param {object} c the current face
+   * @returns {number} seconds
+   */
+  function elapsedFor(c) {
+    return c.popEnd ?? (performance.now() - c.startAt) / 1000;
+  }
+
+  /**
+   * Show the request banner for a face: its text, a hurry countdown, and done or missed once that is clear. Stops the
+   * countdown ticker when the request is no longer open.
+   * @param {object|null} c the current face
+   * @returns {void}
+   */
+  function drawRequest(c) {
+    if (!c || current !== c) return;
+    const v = c.request ? requestView(c.request, c.round, elapsedFor(c)) : null;
+    reqBox.hidden = !v;
+    if (!v) { clearInterval(c.reqTimer); return; }
+    reqText.textContent = t(v.key, v.vars);
+    reqTime.textContent = v.secondsLeft === null ? '' : t('round.request.timeLeft', { seconds: v.secondsLeft });
+    const state = v.status === 'done' ? t('request.done') : v.status === 'failed' ? t('request.missed') : '';
+    if (reqState.textContent !== state) reqState.textContent = state;
+    reqBox.classList.toggle('pop-req--done', v.status === 'done');
+    reqBox.classList.toggle('pop-req--missed', v.status === 'failed');
+    if (v.status !== 'open') clearInterval(c.reqTimer);
+  }
+
+  /**
+   * End a customer round (round mode only) and tell the game, once: after the cleanup, or after a storm-off when the
+   * player picked Try again ('again') or Next customer ('next'). The face stays on screen; the game decides what next.
+   * @param {object|null} c the face of the round
+   * @param {'again'|'next'|null} [choice] the fail choice (null for a finished customer)
+   * @returns {void}
+   */
+  function finishRound(c, choice = null) {
+    if (!c || c.finished || cfg.kind !== 'round') return;
+    c.finished = true;
+    clearTimeout(c.endTimer);
+    clearInterval(c.reqTimer);
+    fail.hidden = true;
+    if (!c.counted) { results.push(c.round); c.counted = true; }
+    const payload = finishPayload({
+      round: c.round, elapsedSeconds: elapsedFor(c), cleanBumpTypes: c.cleanTypes, popTypes: c.popTypes,
+      failChoice: c.failed ? choice : null, request: c.request,
+    });
+    try { c.onFinish?.(payload); } catch (e) { console.warn('onFinish failed:', e); }
   }
 
   /** The size of the free area for the canvas, measured. @returns {{w: number, h: number}} CSS px */
@@ -416,7 +517,7 @@ export function createPopMode({
     }
     const ctx = backdrop.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const reduced = prefersReducedMotion();
+    const reduced = still();
     const time = (performance.now() - back.start) / 1000;
     drawBackdrop(ctx, w, h, { tier, time, reduced, dpr });
     const next = nextBackdropChange(time, tier, reduced);
@@ -471,9 +572,12 @@ export function createPopMode({
     if (prev && !again && !prev.counted && (prev.failed || prev.healed)) results.push(prev.round); // a finished customer
     prev?.scene?.dispose();
     clearTimeout(prev?.failTimer);
+    clearTimeout(prev?.endTimer);
+    clearInterval(prev?.reqTimer);
     fail.hidden = true;
     showIrritation(0);
     newBtn.disabled = false;
+    newBtn.hidden = cfg.kind === 'round'; // a customer round has no "New face" (the game picks the next customer)
     stage.replaceChildren(backdrop, zoomBox);
     zoomBox.hidden = false;
     showView({ z: 1, x: 0, y: 0 }); // every new customer starts with the whole face (SPEC D9)
@@ -483,41 +587,62 @@ export function createPopMode({
     bar.hidden = false;
     showWarmth(0);
     clearTimeout(current?.winceTimer);
-    const s = again && prev ? prev.seed : current ? nextSeed() : seed; // Try again = the same customer, a fresh face
-    const spec = again && prev ? prev.spec : fixedSpec ?? randomFaceSpec(s);
+    const round = cfg.kind === 'round';
+    let s; // Try again = the same customer, a fresh face; a round uses the seed the game gave
+    if (again && prev) s = prev.seed;
+    else if (round) s = cfg.seed;
+    else if (freshSeed) { s = seed; freshSeed = false; } else s = nextSeed();
+    let spec;
+    if (again && prev) spec = prev.spec;
+    else if (round) spec = cfg.setup.spec;
+    else spec = (cfg.kind === 'demo' ? fixedSpec : null) ?? randomFaceSpec(s);
     const { w, h } = stageSize();
     const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
     const face = faceGeometry(w, h, spec);
     const clownNose = (spec.accessories ?? []).includes('clown-nose'); // no nose strip over a clown nose
-    const lay = layoutFace({ seed: s, face, count, strip: strip && !clownNose });
+    const wantStrip = round ? cfg.setup.strip : cfg.kind === 'free' ? toolIds.includes('noseStrip') : strip;
+    const lay = layoutFace({
+      seed: s, face, count: round ? cfg.setup.count : cfg.kind === 'free' ? FACE_BUMPS : count, strip: wantStrip && !clownNose,
+      allowed: round ? cfg.setup.allowed : null, decoys: round ? cfg.setup.decoys : true,
+    });
+    // Skill by use (ECONOMY.md section 4): faster holds and fewer rough presses for kinds the player has mastered.
+    const pimples = cfg.kind === 'demo' ? lay.pimples : applyMastery(lay.pimples, cfg.holdFactors, cfg.roughReductions);
     const canvas = el('canvas', 'pop-canvas');
     canvas.tabIndex = 0;
     canvas.setAttribute('role', 'img');
     canvas.setAttribute('aria-label', t('pop.canvas'));
     stage.append(canvas);
     const c = {
-      canvas, w, h, dpr, face, spec, seed: s, total: lay.pimples.length, healed: false, scene: null,
-      round: createRound(lay.pimples.length), wince: false, winceTimer: 0, patches: 0,
+      canvas, w, h, dpr, face, spec, seed: s, total: pimples.length, healed: false, scene: null,
+      round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0,
+      owed: new Set(), cleanTypes: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
+      request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
     };
     current = c;
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
-      width: w, height: h, dpr, reduced: prefersReducedMotion(), sound, buzz,
-      texture: faceTexture(c), pimples: lay.pimples, strip: lay.strip, decoys: lay.decoys,
+      width: w, height: h, dpr, reduced: still(), sound, buzz,
+      texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
+      irritation: round ? cfg.irritation : undefined,
       onOw: (at) => { if (current === c) showOw(c, at); },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },
       onView: (v) => { if (current === c) showView(v); },
       onIrritation: (lv) => {
         if (current !== c) return;
         showIrritation(lv);
-        if (!c.failed && isFail(lv, mode)) stormOff(c);
+        if (!c.failed && isFail(lv, cfg.failMode)) stormOff(c);
       },
       onPatch: (n) => { c.patches = n; }, // the tip bonus for patches comes with the tips system
       onNote: (n) => { if (n === 'patchFirst' && current === c) hint.textContent = t('tool.patch.notYet'); },
-      onPop: () => {
-        c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean: true });
+      onPop: (p) => {
+        const clean = !c.owed.has(p.id); // clean = no Ow on this bump (counts for mastery and pay)
+        c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean });
+        c.popTypes.push(p.type);
+        if (clean) c.cleanTypes.push(p.type);
+        if (allHandled(c.round)) c.popEnd ??= elapsedFor(c);
         drawCount();
+        drawRequest(c);
         c.scene?.setTexture(faceTexture(c));
       },
       onStep: (step) => {
@@ -535,6 +660,11 @@ export function createPopMode({
         buzz([30, 60, 30, 60, 80]);
         foot.hidden = true;
         bar.hidden = true;
+        if (round) { // a moment to see the glowing face, then the game takes over
+          const pause = (still() ? END_PAUSE_REDUCED : END_PAUSE) * 1000;
+          c.endTimer = setTimeout(() => finishRound(c, null), pause);
+          return;
+        }
         done.hidden = false;
         done.querySelector('button')?.focus({ preventScroll: true });
       },
@@ -544,7 +674,18 @@ export function createPopMode({
     });
     hint.textContent = hintFor('pop');
     drawCount();
+    drawRequest(c);
+    if (c.request?.type === 'hurry') c.reqTimer = setInterval(() => drawRequest(c), 250); // the hurry clock; stops once done or missed
     if (focus) canvas.focus({ preventScroll: true });
+  }
+
+  /**
+   * Start a face now if the scene is mounted and measured (otherwise mount() starts it).
+   * @param {boolean} focus move keyboard focus to the face
+   * @returns {void}
+   */
+  function startNow(focus) {
+    if (ready && !disposed) newFace(focus);
   }
 
   let resizeTimer = 0;
@@ -563,7 +704,65 @@ export function createPopMode({
       host.append(root);
       globalThis.addEventListener?.('resize', onResize);
       watcher?.observe(stage);
-      requestAnimationFrame(() => newFace(false));
+      requestAnimationFrame(() => { ready = true; newFace(false); }); // the demo face, or a round/free play asked for before
+    },
+    /**
+     * Play ONE customer (T3.1b). Their face, exactly bumpCount bumps of the allowed kinds (decoys and the Evil Horn
+     * and ingrown-hair rules as usual), only the owned tools (fingers always), mastery hold times and rough chances,
+     * the meter's difficulty, and the request banner. Calling it again starts the round afresh (the game does that
+     * for "Try again", with the same seed for the same face). Before mount() it waits for the mount.
+     * @param {{customer: {face: object}, bumpCount: number, allowedTypes: string[], difficulty?: number, seed?: number,
+     *   holdFactors?: Object<string, number>, roughReductions?: Object<string, number>, unlockedTools?: string[],
+     *   request?: object|null, tier?: number, career?: boolean, decoys?: boolean,
+     *   onFinish: (result: object) => void}} o customer = chapter-logic.js customerSpec customer; difficulty =
+     *   customerSpec difficulty (1 = normal); seed = the face (random when left out); holdFactors / roughReductions =
+     *   per bump kind from economy.js holdFactor / roughReduction; unlockedTools = owned tools; request = requests.js
+     *   pickRequest result or null; tier = studio room 0..2; career = false makes a round that cannot fail (default
+     *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload
+     * @returns {void}
+     */
+    startRound(o = {}) {
+      const tools = roundTools(o.unlockedTools ?? [START_TOOL]);
+      cfg = {
+        kind: 'round', failMode: o.career === false ? 'free' : 'career', unlockedTools: o.unlockedTools ?? [START_TOOL],
+        setup: roundFaceSetup({ customer: o.customer, bumpCount: o.bumpCount, allowedTypes: o.allowedTypes, unlockedTools: tools, decoys: o.decoys }),
+        seed: Number.isFinite(o.seed) && o.seed > 0 ? Math.floor(o.seed) : 1 + Math.floor(Math.random() * 2e9),
+        holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {}, irritation: irritationScales(o.difficulty),
+        request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
+      };
+      buildToolBar(tools);
+      if (Number.isFinite(o.tier)) { tier = o.tier; paintBackdrop(); }
+      startNow(true);
+    },
+    /**
+     * Free play (SPEC section 5): random faces, the owned tools, mastery still helps, never fails, no onFinish, and
+     * the "New face" button. Before mount() it waits for the mount.
+     * @param {{unlockedTools?: string[], tier?: number, seed?: number, holdFactors?: Object<string, number>,
+     *   roughReductions?: Object<string, number>}} [o] owned tools (all built ones when left out), studio room 0..2,
+     *   the first face's seed, and mastery as for startRound
+     * @returns {void}
+     */
+    startFree(o = {}) {
+      cfg = {
+        kind: 'free', failMode: 'free', unlockedTools: o.unlockedTools ?? null,
+        holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {},
+      };
+      if (Number.isFinite(o.seed) && o.seed > 0) { seed = Math.floor(o.seed); freshSeed = true; }
+      buildToolBar(roundTools(cfg.unlockedTools));
+      if (Number.isFinite(o.tier)) { tier = o.tier; paintBackdrop(); }
+      startNow(true);
+    },
+    /**
+     * The player's tools changed (a tool was bought): rebuild the tool bar (fingers always) and tell the face in play.
+     * The nose strip on a face already in play does not change; the next face uses the new list.
+     * @param {string[]} list owned tool ids
+     * @returns {void}
+     */
+    setUnlockedTools(list) {
+      cfg.unlockedTools = Array.isArray(list) ? [...list] : null;
+      buildToolBar(roundTools(cfg.unlockedTools));
+      current?.scene?.setTools(toolIds);
+      pickTool(toolId); // press the button of the tool in hand (fingers when the old one is gone)
     },
     /** Show a new face. @returns {void} */
     newFace: () => newFace(true),
@@ -585,6 +784,8 @@ export function createPopMode({
       watcher?.disconnect();
       clearTimeout(current?.winceTimer);
       clearTimeout(current?.failTimer);
+      clearTimeout(current?.endTimer);
+      clearInterval(current?.reqTimer);
       current?.scene?.dispose();
       current = null;
       globalThis.removeEventListener?.('resize', onResize);

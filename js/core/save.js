@@ -28,6 +28,13 @@ export function defaultSave(now = Date.now()) {
     stats: { pops: 0, stars: 0, bestCombo: 0 },
     settings: { sound: true, music: true, vibration: true, reducedMotion: false, lang: 'en' },
     seenComics: [],
+    // Economy fields (T3.2, docs/ECONOMY.md section 8). Added without a version bump: older saves simply get these defaults.
+    reputation: 0,
+    skipStreak: 0, // "Next customer" after a fail, in a row; a finished customer resets it
+    mastery: {}, // clean pops per bump type
+    items: {}, // bought shop items: id -> { needsScrub } (a studio upgrade shows only after its scrub job)
+    threeStarDone: false, // a 3-star customer has happened (for the `mstar` strip)
+    requestsDone: 0,
   };
 }
 
@@ -58,9 +65,28 @@ function flag(v, d) {
   return typeof v === 'boolean' ? v : d;
 }
 
+/** A table of short names to whole numbers, or an empty one. @param {unknown} v value @returns {Object<string, number>} */
+function countTable(v) {
+  const out = {};
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    for (const [k, n] of Object.entries(v).slice(0, 100)) if (k.length <= 30 && k !== '__proto__' && Number.isFinite(n) && n >= 0) out[k] = Math.floor(n);
+  }
+  return out;
+}
+
+/** The bought-items table (id -> { needsScrub }), or an empty one. @param {unknown} v value @returns {Object<string, {needsScrub: boolean}>} */
+function itemTable(v) {
+  const out = {};
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    for (const [k, e] of Object.entries(v).slice(0, 100)) if (k.length <= 30 && k !== '__proto__') out[k] = { needsScrub: flag(e?.needsScrub, false) };
+  }
+  return out;
+}
+
 /**
  * Bring a save from an older version up to the current one, one step per version. Version 1 is the first, so there
- * is nothing to do yet; add a step here whenever SAVE_VERSION goes up.
+ * is nothing to do yet; add a step here whenever SAVE_VERSION goes up. (The economy fields added in T3.2 did not need
+ * a version: normalizeSave gives a save without them the defaults.)
  * @param {object} data a save with a version number
  * @returns {object} the save in the current shape
  */
@@ -104,6 +130,12 @@ export function normalizeSave(raw, now = Date.now()) {
       lang: typeof se.lang === 'string' && se.lang.length <= 8 ? se.lang : d.settings.lang,
     },
     seenComics: words(s.seenComics, d.seenComics),
+    reputation: count(s.reputation, d.reputation),
+    skipStreak: count(s.skipStreak, d.skipStreak),
+    mastery: countTable(s.mastery),
+    items: itemTable(s.items),
+    threeStarDone: flag(s.threeStarDone, d.threeStarDone),
+    requestsDone: count(s.requestsDone, d.requestsDone),
   };
 }
 

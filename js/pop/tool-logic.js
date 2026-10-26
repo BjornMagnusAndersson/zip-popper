@@ -179,16 +179,18 @@ export function irritationRise(s, amount) {
  * or for a few seconds after a cotton pad pop, it calms faster and at once.
  * @param {{level: number, quiet: number, soothe: number}} s the meter now
  * @param {number} dt seconds since the last step
- * @param {{warm?: boolean}} [o] warm = the warm cloth is held on the face
+ * @param {{warm?: boolean, drain?: number}} [o] warm = the warm cloth is held on the face; drain = how fast it calms
+ *   compared with normal (1; a harder customer calms slower, see pop/round-logic.js irritationScales)
  * @returns {{level: number, quiet: number, soothe: number}} a new state
  */
-export function irritationStep(s, dt, { warm = false } = {}) {
+export function irritationStep(s, dt, { warm = false, drain = 1 } = {}) {
   const d = Math.max(0, Number(dt) || 0);
   const quiet = s.quiet + d;
   let rate = quiet >= IRRITATION.calmDelay ? IRRITATION.drainPerSecond : 0;
   if (s.soothe > 0) rate = Math.max(rate, IRRITATION.padDrain);
   if (warm) rate = Math.max(rate, IRRITATION.warmDrain);
-  return { level: Math.max(0, s.level - rate * d), quiet, soothe: Math.max(0, s.soothe - d) };
+  const k = Number.isFinite(drain) && drain > 0 ? drain : 1;
+  return { level: Math.max(0, s.level - rate * k * d), quiet, soothe: Math.max(0, s.soothe - d) };
 }
 
 /**
