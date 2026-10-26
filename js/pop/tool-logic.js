@@ -308,8 +308,33 @@ export function warmStep(warmth, dt, holding) {
  */
 export function popStepOver(pimples, strip = null, peeling = false) {
   if (pimples.some((p) => !p.popped)) return false;
-  if (!strip || strip.off) return true;
-  return !(peeling || strip.flying || (strip.q ?? 0) > 0.6);
+  return !stripBusy(strip, peeling);
+}
+
+/**
+ * Whether the nose strip is being peeled right now (a finger on it, flying off, or past 0.6 and finishing by itself).
+ * The wipe start and the cream start wait for such a peel, so a peel she started still gets its bonus (B55).
+ * @param {{off?: boolean, flying?: boolean, q?: number}|null} strip the nose strip (engine state), or null
+ * @param {boolean} [peeling] a finger is peeling the strip now
+ * @returns {boolean} true while a peel is going on
+ */
+export function stripBusy(strip, peeling = false) {
+  if (!strip || strip.off) return false;
+  return Boolean(peeling || strip.flying || (strip.q ?? 0) > 0.6);
+}
+
+/**
+ * What a press on the nose strip does during the wipe step (B55: the strip stays usable until the cream starts):
+ * 'peel' when it is stuck on (any tool peels), 'stick' when it is not stuck yet and the nose strip is in hand, or null
+ * (the press wipes as usual). A strip that is gone or flying off does nothing.
+ * @param {{strip: {off?: boolean, flying?: boolean, stuck?: boolean}|null, onStrip: boolean, toolUse?: string|null}} o
+ *   the strip (engine state), whether the press is on it, and the tool in hand's use (data/tools.js, 'strip' = nose strip)
+ * @returns {'peel'|'stick'|null} what happens
+ */
+export function wipeStripPress({ strip, onStrip, toolUse = null }) {
+  if (!strip || strip.off || strip.flying || !onStrip) return null;
+  if (strip.stuck) return 'peel';
+  return toolUse === 'strip' ? 'stick' : null;
 }
 
 /**

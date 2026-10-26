@@ -17,6 +17,11 @@ export const FACE_UNIT = 165;
 export const MIN_TAP = 44;
 /** The smallest drawn bump radius in CSS px (so even a blackhead is easy to see and aim at). */
 export const MIN_BUMP_R = 11;
+/**
+ * The smallest START radius of a growing bump (the Evil Horn, B58), in CSS px: a little under MIN_BUMP_R so it can
+ * start at about a third of its size on a phone; its tap circle is still a full fingertip (tapRadius).
+ */
+export const GROW_MIN_R = 8;
 /** Bumps on one face in the demo (SPEC D4: 6 to 10 per customer). */
 export const FACE_BUMPS = 8;
 
@@ -173,7 +178,9 @@ export function faceGeometry(width, height, spec0 = {}) {
     const n = 0.13; // the ball's radius plus a little, in rx units
     keepOut.push({ x: cx - n * rx, y: cy + f.noseV * ry - n * rx, w: 2 * n * rx, h: 2 * n * rx });
   }
-  if (acc.includes('flower')) keepOut.push(box(0.56, -1.05, 1.05, -0.58)); // tucked in the hair above the right temple
+  if (acc.includes('flower')) { // tucked in the hair above the right temple; on a bare head it sits further in (B56)
+    keepOut.push(spec.hair === 'bald' || spec.hair === 'mohawk' ? box(0.44, -1.05, 1.05, -0.5) : box(0.56, -1.05, 1.05, -0.58));
+  }
   for (const [u0, v0, u1, v1] of extra.boxes) keepOut.push(box(u0, v0, u1, v1)); // a character's beard and helmet (T2.4)
   const out = { width, height, cx, cy, rx, ry, unit: rx / FACE_UNIT, features: f, keepOut };
   if (extra.zones) out.zones = extra.zones; // a character's own bump zones (the husband: his chin spot first)
@@ -408,6 +415,44 @@ export function grownRadius(r0, rMax, seconds, age) {
   return r0 + (rMax - r0) * (1 - (1 - t) * (1 - t));
 }
 
+/** A growing bump's hold time at its smallest, as a share of the full hold (B58: pop it early and it is quicker). */
+export const GROW_HOLD_SMALL = 0.6;
+
+/**
+ * The hold time of a growing bump (the Evil Horn) at its size now (B58 decision: the hold counts from the current
+ * size). At full size it is the full hold; smaller is quicker, down to GROW_HOLD_SMALL of it at size 0. A bump that
+ * does not grow (no rMax) keeps its hold. Never more than the full hold, so every time limit built on the full hold
+ * stays fair.
+ * @param {number} hold the full hold time in seconds (the table's, or with mastery)
+ * @param {number} r the radius now
+ * @param {number} [rMax] the full radius (left out = not a growing bump)
+ * @returns {number} seconds
+ */
+export function grownHold(hold, r, rMax) {
+  if (!(rMax > 0)) return hold;
+  const share = clamp(r / rMax, 0, 1);
+  return hold * (GROW_HOLD_SMALL + (1 - GROW_HOLD_SMALL) * share);
+}
+
+/**
+ * How a growing bump starts in the pop scene (B58). With reduced motion it does not grow: it starts at the table's
+ * `grow.still` share of its full size (0.7) and stays there. A bump that already starts at full size (a boss's grown
+ * horns, T8.4) does not grow either. Otherwise the layout's start size and growing time are kept.
+ * @param {{type: string, r: number, r0?: number, rMax?: number, growFor?: number}} p a bump from layoutFace
+ * @param {boolean} reduced reduced motion is on
+ * @returns {{r?: number, r0?: number, growFor?: number}} the fields to change (empty for a bump that does not grow)
+ */
+export function growStart(p, reduced) {
+  if (!p?.growFor || !(p.rMax > 0)) return {};
+  const r0 = Number.isFinite(p.r0) ? p.r0 : p.r;
+  if (r0 >= p.rMax) return { r: p.rMax, r0: p.rMax, growFor: 0 };
+  if (reduced) {
+    const still = Math.max(r0, Math.min(p.rMax, p.rMax * (bumpInfo(p.type)?.grow?.still ?? 0.7)));
+    return { r: still, r0: still, growFor: 0 };
+  }
+  return { r: r0, r0, growFor: p.growFor };
+}
+
 /**
  * Where the bumps sit on a face: one per zone (forehead, cheeks, nose, chin, jaw, temple), each on bare skin, off the
  * eyes, brows and mouth, off the nose strip, and far enough apart that every bump has its own fingertip tap circle.
@@ -487,7 +532,7 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allo
     if (grow) { // a growing bump starts small; the spot was chosen for its full size (rMax), so it never grows into another
       b.rMax = p.r;
       // A boss's grown horns (T8.4) start at their full size.
-      b.r0 = hornScale && p.type === 'horn' ? p.r : Math.min(p.r, Math.max(MIN_BUMP_R, p.r * grow.from));
+      b.r0 = hornScale && p.type === 'horn' ? p.r : Math.min(p.r, Math.max(GROW_MIN_R, p.r * grow.from));
       b.r = b.r0;
       b.growFor = grow.seconds;
     }

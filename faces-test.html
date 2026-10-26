@@ -32,6 +32,9 @@
 //   ?show=bumps     bumps and decoys (moles, freckles) in every mood, no boxes: to judge how well they read on the skin
 //   ?w=800&h=390    a landscape phone; ?px=400 shows each picture that many CSS px high; ?dpr=2 paints sharper
 //   ?who=a,b        only these people; ?mood=grim only this mood
+//   ?cols=0-4       only columns 0 to 4; ?album=96x120 the album / reveal picture (screens/reveal.js) at that size
+//   ?crop=300       only the head of each picture, 300 CSS px high (use with ?dpr=2 for sharp detail)
+//   ?acc=headband   strangers with every hair style wearing it (a+b for two); ?acc=all one per accessory (B56)
 //   ?live           the idle life (blinks and glances) runs on every picture (T8.1); with ?blink=1 (0..1) or
 //                   ?gaze=0.25 (-0.3..0.3) every picture shows that one moment instead (for screenshots)
 //   ?perf           measures how long a face picture takes to paint and how long one scene frame takes (T8.1);
@@ -41,7 +44,8 @@ import { faceGeometry, layoutFace } from './js/pop/logic.js';
 import * as FACE from './js/pop/face.js';
 import { drawPimple, drawDecoy } from './js/pop/art.js';
 import { createPopScene } from './js/pop/engine.js';
-import { REGULARS, makeCustomer } from './js/data/customers.js';
+import { faceCanvas as albumFace } from './js/screens/reveal.js';
+import { REGULARS, makeCustomer, FACE_PARTS } from './js/data/customers.js';
 import { HUSBAND, HUSBAND_ARMOR } from './js/data/chapters.js';
 
 const { makeFaceTexture, MOODS } = FACE;
@@ -50,6 +54,8 @@ const W = Number(params.get('w')) || 390; // ?w=800&h=390 = a landscape phone
 const H = Number(params.get('h')) || 800;
 const PX = Number(params.get('px')) || 0; // display height in CSS px (0 = the stylesheet's sizes)
 const DPR = Number(params.get('dpr')) || 1;
+const CROP = Number(params.get('crop')) || 0; // ?crop=300: only the head, that many CSS px high (B56)
+const ALBUM = params.get('album'); // ?album=96x120: the album thumbnail picture instead (B56)
 const LIVE = params.has('live');
 // A fixed idle-life moment for every picture (?blink, ?gaze), or null for the real timing.
 const FIXED = params.has('blink') || params.has('gaze') ? { blink: Number(params.get('blink')) || 0, gx: Number(params.get('gaze')) || 0, gy: 0 } : null;
@@ -65,7 +71,45 @@ const everyone = [
   ...[11, 22, 33, 44].map((seed, i) => { const c = makeCustomer(seed, { chapter: 2 + i }); return { name: `gen ${seed}`, face: c.face, bumps: c.bumps, seed }; }),
 ];
 const who = params.get('who')?.split(',') ?? null; // ?who=husband,armor shows only these
-const people = who ? who.map((n) => everyone.find((p) => p.name === n)).filter(Boolean) : everyone;
+const accSheet = params.get('acc'); // B56: ?acc=... builds strangers wearing accessories instead (see accPeople)
+const cols = (params.get('cols') ?? '0-99').split('-').map(Number); // ?cols=0-4: only columns 0 to 4 (B56)
+const people = (accSheet ? accPeople(accSheet) : who ? who.map((n) => everyone.find((p) => p.name === n)).filter(Boolean) : everyone)
+  .slice(cols[0], cols[1] + 1);
+
+/**
+ * B56 audit sheets. ?acc=headband (or headband+glasses): one stranger per hair style wearing those accessories, the
+ * skin tones, hair colours and head shapes taken in turn. ?acc=all: one stranger per accessory (hair style from
+ * ?hair=, default each in turn). ?skin=deep / ?shape=heart / ?hc=pink fix that part for every column.
+ * @param {string} arg the ?acc value
+ * @returns {object[]} the people {name, face, bumps, seed}
+ */
+function accPeople(arg) {
+  const fix = { skinTone: params.get('skin'), shape: params.get('shape'), hairColor: params.get('hc') };
+  // The face parts of column i (everything but the hair style and the accessories).
+  const base = (i) => ({
+    shape: fix.shape ?? FACE_PARTS.shape[i % FACE_PARTS.shape.length],
+    skinTone: fix.skinTone ?? FACE_PARTS.skinTone[i % FACE_PARTS.skinTone.length],
+    hairColor: fix.hairColor ?? FACE_PARTS.hairColor[(i * 3) % FACE_PARTS.hairColor.length],
+    eyes: FACE_PARTS.eyes[i % FACE_PARTS.eyes.length], brows: FACE_PARTS.brows[i % FACE_PARTS.brows.length],
+    mouth: FACE_PARTS.mouth[i % FACE_PARTS.mouth.length],
+  });
+  if (arg === 'all') {
+    return FACE_PARTS.accessories.map((a, i) => ({
+      name: a, seed: 100 + i, bumps: 8,
+      face: { ...base(i), hair: params.get('hair') ?? FACE_PARTS.hair[i % FACE_PARTS.hair.length], accessories: [a] },
+    }));
+  }
+  // Returns the known accessory ids in an 'a+b' text.
+  const ids = (s) => s.split(/[+ ]/).filter((a) => FACE_PARTS.accessories.includes(a));
+  if (arg.includes(',')) { // ?acc=hat+beanie,tiara+headband: one column per set
+    return arg.split(',').map((s, i) => ({
+      name: s, seed: 300 + i, bumps: 8,
+      face: { ...base(i), hair: params.get('hair') ?? FACE_PARTS.hair[i % FACE_PARTS.hair.length], accessories: ids(s) },
+    }));
+  }
+  const acc = ids(arg);
+  return FACE_PARTS.hair.map((h, i) => ({ name: h, seed: 200 + i, bumps: 8, face: { ...base(i), hair: h, accessories: acc } }));
+}
 const lives = []; // {canvas, tex, life} for ?live
 
 /**
@@ -75,6 +119,13 @@ const lives = []; // {canvas, tex, life} for ?live
  * @returns {HTMLCanvasElement} the canvas
  */
 function faceCanvas(p, mood) {
+  if (ALBUM) { // ?album=96x120 (B56): the album / reveal picture (screens/reveal.js), shown twice as big
+    const [aw, ah] = ALBUM.split('x').map(Number);
+    const look = { seed: p.seed, spec: p.face, count: p.bumps, kinds: null, strip: false, decoys: true, w: W, h: H, mood, redness: 0.3, clean: mood === 'glowing' };
+    const c = albumFace(look, aw || 96, ah || 120, 2);
+    c.style.cssText = `width:${(aw || 96) * 2}px;height:${(ah || 120) * 2}px;background:#f3e9dc`;
+    return c;
+  }
   const face = faceGeometry(W, H, p.face);
   const redness = mood === 'grim' || mood === 'ow' || mood === 'sleep' ? 1 : mood === 'relief' ? 0.3 : 0;
   const tex = makeFaceTexture(W, H, DPR, face, p.face, { mood, redness, seed: p.seed });
@@ -100,7 +151,14 @@ function faceCanvas(p, mood) {
   }
   if (PX) { shown.style.height = `${PX}px`; shown.style.width = `${Math.round((PX * W) / H)}px`; }
   shown.title = `${p.name}: ${JSON.stringify(p.face)}`;
-  return shown;
+  if (!CROP) return shown;
+  // ?crop (B56): show only a box round the head (face units -1.75 .. 1.75 across, -1.7 .. 1.5 down), drawn large.
+  const k = CROP / (3.2 * face.ry);
+  shown.style.cssText = `width:${W * k}px;height:${H * k}px;border-radius:0;margin:${-(face.cy - 1.7 * face.ry) * k}px 0 0 ${-(face.cx - 1.75 * face.rx) * k}px`;
+  const box = document.createElement('div');
+  box.style.cssText = `width:${3.5 * face.rx * k}px;height:${CROP}px;overflow:hidden;border-radius:6px`;
+  box.append(shown);
+  return box;
 }
 
 /** Fill the table: one row per mood (or only the chosen one), one column per person. @returns {void} */

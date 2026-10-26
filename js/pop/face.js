@@ -185,6 +185,29 @@ function hashText(s) {
   return h >>> 0;
 }
 
+/** Headwear that covers the top of the head: only one of these is worn. */
+const HATS = ['beanie', 'hat', 'pilot-cap'];
+/** Accessory -> the headwear it cannot be worn with (it would sit on top of it or be squashed under it). */
+const CLASHES = { tiara: HATS, veil: HATS, headband: ['beanie', 'pilot-cap'] };
+
+/**
+ * The accessories a face really wears (B56): the generator can pick two that clash (two hats, a tiara or veil on a
+ * cap, a headband under a beanie); the first one in the list is kept and the clashing one is left off. Older saved
+ * faces keep their list, so this is done when drawing. The layout (logic.js) still counts both, which only keeps
+ * bumps a little further from the hairline.
+ * @param {string[]} acc accessory ids, in the face's order
+ * @returns {string[]} the ones worn
+ */
+export function wornAccessories(acc) {
+  const out = [];
+  for (const a of acc) {
+    // True when b cannot be worn together with a (either way round).
+    const clash = (b) => (HATS.includes(a) && HATS.includes(b)) || CLASHES[a]?.includes(b) || CLASHES[b]?.includes(a);
+    if (!out.some(clash)) out.push(a);
+  }
+  return out;
+}
+
 /**
  * Turn a face spec into everything the drawing needs: part ids checked against FACE_PARTS (unknown ones get a
  * default), and colours as '#rrggbb'. Older specs ({skin, hair: '#colour', eyes: '#colour', shirt}) still work.
@@ -214,7 +237,7 @@ export function faceLook(spec = DEFAULT_FACE_SPEC) {
     eyeColour: isHex(s.eyes) ? s.eyes : isHex(s.eyeColour) ? s.eyeColour : pick(EYE_COLOURS),
     brows: part('brows', s.brows, 'flat'),
     mouth: part('mouth', s.mouth, 'smile'),
-    acc,
+    acc: wornAccessories(acc), // B56: never two hats, or a crown on a cap
     shirt: isHex(s.shirt) ? s.shirt : pick(SHIRT_COLOURS),
     accent,
     accent2: pick(ACCENTS.filter((c) => c !== accent)),
@@ -615,7 +638,8 @@ function drawBackHair(ctx, f, look) {
     fillHair(ctx, f, hair, -0.95, 0, { flow: 'down', box: [-1.32, -0.3, 1.32, 1.62], count: 40 });
     return;
   }
-  if (st === 'bun') { // the bun on top, with a hair tie
+  // The bun on top (B56: not under a hat, beanie or cap, where it used to poke out above the crown).
+  if (st === 'bun' && !look.acc.some((a) => a === 'beanie' || a === 'hat' || a === 'pilot-cap')) {
     ctx.beginPath();
     ctx.ellipse(cx, cy - ry * 1.2, rx * 0.34, ry * 0.24, 0, 0, Math.PI * 2);
     fillHair(ctx, f, hair, -1.35, 0, { flow: 'swirl', from: [0, -1.2], count: 16 });
@@ -665,12 +689,15 @@ function drawFrontHair(ctx, f, look) {
     ctx.beginPath();
     ctx.ellipse(X(-0.3), Y(-0.86), rx * 0.22, ry * 0.07, -0.35, 0, Math.PI * 2);
     ctx.fill();
-    for (const s of [-1, 1]) { // tufts above the ears, outside the bare-skin oval
+    // Tufts above the ears, outside the bare-skin oval: full, soft patches hugging the head (B56: they used to be thin
+    // dark slivers standing off the head like fins).
+    for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(X(s * 1.0), Y(-0.42));
-      ctx.quadraticCurveTo(X(s * 1.13), Y(-0.3), X(s * 1.05), Y(-0.06));
-      ctx.quadraticCurveTo(X(s * 0.99), Y(-0.2), X(s * 1.0), Y(-0.42));
-      fillHair(ctx, f, hair, -0.95, 0, { flow: 'down', box: s < 0 ? [-1.13, -0.42, -0.99, -0.06] : [0.99, -0.42, 1.13, -0.06], count: 6 });
+      ctx.moveTo(X(s * 0.93), Y(-0.52));
+      ctx.quadraticCurveTo(X(s * 1.09), Y(-0.46), X(s * 1.08), Y(-0.17));
+      ctx.quadraticCurveTo(X(s * 1.05), Y(-0.1), X(s * 0.99), Y(-0.14));
+      ctx.quadraticCurveTo(X(s * 1.0), Y(-0.36), X(s * 0.93), Y(-0.52));
+      fillHair(ctx, f, hair, -0.95, 0, { flow: 'down', box: s < 0 ? [-1.09, -0.52, -0.93, -0.1] : [0.93, -0.52, 1.09, -0.1], count: 8 });
     }
     return;
   }
@@ -688,6 +715,8 @@ function drawFrontHair(ctx, f, look) {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+    // B56: under a hat, beanie or cap the crest is squashed flat (its root used to peek out under the brim).
+    if (look.acc.some((a) => HATS.includes(a))) return;
     // The spiky strip on top.
     const base = f.features.hairTop + 0.04;
     ctx.beginPath();
@@ -739,9 +768,20 @@ function drawFrontHair(ctx, f, look) {
     }
   }
   ctx.closePath();
+  if (st === 'curly') { // B56: a bumpy edge of curls round the top, so it reads as hair and not as a shower cap
+    const t0 = Math.asin(Math.max(-0.95, Math.min(0.95, (sideV - 0.42) / sy))); // not down the sides (stray balls)
+    for (let i = 0; i <= 8; i += 1) {
+      const t = t0 + (i / 8) * (-Math.PI - 2 * t0);
+      const [x, y] = headPoint(f, t, sx * 0.97, sy * 0.98);
+      const r = rx * 0.11 * (0.65 + 0.35 * Math.sin((i / 8) * Math.PI)); // smaller towards the ends
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, Math.PI * 2, true); // the same turning way as the cap, so they add to it
+    }
+  }
   // Texture: little curls for curly hair, strands for straight hair (pulled back towards a bun or ponytail, from the
   // parting for long hair, only a few for the husband's smooth hair).
-  if (st === 'curly' || st === 'afro') fillHair(ctx, f, hair, -0.95, 0, { flow: 'curl', box: [-1.08, -1.25, 1.08, -0.6], count: 44, seed: 7 });
+  if (st === 'curly') fillHair(ctx, f, hair, -0.95, 0, { flow: 'curl', box: [-1.2, -1.3, 1.2, -0.25], count: 60, seed: 7 });
+  else if (st === 'afro') fillHair(ctx, f, hair, -0.95, 0, { flow: 'curl', box: [-1.08, -1.25, 1.08, -0.6], count: 44, seed: 7 });
   else if (look.smoothHair) fillHair(ctx, f, hair, -0.95, 0, { count: 12, seed: 3 });
   else fillHair(ctx, f, hair, -0.95, 0, { from: st === 'bun' || st === 'ponytail' ? [0, -1.32] : st === 'long' ? [0, -1.1] : [0.08, -1.14], count: 40 });
   // Long hair and the bob also hang down beside the face (outside the bare-skin oval).
@@ -755,7 +795,8 @@ function drawFrontHair(ctx, f, look) {
         ctx.lineTo(X(s * (Math.sqrt(Math.max(0, 1 - v * v)) * 1.0 + 0.035)), Y(v));
       }
       ctx.quadraticCurveTo(X(s * 1.0), Y(end + 0.1), X(s * 1.22), Y(end + 0.04));
-      ctx.quadraticCurveTo(X(s * 1.2), Y(0), X(s * 1.1), Y(-0.55));
+      // Back up the outer edge to the top of the head outline (B56: it used to end at 1.1, a spike in the air).
+      ctx.quadraticCurveTo(X(s * 1.2), Y(0), X(s * 1.0), Y(-0.5));
       ctx.closePath();
       fillHair(ctx, f, hair, -0.4, 0, { flow: 'down', box: s < 0 ? [-1.22, -0.45, -0.95, end + 0.1] : [0.95, -0.45, 1.22, end + 0.1], count: 10, seed: 12 + s });
     }
@@ -905,28 +946,12 @@ function drawHeadwear(ctx, f, look) {
     ctx.fillStyle = '#c0392b';
     ctx.beginPath(); ctx.arc(X(0), Y(bandBottom - 0.22), rx * 0.035, 0, Math.PI * 2); ctx.fill();
   }
-  if (has('headband')) { // a stretchy band along the hairline with a knot on the left
-    const c = look.accent;
-    ctx.beginPath();
-    for (let i = 0; i <= 24; i += 1) { const u = -1.04 + (2.08 * i) / 24; ctx.lineTo(X(u), Y(hairline(f, u) - 0.14)); }
-    for (let i = 24; i >= 0; i -= 1) { const u = -1.04 + (2.08 * i) / 24; ctx.lineTo(X(u), Y(hairline(f, u) - 0.04)); }
-    ctx.closePath();
-    ctx.fillStyle = c;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = lw;
-    ctx.beginPath();
-    for (let i = 0; i <= 24; i += 1) { const u = -1.0 + (2.0 * i) / 24; ctx.lineTo(X(u), Y(hairline(f, u) - 0.09)); }
-    ctx.stroke();
-    ctx.fillStyle = shade(c, -0.1);
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.ellipse(X(-0.78 + s * 0.12), Y(hairline(f, -0.78) - 0.16), rx * 0.13, rx * 0.07, s * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  if (has('headband')) drawHeadband(ctx, f, look);
   if (has('tiara')) { // a small golden crown with a pink gem
     const baseV = -1.05;
+    ctx.save();
+    // B56: on a mohawk it sits lower, in front of the crest's root (which used to show as a block under it).
+    if (look.hairStyle === 'mohawk') ctx.translate(0, ry * 0.12);
     ctx.beginPath();
     ctx.moveTo(X(-0.42), Y(baseV + 0.02));
     const pts = [[-0.42, -1.2], [-0.26, -1.12], [-0.14, -1.27], [0, -1.16], [0.14, -1.27], [0.26, -1.12], [0.42, -1.2]];
@@ -947,6 +972,7 @@ function drawHeadwear(ctx, f, look) {
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(X(s * 0.24), Y(-1.08), rx * 0.03, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.beginPath(); ctx.arc(X(-0.02), Y(-1.115), rx * 0.016, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
   if (has('veil')) { // the front of the veil: a pearl band on top of the head
     ctx.fillStyle = '#fffaf0';
@@ -957,7 +983,139 @@ function drawHeadwear(ctx, f, look) {
       ctx.fill();
     }
   }
-  if (has('flower')) drawFlower(ctx, X(0.8), Y(-0.82), rx * 0.2, look.accent2);
+  if (has('flower')) { // tucked into the hair above the right temple (B56: pulled in onto the head, so it never floats)
+    const [fu, fv] = flowerSpot(f.features.shape, look.hairStyle);
+    drawFlower(ctx, X(fu), Y(fv), rx * 0.2, look.accent2);
+  }
+}
+
+/** Hair style -> how far its outline reaches past the head outline [across, up and down] (B56: where a band over
+ * the hair must end so it seems to go round the back of the head instead of sticking out into the air). */
+const HAIR_REACH = { bald: [1, 1], mohawk: [1, 1], curly: [1.1, 1.16], afro: [1.08, 1.16], long: [1.1, 1.14] };
+
+/**
+ * Whether a point (in face units) lies inside the head outline scaled by sx and sy (B56).
+ * @param {string} shape the head shape id
+ * @param {number} u across, face units
+ * @param {number} v down, face units
+ * @param {number} sx scale across
+ * @param {number} sy scale up and down
+ * @returns {boolean} true = inside
+ */
+export function insideHeadOutline(shape, u, v, sx, sy) {
+  return Math.hypot(u / sx, v / sy) <= headReach(shape, Math.atan2(v / sy, u / sx));
+}
+
+/**
+ * Where the flower sits (B56), in face units: above the right temple, tucked into the edge of the hair, or pulled in
+ * onto a bare head (bald, mohawk) so it never hangs in the air beside the dome.
+ * @param {string} shape the head shape id
+ * @param {string} hairStyle the hair style id
+ * @returns {number[]} [u, v] its centre
+ */
+export function flowerSpot(shape, hairStyle) {
+  if (hairStyle !== 'bald' && hairStyle !== 'mohawk') return [0.8, -0.82]; // in the hair's edge, as it always was
+  const t = Math.atan2(-0.82, 0.8); // the same direction, pulled in onto the bare head
+  const k = Math.min(Math.hypot(0.8, 0.82), headReach(shape, t) * 0.95); // logic.js keeps bumps off it
+  return [k * Math.cos(t), k * Math.sin(t)];
+}
+
+/**
+ * Where the headband lies (B56), in face units: its upper and lower edge at each u, and how far it reaches to each
+ * side before it disappears round the back of the hair (or the bald head). Bald heads and mohawks wear it right on
+ * the hairline (no hair to show under it). It never reaches below the hairline, so it never covers a bump.
+ * @param {object} f the face geometry
+ * @param {string} hairStyle the hair style id
+ * @returns {{top: (u: number) => number, bottom: (u: number) => number, reach: [number, number], end: number}}
+ *   the edges, the scale of the outline it is cut to, and the u where its middle line leaves that outline (> 0)
+ */
+export function headbandPath(f, hairStyle) {
+  const reach = HAIR_REACH[hairStyle] ?? [1.07, 1.12];
+  const bare = hairStyle === 'bald' || hairStyle === 'mohawk';
+  const ft = f.features;
+  // The lower edge at u: just above the hairline (hugging the dome on a bare head).
+  const bottom = (u) => hairline(f, u) - (bare ? 0.01 : 0.04);
+  // The upper edge at u.
+  const top = (u) => bottom(u) - 0.11;
+  let end = 0;
+  for (let u = 0; u <= 1.4; u += 0.01) {
+    if (!insideHeadOutline(ft.shape, u, (top(u) + bottom(u)) / 2, reach[0] - 0.02, reach[1] - 0.02)) break;
+    end = u;
+  }
+  return { top, bottom, reach, end };
+}
+
+/**
+ * The headband (B56): a stretchy band over the hair along the hairline. It is cut to the outline of the hair (or of
+ * the head when bald), and darkens towards its ends, so it reads as going round the back of the head; a little bow
+ * sits on it on the left, always on the band.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {object} look the face look
+ * @returns {void}
+ */
+function drawHeadband(ctx, f, look) {
+  const { cx, cy, rx, ry } = f;
+  // Turns a face x-unit (u) into a canvas x position.
+  const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
+  const Y = (v) => cy + v * ry;
+  const c = look.accent;
+  const band = headbandPath(f, look.hairStyle);
+  const n = 32;
+  ctx.save();
+  ctx.beginPath(); // the outline it is cut to
+  for (let i = 0; i < 96; i += 1) {
+    const [x, y] = headPoint(f, (i / 96) * Math.PI * 2, band.reach[0] - 0.01, band.reach[1] - 0.01);
+    if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+  ctx.clip();
+  ctx.beginPath();
+  for (let i = 0; i <= n; i += 1) { const u = -1.4 + (2.8 * i) / n; ctx.lineTo(X(u), Y(band.top(u))); }
+  for (let i = n; i >= 0; i -= 1) { const u = -1.4 + (2.8 * i) / n; ctx.lineTo(X(u), Y(band.bottom(u))); }
+  ctx.closePath();
+  const g = ctx.createLinearGradient(X(-band.end), 0, X(band.end), 0); // rounds away at both ends
+  g.addColorStop(0, shade(c, -0.35));
+  g.addColorStop(0.2, shade(c, 0.05));
+  g.addColorStop(0.45, shade(c, 0.12));
+  g.addColorStop(0.8, c);
+  g.addColorStop(1, shade(c, -0.4));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = shade(c, -0.35, 0.8);
+  ctx.lineWidth = Math.max(1, rx * 0.012);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; // the stretchy stitch line
+  ctx.lineWidth = Math.max(1.2, rx * 0.014);
+  ctx.beginPath();
+  for (let i = 0; i <= n; i += 1) { const u = -1.4 + (2.8 * i) / n; ctx.lineTo(X(u), Y((band.top(u) + band.bottom(u)) / 2)); }
+  ctx.stroke();
+  ctx.restore();
+  // The bow, on the band two thirds of the way out on the left, tilted with it.
+  const ku = -0.62 * band.end;
+  const kv = (band.top(ku) + band.bottom(ku)) / 2;
+  const slope = Math.atan2((band.bottom(ku + 0.02) - band.bottom(ku - 0.02)) * ry, 0.04 * rx);
+  ctx.save();
+  ctx.translate(X(ku), Y(kv));
+  ctx.rotate(slope);
+  ctx.fillStyle = shade(c, -0.08);
+  ctx.strokeStyle = shade(c, -0.4, 0.8);
+  ctx.lineWidth = Math.max(1, rx * 0.01);
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.bezierCurveTo(s * rx * 0.08, -ry * 0.09, s * rx * 0.17, -ry * 0.06, s * rx * 0.15, 0);
+    ctx.bezierCurveTo(s * rx * 0.17, ry * 0.06, s * rx * 0.08, ry * 0.09, 0, 0);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.fillStyle = shade(c, -0.2);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx * 0.035, ry * 0.04, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**

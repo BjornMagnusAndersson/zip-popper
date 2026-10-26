@@ -22,13 +22,13 @@
 // leaves the screen or slides under the tool bar); 'ticklish' = a squeeze held on a cheek, the jaw or near the ear
 // makes her giggle (the face jerks away, the press drops back and must be made again; onGiggle tells the controller);
 // 'sensitive' = cold squeezes give more Ows, each Ow irritates more, and her cheeks start a little red.
-import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius } from './logic.js';
+import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius, grownHold, growStart } from './logic.js';
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
-  wipeReach, autoWipeSeconds, padRestSpot, popStepOver,
+  wipeReach, autoWipeSeconds, padRestSpot, popStepOver, stripBusy, wipeStripPress,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
@@ -56,12 +56,20 @@ const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
  * A bump ready for the scene: its own copy with pressure and animation state, and its hold time from data/bumps.js
- * when the layout did not give one.
+ * when the layout did not give one. A growing bump (Evil Horn, B58) gets its start size (logic.js growStart: no growing
+ * with reduced motion) and keeps its full hold in holdFull; its hold now follows its size (logic.js grownHold).
  * @param {object} p a bump like those from layoutFace
  * @param {boolean} reduced reduced motion (it appears at once)
  * @returns {object} the scene's bump
  */
-const sceneBump = (p, reduced) => ({ ...p, hold: p.hold ?? holdTime(p.type), pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0, age: 0 });
+const sceneBump = (p, reduced) => {
+  const b = { ...p, hold: p.hold ?? holdTime(p.type), pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0, age: 0 };
+  if (!b.growFor) return b;
+  Object.assign(b, growStart(b, reduced));
+  b.holdFull = b.hold;
+  b.hold = grownHold(b.holdFull, b.r, b.rMax);
+  return b;
+};
 
 /**
  * Whether a bump comes out as a horn (the Evil Horn creaks out instead of squirting).
@@ -117,7 +125,8 @@ function affine(s, d) {
  *   tool?: string, face?: {cx: number, cy: number, rx: number, ry: number}, tools?: string[],
  *   onOw?: (o: {x: number, y: number, type: string, tool: string}) => void, onWarm?: (warmth: number) => void,
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
- *   onStripPeeled?: () => void (the nose strip came off, B13 round 2c),
+ *   onStripPeeled?: () => void (the nose strip came off, B13 round 2c), onStripStuck?: () => void (the strip was
+ *   stuck on during the wipe, B55),
  *   covered?: () => {x: number, y: number, w: number, h: number}[] (boxes of controls over the scene; the wipe pad
  *   waits clear of them),
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
@@ -659,6 +668,7 @@ export function createPopScene(canvas, o) {
   /**
    * After the last pimple: start wiping (or straight to the cream when there is no goo). The nose strip is optional
    * (tool-logic.js popStepOver): an unpeeled strip never holds the round up; only a peel in progress is waited for.
+   * The strip stays on and usable through the wipe; it only comes away at the cream (B55, beginCream).
    * @returns {void}
    */
   function maybeNextStep() {
@@ -668,7 +678,6 @@ export function createPopScene(canvas, o) {
     const start = () => {
       if (disposed || step !== 'pop') return;
       if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || !popStepOver(pimples, strip, Boolean(peel))) { setTimeout(start, 120); return; }
-      if (strip && !strip.off && strip.stuck) { strip.stuck = false; strip.q = 0; } // stuck on but never peeled: it comes away, no bonus
       beginWipe();
     };
     setTimeout(start, reduced ? 200 : 450);
@@ -863,9 +872,15 @@ export function createPopScene(canvas, o) {
     kick();
   }
 
-  /** Dab cream on every pink mark and rub it in with a clean sweep. @returns {void} */
+  /**
+   * Dab cream on every pink mark and rub it in with a clean sweep. A nose strip stuck on but never peeled comes away
+   * now, with no bonus (B55: until here it could still be stuck on and peeled).
+   * @returns {void}
+   */
   function beginCream() {
     wipe = null;
+    peel = null;
+    if (strip && !strip.off && strip.stuck) { strip.stuck = false; strip.q = 0; }
     cream = { t: 0, dollops: marks.filter((m) => !m.patched).map((m, i) => ({ x: m.x, y: m.y, r: Math.max(6, m.r * 1.1), at: i * 0.08 })) }; // patched spots need no cream
     play('cream_heal');
     irr = irritationSoothe(irr, 'cream'); // the cream soothes the skin
@@ -883,8 +898,10 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) {
       if (p.appear < 1) { p.appear = Math.min(1, p.appear + dt * 3.5); busy = true; }
       if (p.growFor && !p.popped && step === 'pop' && p.age < p.growFor) { // a growing bump (Evil Horn) gets bigger while you watch
+        if (!p.creaked && !halted) { p.creaked = true; play('creak', { grow: true }); } // a soft creak as it starts to grow out (B58)
         p.age += dt;
         p.r = grownRadius(p.r0, p.rMax, p.growFor, p.age);
+        p.hold = grownHold(p.holdFull ?? p.hold, p.r, p.rMax); // bigger = a longer squeeze (B58)
         busy = true;
       }
       if (!p.popped) {
@@ -1015,8 +1032,8 @@ export function createPopScene(canvas, o) {
       }
       if (wipe.fade) {
         busy = true;
-        wipe.fade += dt * 3;
-        if (wipe.fade >= 1) beginCream();
+        wipe.fade = Math.min(1, wipe.fade + dt * 3);
+        if (wipe.fade >= 1 && !stripBusy(strip, Boolean(peel))) beginCream(); // a peel going on finishes first (B55)
       }
     }
     if (cream) {
@@ -1372,8 +1389,18 @@ export function createPopScene(canvas, o) {
     if (e.button > 0 || halted) return false;
     const pt = local(e);
     if (step === 'pop' && giggleBlocks(time, giggleAt)) return false; // she is still giggling (ticklish, T8.3): wait
+    const stripDo = step === 'wipe' ? wipeStripPress({ // B55: the nose strip still sticks on and peels while wiping
+      strip, onStrip: Boolean(strip && inStripArea(strip, pt.x, pt.y)), toolUse: toolInfo(tool)?.use ?? null,
+    }) : null;
     if (step === 'pop') {
       if (!pressPop(e, pt)) return false;
+    } else if (stripDo === 'peel') {
+      peel = { id: e.pointerId, x0: pt.x, q0: strip.q };
+    } else if (stripDo === 'stick') {
+      strip.stuck = true;
+      play('peel');
+      buzz(10);
+      try { o.onStripStuck?.(); } catch (err) { console.warn('onStripStuck failed:', err); } // the hint says: now peel it
     } else if (step === 'wipe' && toolInfo(tool)?.use === 'patch' && patchAt(pt)) {
       // a patch went on a popped spot; no wiping with this press
     } else if (step === 'wipe' && wipe && !wipe.fade) {

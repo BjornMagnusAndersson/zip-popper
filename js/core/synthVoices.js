@@ -44,13 +44,21 @@ export const VOICES = {
     k.tone(3400, t, 0.025, { type: 'square', vol: 0.04 });
     k.tone(600, t + 0.03, 0.08, { vol: 0.16, slideTo: 1500 });
   },
-  /** The Evil Horn coming out: a comic door-creak that rises, then a hollow "thwop". @param {object} k kit @param {number} t start */
-  creak(k, t) {
+  /**
+   * The Evil Horn coming out: a comic door-creak that rises, then a hollow "thwop". With o.grow (B58) only a softer,
+   * slower creak and no thwop: the horn starting to grow out.
+   * @param {object} k kit @param {number} t start @param {{grow?: boolean}} [o] options
+   */
+  creak(k, t, o) {
+    const grow = Boolean(o?.grow);
+    const len = grow ? 0.8 : 0.42;
+    const vol = grow ? 0.045 : 0.07;
     for (let i = 0; i < 14; i += 1) { // the creak: quick little clicks that get faster and higher
-      const d = 0.42 * Math.sqrt(i / 14);
-      k.tone(160 + i * 22, t + d, 0.05, { type: 'sawtooth', vol: 0.07, slideTo: 140 + i * 26 });
+      const d = len * Math.sqrt(i / 14);
+      k.tone(160 + i * 22, t + d, 0.05, { type: 'sawtooth', vol, slideTo: 140 + i * 26 });
     }
-    k.hiss(t, 0.45, { freq: 700, to: 1400, q: 8, vol: 0.05 });
+    k.hiss(t, len + 0.03, { freq: 700, to: 1400, q: 8, vol: grow ? 0.03 : 0.05 });
+    if (grow) return;
     k.tone(520, t + 0.47, 0.16, { vol: 0.35, slideTo: 160 }); // thwop
     k.hiss(t + 0.47, 0.08, { type: 'lowpass', freq: 900, vol: 0.18 });
   },

@@ -48,7 +48,7 @@ import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
 import {
   applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
-  stripChance, stripHintKey,
+  stripChance, stripHintKey, wipeHintKey,
 } from './round-logic.js';
 import { kindsOnFace, newKindQueue, hintQueueAfterPop, newKindHintKey } from '../screens/guide-logic.js';
 
@@ -375,8 +375,12 @@ export function createPopMode({
       stuck: Boolean(current?.scene?.stripStuck?.()), owned: toolIds.includes('noseStrip'), toolInHand: toolId,
     }) : null;
     if (stripKey) return t(stripKey); // "Dotty nose: try the nose strip for a bonus!" (the strip is optional)
-    if (step === 'wipe') { // with the cotton pad in the bar but not in hand: tell her it wipes faster (B13 round 2b)
-      return t(toolIds.includes('cottonPad') && toolId !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe');
+    if (step === 'wipe') { // the nose strip tip while it is still on (B55), else the wipe hint (pad tip: B13 round 2b)
+      return t(wipeHintKey({
+        stripOnFace: Boolean(current?.hasStrip && !current.stripPeeled && current.scene?.stripOn?.()),
+        stuck: Boolean(current?.scene?.stripStuck?.()), owned: toolIds.includes('noseStrip'), toolInHand: toolId,
+        padOwned: toolIds.includes('cottonPad'),
+      }));
     }
     if (step === 'cream' || step === 'done') return t('pop.hint.cream');
     if (squeeze && canSqueeze(toolId)) { // T1.7: the squeeze switch is on and fingers are in hand
@@ -815,7 +819,11 @@ export function createPopMode({
         if (!c.failed && isFail(lv, cfg.failMode)) stormOff(c);
       },
       onPatch: (n) => { c.patches = n; }, // each patched spot pays a small tip (economy.js roundPayout)
-      onStripPeeled: () => { c.stripPeeled = true; }, // the peeled nose strip pays a bonus (economy.js roundPayout)
+      onStripPeeled: () => { // the peeled nose strip pays a bonus (economy.js roundPayout)
+        c.stripPeeled = true;
+        if (current === c && c.scene?.step() === 'wipe') paintHint('wipe'); // peeled while wiping (B55): the strip tip goes
+      },
+      onStripStuck: () => { if (current === c && c.scene?.step() === 'wipe') paintHint('wipe'); }, // stuck on while wiping (B55): "peel it"
       covered: () => coveredRects(), // where the tool bar and buttons sit over the face, so the wipe pad rests clear of them
       onNote: (n) => { if (n === 'patchFirst' && current === c) { hint.textContent = t('tool.patch.notYet'); hint.classList.remove('pop-hint--new', 'pop-hint--flash'); } },
       onPop: (p) => {

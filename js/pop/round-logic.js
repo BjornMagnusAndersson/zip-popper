@@ -220,6 +220,23 @@ export function stripHintKey({ stripOnFace, stuck = false, owned, toolInHand }) 
 }
 
 /**
+ * The hint line during the wipe step (B55: the nose strip stays usable until the cream starts, and so does its hint).
+ * While the strip is still on: stuck on = 'peel it for the bonus'; not stuck, owned and not in hand = the strip bonus
+ * tip; the nose strip in hand = its own hint. Otherwise the wipe hint (with the cotton pad tip when she owns the pad
+ * but holds something else, B13 round 2b).
+ * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string, padOwned?: boolean}} o the face
+ *   and the tool bar now (owned = she owns the nose strip)
+ * @returns {string} the string key
+ */
+export function wipeHintKey({ stripOnFace, stuck = false, owned, toolInHand, padOwned = false }) {
+  if (stripOnFace && stuck) return 'pop.hint.stripPeel';
+  if (stripOnFace && owned && toolInHand === 'noseStrip') return 'tool.noseStrip.hint';
+  const strip = stripHintKey({ stripOnFace, stuck, owned, toolInHand });
+  if (strip) return strip;
+  return padOwned && toolInHand !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe';
+}
+
+/**
  * What the request banner shows now: the request's text (requests.js describeRequest), whether it is still open,
  * done or missed (requestProgress), and for a hurry request the whole seconds left. Null when there is no request.
  * @param {{type: string, n?: number, timeLimit?: number}|null} request from requests.js pickRequest

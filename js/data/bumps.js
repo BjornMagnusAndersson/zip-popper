@@ -26,7 +26,9 @@ export { TOOL_IDS } from './tools.js';
  * - rough: the chance (0..1) that a press start with the right tool still gives an Ow while the face is cold (T1.2b,
  *   TOOLS.md decision 3); scaled by the tool (data/tools.js roughScale), the warm cloth and the irritation meter.
  * - grow (optional): the bump grows while the face is on screen: it starts at `from` times its laid-out radius and
- *   reaches the full radius after `seconds`, then stops (the layout keeps room for the full size).
+ *   reaches the full radius after `seconds`, then stops (the layout keeps room for the full size); `still` = the
+ *   share of the full size it starts at, and keeps, with reduced motion (it does not grow then). Its hold time counts
+ *   from its size now (pop/logic.js grownHold): popped early, it is quicker.
  */
 export const BUMPS = {
   whitehead: {
@@ -53,7 +55,9 @@ export const BUMPS = {
     implemented: true, hold: 2.9, radius: [24, 30], goo: 'horn', drops: 3,
     bestTools: ['fingers'], warmHelps: true, needsTool: null, pay: 8, rough: 0.18,
     spawn: { chance: 0.4, maxPerFace: 1, zones: ['cheekL', 'cheekR', 'jawL', 'jawR'] }, // roomy spots, so it can grow big
-    grow: { from: 0.8, seconds: 24 }, // starts fairly big, so it reads on a phone from the start
+    // B58: starts small (35 percent) and visibly grows out to full size in 13 s, fast at first (ease-out); with
+    // reduced motion it does not grow and starts at 70 percent. A tiny horn is still easy to tap (logic.js tapRadius).
+    grow: { from: 0.35, seconds: 13, still: 0.7 },
   },
   hair: { // an ingrown hair (T1.3): a small red bump; tweezers pull out a silly, very long curly hair (no goo)
     implemented: true, hold: 1.6, radius: [13, 17], goo: 'hair', drops: 0,
