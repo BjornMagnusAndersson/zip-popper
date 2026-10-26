@@ -1,7 +1,7 @@
 // The app router (T3.1c, with T3.3 save wiring and T3.4 free play): wires every screen, the story chapters, the
 // economy, the comics and the pop rounds into one game. index.html calls startApp().
 // Flow: first start = name screen, then the menu; later starts = title, then the menu. Continue plays the next story
-// step (chapter-logic.js): a chapter strip, a special mode (placeholder until T4.5 / T4.6), a customer (intro, pop
+// step (chapter-logic.js): a chapter strip, a special mode (torchlight, T4.5; phone scroll, T4.6), a customer (intro, pop
 // round, result), the hygiene scare strip (gloves), the teaser strip and the "To be continued" screen. Free play,
 // Comics, Shop (with the placeholder scrub job until T5.1b), Settings and About hang off the menu.
 // The save is written after every customer, purchase, scrub job, comic seen and setting change, so a reload goes on
@@ -35,6 +35,8 @@ import { createComicsScreen } from '../screens/comics.js';
 import { createSettingsScreen } from '../screens/settings.js';
 import { createAboutScreen } from '../screens/about.js';
 import { createSpecialScreen } from '../screens/special.js';
+import { createTorchlightScreen } from '../screens/torchlight.js';
+import { createPhoneScrollScreen } from '../screens/phone-scroll.js';
 import { createScrubScreen } from '../screens/scrub.js';
 import { createEndScreen } from '../screens/end.js';
 import * as L from './app-logic.js';
@@ -79,8 +81,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
   let screen = null; // the screen on show ({node, dispose})
   let pop = null; // the pop scene while a round or free play is on
-  const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music }); // comics and menus
-  const music = createMusic({ sound }); // background music (T6.1a), on the same audio as the sounds
+  const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music, sfxVolume: save.settings.sfxVolume }); // comics and menus
+  const music = createMusic({ sound, volume: save.settings.musicVolume }); // background music (T6.1a), on the same audio as the sounds
   let hurryTimer = 0; // ends the hectic music when a hurry request's time is up
   // Browsers only allow sound after a tap: the first tap anywhere wakes the audio, and the music starts then.
   for (const type of ['click', 'touchend', 'keydown']) (root.ownerDocument ?? root).addEventListener(type, () => sound.unlock(), { passive: true });
@@ -278,6 +280,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function continueStory() {
+    const lost = L.pendingStrips(save); // milestone strips left over when the app was closed on a result screen (B4)
+    if (lost.length) { playStrips(lost, () => { persist(L.clearPendingStrips(save)); continueStory(); }); return; }
     const waiting = L.pendingScrub(save);
     if (waiting) { runScrub(waiting, continueStory); return; }
     const step = L.nextStep(save);
@@ -285,14 +289,43 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const done = () => { persist(L.finishStep(save, step)); continueStory(); };
     if (step.type === 'strip' || step.type === 'teaser') playStrip(step.stripId, done);
     else if (step.type === 'scare') playStrip(L.SCARE_STRIP, done);
+    else if (step.type === 'special' && getChapter(step.chapter)?.special === 'torchlight') playTorchlight(step, done);
+    else if (step.type === 'special' && getChapter(step.chapter)?.special === 'phoneScroll') playPhoneScroll(done);
     else if (step.type === 'special') {
-      // PLACEHOLDER: T4.5 (torchlight, chapter 1) and T4.6 (phoneScroll, chapter 4) replace this screen.
+      // Fallback for a special mode with no screen yet (none in v1: torchlight T4.5, phoneScroll T4.6).
       show(createSpecialScreen({ t, reducedMotion: still(), titleKey: getChapter(step.chapter)?.titleKey, onContinue: done }));
     } else if (step.type === 'customer') showIntro(step);
     else {
       persist(L.finishStep(save, step)); // the end: v1 is finished (Continue shows this screen again)
       show(createEndScreen({ t, reducedMotion: still(), textKey: step.textKey, playerName: save.playerName, onMenu: showMenu }));
     }
+  }
+
+  /**
+   * The torchlight special mode (T4.5, chapter 1): the sneaky pop by torchlight; the catch's Continue goes on with the
+   * story. No money, no stats.
+   * @param {{chapter: number}} step the special step
+   * @param {() => void} done finishes the step and plays the next
+   * @returns {void}
+   */
+  function playTorchlight(step, done) {
+    sound.unlock();
+    const tl = show(createTorchlightScreen({
+      t, reducedMotion: still(), roundArgs: L.torchlightArgs(save, step.chapter, flags.seed),
+      popOptions: { storage: popStorage, ...squeezeOptions() }, onContinue: done, onMenu: showMenu,
+    }));
+    tl.unlock();
+  }
+
+  /**
+   * The phone-scroll special mode (T4.6, chapter 4): late-night scrolling with tiny pops; the idea card's Continue goes
+   * on with the story (strip 5). No money, no stats; calm music (show() sets it).
+   * @param {() => void} done finishes the step and plays the next
+   * @returns {void}
+   */
+  function playPhoneScroll(done) {
+    sound.unlock();
+    show(createPhoneScrollScreen({ t, sound, seed: flags.seed, reducedMotion: still(), onContinue: done, onMenu: showMenu }));
   }
 
   /**
@@ -325,7 +358,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     sound.unlock();
     pop.unlock();
     /** Start (or start again) the round. @returns {void} */
-    const start = () => { roundMusic(args.request); pop.startRound({ ...args, onFinish: (payload) => finishRound(step, payload, start) }); };
+    const start = () => { roundMusic(args.request); pop.startRound({ ...args, customerName: args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start) }); };
     start();
   }
 
@@ -339,13 +372,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function finishRound(step, payload, again) {
     const out = L.applyRound(save, payload, step);
     if (out.retry) { again(); return; }
-    persist(out.save);
-    if (out.failed) { playStrips(out.strips, continueStory); return; } // "Next customer": on with the story
+    persist(out.save); // the save also lists the milestone strips still to play (B4), so closing the app now loses none
+    /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */
+    const playWaiting = (then) => playStrips(L.pendingStrips(save), () => { persist(L.clearPendingStrips(save)); then(); });
+    if (out.failed) { playWaiting(continueStory); return; } // "Next customer": on with the story
     show(createResultScreen({
       t, reducedMotion: still(), stars: out.stars, payout: out.payout, reputationChange: out.reputationChange,
       factKey: out.factKey, reactionKey: out.reactionKey, playerName: playerName(),
-      onContinue: () => playStrips(out.strips, continueStory),
-      onShop: L.shopOpen(save) ? () => playStrips(out.strips, () => showShop(continueStory)) : undefined,
+      onContinue: () => playWaiting(continueStory),
+      onShop: L.shopOpen(save) ? () => playWaiting(() => showShop(continueStory)) : undefined,
     }));
   }
 
@@ -436,6 +471,11 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         if (key === 'music') { sound.setMusicOn(value); sound.unlock(); setMusic({ screen: 'menu' }); }
         if (key === 'reducedMotion') s.node.classList.toggle('app-still', value);
       },
+      onVolume: (key, value, final) => { // a volume slider moved: apply at once, save, and let a let-go effects slider be heard
+        persist(L.setSetting(save, key, value));
+        if (key === 'musicVolume') music.setVolume(value);
+        if (key === 'sfxVolume') { sound.setVolume(value); if (final) { sound.unlock(); sound.play('pop_small'); } }
+      },
       onExport: () => { download(store.exportText(save)); s.update({ notice: { key: 'ui.settings.exported' } }); },
       onImport: (text) => {
         const result = store.importText(text);
@@ -443,11 +483,13 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
           save = result.save;
           sound.setOn(save.settings.sound);
           sound.setMusicOn(save.settings.music);
+          sound.setVolume(save.settings.sfxVolume);
+          music.setVolume(save.settings.musicVolume);
           setMusic({ screen: 'menu' });
         }
         s.update({ notice: { key: importNoticeKey(result) }, playerName: save.playerName, settings: save.settings });
       },
-      onReset: () => { save = store.reset(); boot(); },
+      onReset: () => { save = store.reset(); sound.setVolume(save.settings.sfxVolume); music.setVolume(save.settings.musicVolume); boot(); },
       onBack: showMenu,
     }));
   }

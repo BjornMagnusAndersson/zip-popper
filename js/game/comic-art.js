@@ -115,6 +115,7 @@ export function tint(hex, amount) {
   const n = parseInt(hex.slice(1), 16);
   const to = amount > 0 ? 255 : 0;
   const k = Math.abs(amount);
+  // Moves one colour channel toward black or white by k, returns it as two hex digits.
   const ch = (v) => Math.round(v + (to - v) * k).toString(16).padStart(2, '0');
   return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
 }
@@ -241,6 +242,7 @@ function mouth(kind, y) {
  */
 function extras(e, r) {
   const g = el('g');
+  // Draws a small water drop at x, y, scaled by s (for sweat and tears).
   const drop = (x, y, s) => el('path', { d: `M${x} ${y - 16 * s} C${x + 12 * s} ${y} ${x + 10 * s} ${y + 12 * s} ${x} ${y + 12 * s} C${x - 10 * s} ${y + 12 * s} ${x - 12 * s} ${y} ${x} ${y - 16 * s}Z`, fill: '#9ad8ff', ...ink(4) });
   if (e.sweat) g.appendChild(drop(r * 0.95, -r * 0.55, 1.3));
   if (e.tear) { g.appendChild(drop(-44, 46, 1)); g.appendChild(drop(46, 52, 0.8)); }
@@ -1346,6 +1348,7 @@ function dog(l) {
   const pose = l.stance ?? 'stand';
   const face = l.face ?? (pose === 'sleep' ? 'sleep' : 'happy');
   const g = el('g');
+  // Draws a tail: a thick dark stroke with a thinner fur-coloured stroke on top.
   const tail = (d) => { g.appendChild(line(d, 24)); g.appendChild(line(d, 13, { stroke: fur })); };
   const lift = pose === 'run' ? -40 : 0;
   // Head position: resting on the paws when asleep, else up front.

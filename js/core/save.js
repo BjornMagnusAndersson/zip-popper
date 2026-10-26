@@ -7,6 +7,9 @@ export const SAVE_VERSION = 1;
 export const SAVE_KEY = 'popper.save';
 const BACKUP_KEY = 'popper.save.backup'; // a save that could not be read is kept here instead of being overwritten
 export const NAME_MAX = 20;
+/** The music volume a new player starts with (the same as DEFAULT_VOLUME in music.js) and the sound effects volume (full, as before). */
+export const DEFAULT_MUSIC_VOLUME = 0.7;
+export const DEFAULT_SFX_VOLUME = 1;
 
 /**
  * A fresh save for a new player.
@@ -27,7 +30,7 @@ export function defaultSave(now = Date.now()) {
     outfitTier: 1,
     stats: { pops: 0, stars: 0, bestCombo: 0 },
     // squeeze (T1.7): two fingers round a bump squeeze it (off by default; old saves load with it off)
-    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, lang: 'en' },
+    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, lang: 'en', musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME },
     seenComics: [],
     squeezeHintSeen: false, // the one-time "squeeze between two fingers" hint was shown (T1.7)
     // Economy fields (T3.2, docs/ECONOMY.md section 8). Added without a version bump: older saves simply get these defaults.
@@ -37,6 +40,7 @@ export function defaultSave(now = Date.now()) {
     items: {}, // bought shop items: id -> { needsScrub } (a studio upgrade shows only after its scrub job)
     threeStarDone: false, // a 3-star customer has happened (for the `mstar` strip)
     requestsDone: 0,
+    pendingStrips: [], // milestone strips earned by the last customer, not yet played (B4: they survive closing the app on the result screen)
   };
 }
 
@@ -65,6 +69,16 @@ function words(v, d) {
 /** A true/false value, or the fallback. @param {unknown} v value @param {boolean} d fallback @returns {boolean} */
 function flag(v, d) {
   return typeof v === 'boolean' ? v : d;
+}
+
+/**
+ * A volume between 0 and 1 (rounded to two decimals), or the fallback when it is not a number.
+ * @param {unknown} v value
+ * @param {number} d fallback
+ * @returns {number} volume
+ */
+export function clampVolume(v, d = DEFAULT_SFX_VOLUME) {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(1, Math.max(0, v)) * 100) / 100 : d;
 }
 
 /** A table of short names to whole numbers, or an empty one. @param {unknown} v value @returns {Object<string, number>} */
@@ -131,6 +145,8 @@ export function normalizeSave(raw, now = Date.now()) {
       reducedMotion: flag(se.reducedMotion, d.settings.reducedMotion),
       squeeze: flag(se.squeeze, d.settings.squeeze),
       lang: typeof se.lang === 'string' && se.lang.length <= 8 ? se.lang : d.settings.lang,
+      musicVolume: clampVolume(se.musicVolume, d.settings.musicVolume),
+      sfxVolume: clampVolume(se.sfxVolume, d.settings.sfxVolume),
     },
     seenComics: words(s.seenComics, d.seenComics),
     squeezeHintSeen: flag(s.squeezeHintSeen, d.squeezeHintSeen),
@@ -140,6 +156,7 @@ export function normalizeSave(raw, now = Date.now()) {
     items: itemTable(s.items),
     threeStarDone: flag(s.threeStarDone, d.threeStarDone),
     requestsDone: count(s.requestsDone, d.requestsDone),
+    pendingStrips: words(s.pendingStrips, d.pendingStrips),
   };
 }
 

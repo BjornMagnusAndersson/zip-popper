@@ -4,22 +4,25 @@
 
 import { el, button, icon, header, screenShell } from './dom.js';
 import { createNameField } from './name.js';
-import { SETTING_TOGGLES } from './screen-logic.js';
+import { SETTING_TOGGLES, SETTING_SLIDERS, volumePercent } from './screen-logic.js';
 
 /**
  * Build the settings screen.
  * @param {{t: (key: string, vars?: object) => string, playerName?: string,
  *   settings?: {sound?: boolean, music?: boolean, vibration?: boolean, reducedMotion?: boolean},
  *   onName?: (name: string) => void, onToggle?: (key: string, value: boolean) => void, onExport?: () => void,
- *   onImport?: (text: string) => void, onReset?: () => void, onBack?: () => void, reducedMotion?: boolean}} opts
- *   t = string function; playerName = the name now; settings = the four switches; onName = a clean name was confirmed;
+ *   onImport?: (text: string) => void, onReset?: () => void, onBack?: () => void, reducedMotion?: boolean,
+ *   onVolume?: (key: string, value: number, final: boolean) => void}} opts
+ *   t = string function; playerName = the name now; settings = the switches and the two volumes (musicVolume, sfxVolume,
+ *   0 to 1); onName = a clean name was confirmed;
  *   onToggle = a switch changed (setting name, new value); onExport = Export save; onImport = the text of the chosen save
- *   file; onReset = the player confirmed "Start over"; onBack = Back
+ *   file; onReset = the player confirmed "Start over"; onBack = Back; onVolume = a volume slider moved (setting name,
+ *   0 to 1, final = true when the finger or key was let go)
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, settings?: object, notice?: {key: string, vars?: object}|null}) => void,
  *   dispose: () => void}} the screen. update can also show a notice line (a string key), such as the result of an import.
  */
 export function createSettingsScreen({
-  t, playerName = '', settings = {}, onName, onToggle, onExport, onImport, onReset, onBack, reducedMotion = false,
+  t, playerName = '', settings = {}, onName, onToggle, onVolume, onExport, onImport, onReset, onBack, reducedMotion = false,
 }) {
   const shell = screenShell('settings', { label: t('ui.settings.title'), reducedMotion });
   let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, ...settings };
@@ -81,6 +84,44 @@ export function createSettingsScreen({
   }
   paint();
 
+  // Volume sliders (music and sound effects): they report while dragging (final = false) and when let go (final = true)
+  const sliders = SETTING_SLIDERS.map((def) => {
+    const id = `app-vol-${def.id}`;
+    const row = el('div', 'app-sliderrow');
+    const label = el('label', 'app-sliderrow__label', t(def.labelKey));
+    label.htmlFor = id;
+    const shown = el('span', 'app-sliderrow__value');
+    const input = el('input', 'app-slider');
+    input.type = 'range';
+    input.id = id;
+    input.min = '0';
+    input.max = '100';
+    input.step = '1';
+    /** Show the number next to the name and keep the slider handle in line. @returns {void} */
+    const paintOne = () => {
+      const pct = volumePercent(values[def.id], def.fallback);
+      input.value = String(pct);
+      input.style.setProperty('--fill', `${pct}%`);
+      shown.textContent = t('ui.settings.percent', { value: pct });
+      input.setAttribute('aria-valuetext', shown.textContent);
+    };
+    /** The slider moved or was let go: remember the value and tell the game. @param {boolean} final true when let go @returns {void} */
+    const move = (final) => {
+      const pct = volumePercent(Number(input.value) / 100, def.fallback);
+      values = { ...values, [def.id]: pct / 100 };
+      paintOne();
+      onVolume?.(def.id, pct / 100, final);
+    };
+    input.addEventListener('input', () => move(false), { signal: shell.signal });
+    input.addEventListener('change', () => move(true), { signal: shell.signal });
+    const top = el('div', 'app-sliderrow__top');
+    top.append(label, shown);
+    row.append(top, input);
+    switchCard.append(row);
+    paintOne();
+    return paintOne;
+  });
+
   // Save file
   const saveCard = el('section', 'app-card app-setcard');
   const file = el('input');
@@ -132,7 +173,7 @@ export function createSettingsScreen({
     /** Show new values and/or a notice line. @param {{playerName?: string, settings?: object, notice?: {key: string, vars?: object}|null}} data new data @returns {void} */
     update(data) {
       if (data.playerName !== undefined) field.setValue(data.playerName);
-      if (data.settings) { values = { ...values, ...data.settings }; paint(); }
+      if (data.settings) { values = { ...values, ...data.settings }; paint(); for (const p of sliders) p(); }
       if (data.notice !== undefined) showNotice(data.notice);
     },
     dispose: shell.dispose,

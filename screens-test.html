@@ -126,8 +126,9 @@ const SCREENS = [
   })],
   ['settings', () => {
     const screen = createSettingsScreen({
-      t, reducedMotion, playerName, settings: { sound: true, music: false, vibration: true, reducedMotion: false },
+      t, reducedMotion, playerName, settings: { sound: true, music: false, vibration: true, reducedMotion: false, musicVolume: 0.7, sfxVolume: 1 },
       onName: (n) => say(`onName("${n}")`), onToggle: (k, v) => say(`onToggle(${k}, ${v})`),
+      onVolume: (k, v, final) => say(`onVolume(${k}, ${v}, ${final})`),
       onExport: () => { say('onExport'); screen.update({ notice: { key: 'ui.settings.exported' } }); },
       onImport: (text) => { say(`onImport(${text.length} characters)`); screen.update({ notice: { key: 'ui.settings.importFailed' } }); },
       onReset: () => say('onReset'), onBack: () => say('onBack'),

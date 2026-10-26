@@ -3,7 +3,7 @@
 // and the customer's difficulty (ECONOMY.md section 7) change the numbers, which tools are in the tool bar, how the
 // request banner reads, and what the game gets back when the round ends (onFinish). pop-mode.js is the DOM glue.
 // No DOM, no audio, no timers here, so Node can test it.
-import { FACE_BUMPS, holdTime } from './logic.js';
+import { FACE_BUMPS, holdTime, faceGeometry, layoutFace } from './logic.js';
 import { toolBarIds, START_TOOL } from './tool-logic.js';
 import { isImplemented } from '../data/bumps.js';
 import { describeRequest, requestProgress, requestResult } from '../game/requests.js';
@@ -70,6 +70,21 @@ export function roughMultiplier(type, roughReductions = {}) {
  */
 export function applyMastery(pimples, holdFactors = {}, roughReductions = {}) {
   return pimples.map((p) => ({ ...p, hold: scaledHold(p.type, holdFactors), roughMul: roughMultiplier(p.type, roughReductions) }));
+}
+
+/**
+ * The hold seconds of the real bumps of a customer's face (B5): lays the face out the way the pop scene will (same seed,
+ * same bump kinds, same count) at a nominal size and puts the player's mastery in. The kinds of the bumps do not depend
+ * on the screen size, so the seconds are the same as on the real stage; only where the bumps sit differs.
+ * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[]|null,
+ *   decoys?: boolean, seed: number, holdFactors?: Object<string, number>}} o the same arguments as startRound
+ * @returns {number[]} hold seconds of every bump, scaled by mastery
+ */
+export function faceBumpHolds({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, holdFactors = {} } = {}) {
+  const setup = roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools: roundTools(unlockedTools), decoys });
+  const face = faceGeometry(360, 480, setup.spec);
+  const lay = layoutFace({ seed, face, count: setup.count, strip: setup.strip, allowed: setup.allowed, decoys: setup.decoys });
+  return applyMastery(lay.pimples, holdFactors).map((p) => p.hold);
 }
 
 /**

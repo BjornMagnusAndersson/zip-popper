@@ -335,6 +335,7 @@ export function tailPath(box, target, base = 0) {
   const bend = (len - edge) * 0.12;
   const q1 = [(b1[0] + tip[0]) / 2 + nx * bend, (b1[1] + tip[1]) / 2 + ny * bend];
   const q2 = [(b2[0] + tip[0]) / 2 + nx * bend * 0.5, (b2[1] + tip[1]) / 2 + ny * bend * 0.5];
+  // Formats a point as 'x y' with one decimal place, for SVG path text.
   const f = (p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`;
   return `M${f(b1)} Q${f(q1)} ${f(tip)} Q${f(q2)} ${f(b2)} Z`;
 }

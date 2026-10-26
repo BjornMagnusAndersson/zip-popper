@@ -19,6 +19,7 @@ const knightOutside = (x, y, s) => ({ art: 'husband', x, y, scale: s, pose: 'bus
  * @param {number} x middle @param {number} y bottom @param {number} s size @returns {object[]} shape layers
  */
 function cupCozy(x, y, s) {
+  // Turns a unit offset (dx, dy) into a point on the cup, scaled by s.
   const p = (dx, dy) => `${x + dx * s} ${y + dy * s}`;
   return [
     { shape: 'path', d: `M${p(-50, 0)} L${p(50, 0)} L${p(62, -130)} L${p(-62, -130)}Z`, fill: '#fff8ee', stroke: true, sw: 5 },
@@ -31,6 +32,7 @@ function cupCozy(x, y, s) {
 
 /** A big knitted striped sock (the group's "talking sock"). @param {number} x top middle @param {number} y top @param {number} s size @returns {object[]} shape layers */
 function talkingSock(x, y, s) {
+  // Turns a unit offset (dx, dy) into a point on the sock, scaled by s.
   const p = (dx, dy) => `${x + dx * s} ${y + dy * s}`;
   return [
     { shape: 'path', d: `M${p(-40, 0)} L${p(40, 0)} L${p(40, 150)} Q${p(46, 190)} ${p(90, 200)} L${p(130, 210)} Q${p(160, 240)} ${p(130, 266)} L${p(10, 260)} Q${p(-44, 250)} ${p(-40, 190)}Z`, fill: '#3fae8c', stroke: true, sw: 6 },

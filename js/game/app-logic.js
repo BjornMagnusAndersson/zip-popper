@@ -4,7 +4,8 @@
 // Every helper returns a NEW save object and never changes the one it is given.
 
 import { currentStep, progressFromSave, progressToSave, advance, customerSpec } from './chapter-logic.js';
-import { CHAPTERS, getChapter } from '../data/chapters.js';
+import { CHAPTERS, getChapter, HUSBAND } from '../data/chapters.js';
+import { TORCHLIGHT_ROUND } from './torchlight-logic.js';
 import {
   economyFromSave, economyToSave, holdFactor, roughReduction, buildRoundResult, applyRoundResult, recordCleanPop,
   milestoneStripsToPlay, buy, canBuy, grantItem, finishScrub, needsScrub, masteryLevel,
@@ -13,9 +14,9 @@ import {
   SHOP_ITEMS, SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL,
 } from '../data/economy-data.js';
 import { pickRequest } from './requests.js';
-import { scaledHold, allowedKinds } from '../pop/round-logic.js';
+import { faceBumpHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
-import { defaultSave, normalizeSave, sanitizeName } from '../core/save.js';
+import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
 import { STRIP as strip0 } from '../data/comics/strip-0.js';
 import { STRIP as strip1 } from '../data/comics/strip-1.js';
@@ -175,7 +176,29 @@ export function chapterTitleKey(save) {
  */
 export function markSeen(save, id) {
   const seen = Array.isArray(save.seenComics) ? save.seenComics : [];
-  return seen.includes(id) ? save : { ...save, seenComics: [...seen, id] };
+  const pending = Array.isArray(save.pendingStrips) ? save.pendingStrips : [];
+  const next = seen.includes(id) ? save : { ...save, seenComics: [...seen, id] };
+  return pending.includes(id) ? { ...next, pendingStrips: pending.filter((p) => p !== id) } : next; // a played strip is no longer waiting
+}
+
+/**
+ * The milestone strips still waiting to be played (B4): earned by the last customer, not seen yet. Played on Continue
+ * after the result screen, or on the next Continue when the app was closed on the result screen.
+ * @param {object} save the save
+ * @returns {string[]} strip ids, in order
+ */
+export function pendingStrips(save) {
+  const seen = save.seenComics ?? [];
+  return (Array.isArray(save.pendingStrips) ? save.pendingStrips : []).filter((id) => !seen.includes(id) && stripById(id));
+}
+
+/**
+ * Empties the waiting strips list (call once they have been played, so they never play twice).
+ * @param {object} save the save
+ * @returns {object} new save
+ */
+export function clearPendingStrips(save) {
+  return Array.isArray(save.pendingStrips) && save.pendingStrips.length ? { ...save, pendingStrips: [] } : save;
 }
 
 /**
@@ -257,8 +280,9 @@ export function backdropRoom(chapter) {
  * Everything pop-mode.js startRound needs for a story customer (all but onFinish): the customer and their bumps
  * (chapter-logic.js customerSpec), the owned tools, mastery, the room (home or studio, backdropRoom) and studio
  * tier, decoys (career customers from number 4,
- * ECONOMY.md section 6) and the request (requests.js pickRequest; the hurry limit uses the mastery-scaled hold times,
- * estimated as bumpCount times the average hold of the allowed kinds because the real face is laid out later).
+ * ECONOMY.md section 6) and the request (requests.js pickRequest; the hurry limit uses the mastery-scaled hold times
+ * of the real bumps of the face, round-logic.js faceBumpHolds), the customer's name key (the scene header, B5) and
+ * what "Next customer" would cost now (skipCost, B3).
  * @param {object} save the save
  * @param {{chapter: number, n: number}} step a customer step (from nextStep)
  * @param {number|null} [forcedSeed] the ?seed= flag
@@ -269,16 +293,28 @@ export function roundArgs(save, step, forcedSeed = null) {
   if (!spec) return null;
   const { holdFactors, roughReductions } = masteryTables(save);
   const career = getChapter(step.chapter)?.kind === 'career';
-  const kinds = allowedKinds(spec.allowedTypes);
-  const avg = kinds.reduce((sum, k) => sum + scaledHold(k, holdFactors), 0) / kinds.length;
-  const holds = Array.from({ length: spec.bumpCount }, () => avg);
   const seed = roundSeed(step.chapter, step.n, forcedSeed);
+  const unlockedTools = [...economyFromSave(save).unlockedTools];
+  const decoys = career && step.n >= 4;
+  const holds = faceBumpHolds({
+    customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: spec.allowedTypes, unlockedTools, decoys, seed, holdFactors,
+  });
   return {
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
-    seed, holdFactors, roughReductions, unlockedTools: [...economyFromSave(save).unlockedTools],
+    seed, holdFactors, roughReductions, unlockedTools,
     request: pickRequest(spec, holds, seed + 101, step.n), room: backdropRoom(step.chapter), tier: backdropTier(save), career: true,
-    decoys: career && step.n >= 4,
+    decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
   };
+}
+
+/**
+ * What "Next customer" after a fail would cost in reputation right now (the ladder 2, 3, 4, 5 by skips in a row,
+ * economy-data.js SKIP_PENALTIES; the same number applyRound takes off).
+ * @param {object} save the save
+ * @returns {number} reputation points
+ */
+export function skipPenaltyNow(save) {
+  return SKIP_PENALTIES[Math.min(economyFromSave(save).skipStreak, SKIP_PENALTIES.length - 1)];
 }
 
 /**
@@ -292,6 +328,25 @@ export function freeArgs(save, forcedSeed = null) {
   return {
     unlockedTools: [...economyFromSave(save).unlockedTools], room: 'studio', tier: backdropTier(save), holdFactors, roughReductions,
     ...(Number.isFinite(forcedSeed) && forcedSeed > 0 ? { seed: forcedSeed } : {}),
+  };
+}
+
+/**
+ * The arguments for the torchlight special mode's round (T4.5, chapter 1; pop-mode.js startRound, all but onFinish,
+ * onPop and onOw): the husband asleep (mood 'sleep') in the living room, his 3 whitehead bumps, the owned tools and
+ * mastery, no request, no decoys, and a round that cannot storm off (career false: the wake-up meter is the danger).
+ * @param {object} save the save
+ * @param {number} chapter the chapter of the special step (1)
+ * @param {number|null} [forcedSeed] the ?seed= flag
+ * @returns {object} startRound arguments
+ */
+export function torchlightArgs(save, chapter, forcedSeed = null) {
+  const { holdFactors, roughReductions } = masteryTables(save);
+  return {
+    customer: HUSBAND, bumpCount: TORCHLIGHT_ROUND.bumpCount, allowedTypes: [...TORCHLIGHT_ROUND.allowedTypes],
+    difficulty: TORCHLIGHT_ROUND.difficulty, seed: roundSeed(chapter, 1, forcedSeed), holdFactors, roughReductions,
+    unlockedTools: [...economyFromSave(save).unlockedTools], request: null, room: 'home', tier: 0, career: false,
+    decoys: false, mood: 'sleep',
   };
 }
 
@@ -341,7 +396,7 @@ export function applyRound(save, payload, step) {
   let stars = 0;
   let skipPenalty = 0;
   if (failed) {
-    skipPenalty = SKIP_PENALTIES[Math.min(before.skipStreak, SKIP_PENALTIES.length - 1)];
+    skipPenalty = skipPenaltyNow(save);
     after = applyRoundResult(before, { failed: true, choice: 'next' });
   } else {
     const result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false);
@@ -352,7 +407,7 @@ export function applyRound(save, payload, step) {
   }
   const strips = careerStrips(save, before, after, stars);
   const progress = advance(progressFromSave(save), failed ? 'skip' : 'done');
-  const next = { ...economyToSave(save, after), ...progressToSave(progress) };
+  const next = { ...economyToSave(save, after), ...progressToSave(progress), pendingStrips: [...strips] }; // kept until played (B4)
   const spec = customerSpec(step.chapter, step.n);
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
@@ -403,11 +458,15 @@ export function pendingScrub(save) {
 /**
  * Changes one Settings switch.
  * @param {object} save the save
- * @param {string} key sound, music, vibration, reducedMotion or squeeze (two-finger squeeze, T1.7)
- * @param {boolean} value on or off
+ * @param {string} key sound, music, vibration, reducedMotion or squeeze (two-finger squeeze, T1.7); or musicVolume or
+ *   sfxVolume (a number from 0 to 1, kept inside that range)
+ * @param {boolean|number} value on or off, or the volume
  * @returns {object} new save
  */
 export function setSetting(save, key, value) {
+  if (key === 'musicVolume' || key === 'sfxVolume') {
+    return { ...save, settings: { ...save.settings, [key]: clampVolume(value, save.settings?.[key]) } };
+  }
   if (!['sound', 'music', 'vibration', 'reducedMotion', 'squeeze'].includes(key)) return save;
   return { ...save, settings: { ...save.settings, [key]: Boolean(value) } };
 }

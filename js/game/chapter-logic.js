@@ -46,6 +46,7 @@ export function progressFromSave(save) {
   const s = save && typeof save === 'object' ? save : {};
   let base = normalizeProgress({ chapter: s.chapter, customersDone: s.customersDone });
   const seen = Array.isArray(s.seenComics) ? s.seenComics : [];
+  // Sets stripSeen on the progress when the chapter's comic strip is in the saved list.
   const stripSeenFor = (p) => {
     const strip = getChapter(p.chapter)?.strip;
     return { ...p, stripSeen: p.stripSeen || (strip !== undefined && seen.includes(strip)) };

@@ -41,8 +41,9 @@ export const SHIRT_COLOURS = ['#6a7be6', '#e66a8f', '#3fae8c', '#f0a43a', '#8a63
 export const EYE_COLOURS = ['#5a86b4', '#5d4030', '#4d8a5a', '#7a6a4a', '#8a5fb0'];
 /** Bright colours for accessories (hat, beanie, bowtie, scarf, flower, frames). */
 const ACCENTS = ['#e8505b', '#f3a33a', '#3fb6a8', '#5b7ce6', '#c065d6', '#f27eb2', '#59b85f'];
-/** The four moods a face can show; older mood names from faceMood() are mapped onto these. */
-export const MOODS = ['grim', 'ow', 'relief', 'glowing'];
+/** The moods a face can show (sleep: eyes shut, fast asleep, for the torchlight special mode T4.5); older mood names
+ * from faceMood() are mapped onto these. */
+export const MOODS = ['grim', 'ow', 'relief', 'glowing', 'sleep'];
 const MOOD_ALIAS = { sad: 'grim', meh: 'meh', happy: 'relief', glow: 'glowing' };
 
 /** The face used when no spec is given. */
@@ -71,6 +72,7 @@ function shade(hex, amount, alpha = 1) {
   const n = parseInt(hex.slice(1), 16);
   const to = amount > 0 ? 255 : 0;
   const k = Math.abs(amount);
+  // Moves one colour channel toward black or white by amount, as a 0 to 255 number.
   const ch = (v) => Math.round(v + (to - v) * k);
   return `rgba(${ch((n >> 16) & 255)},${ch((n >> 8) & 255)},${ch(n & 255)},${alpha})`;
 }
@@ -95,7 +97,9 @@ function hashText(s) {
  */
 export function faceLook(spec = DEFAULT_FACE_SPEC) {
   const s = resolveFaceSpec(spec ?? DEFAULT_FACE_SPEC); // a story character (characters.js) brings his own parts
+  // True when a value is a #rrggbb colour text.
   const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+  // Returns the value if it is a known part of this kind, else the default.
   const part = (kind, v, dflt) => (FACE_PARTS[kind].includes(v) ? v : dflt);
   const acc = (Array.isArray(s.accessories) ? s.accessories : []).filter((a) => FACE_PARTS.accessories.includes(a));
   const key = JSON.stringify([s.shape, s.skinTone ?? s.skin, s.hair, s.hairColor, s.eyes, s.brows, s.mouth, acc]);
@@ -388,7 +392,9 @@ function drawFrontHair(ctx, f, look) {
   const { cx, cy, rx, ry } = f;
   const hair = look.hair;
   const st = look.hairStyle;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
   if (st === 'bald') {
     ctx.fillStyle = 'rgba(255,255,255,0.28)';
@@ -520,7 +526,9 @@ function drawFrontHair(ctx, f, look) {
  * @returns {void}
  */
 function drawTuft(ctx, f, hair) {
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => f.cx + u * f.rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => f.cy + v * f.ry;
   ctx.beginPath();
   ctx.moveTo(X(-0.1), Y(-1.08));
@@ -547,12 +555,16 @@ function drawTuft(ctx, f, hair) {
  */
 function drawHeadwear(ctx, f, look) {
   const { cx, cy, rx, ry } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
+  // True when the look wears the named accessory.
   const has = (a) => look.acc.includes(a);
   const lw = Math.max(1.5, rx * 0.018);
   if (has('beanie')) {
     const c = look.accent;
+    // Lower edge of the dome at x-unit u, just under the hairline.
     const bottom = (u) => hairline(f, u) + 0.03;
     // The dome.
     ctx.beginPath();
@@ -738,7 +750,9 @@ function drawFlower(ctx, x, y, r, colour) {
  */
 function drawNeckwear(ctx, f, look) {
   const { cx, cy, rx, ry } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
   if (look.acc.includes('scarf')) {
     const c = look.accent;
@@ -864,6 +878,21 @@ function drawEye(ctx, x, y, s, style, mood, side, iris, lid) {
     ctx.stroke();
     return;
   }
+  if (mood === 'sleep') { // fast asleep: a relaxed shut lid, a soft curve sagging down with three little lashes
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(2, size * 0.16);
+    ctx.beginPath();
+    ctx.arc(x, y - size * 0.35, size * 0.75, Math.PI * 0.18, Math.PI * 0.82);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(1.4, size * 0.09);
+    for (const k of [-0.45, 0, 0.45]) {
+      const a = Math.PI * 0.5 - k;
+      const lx = x + Math.cos(a) * size * 0.75;
+      const ly = y - size * 0.35 + Math.sin(a) * size * 0.75;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + Math.cos(a) * size * 0.22, ly + Math.sin(a) * size * 0.22); ctx.stroke();
+    }
+    return;
+  }
   if (mood === 'ow') {
     ctx.strokeStyle = ink;
     ctx.lineWidth = Math.max(2, size * 0.18);
@@ -979,6 +1008,7 @@ const BROW_STYLES = {
 /** Mood -> [inner end raised, whole brow raised, outer end lowered] (ry units). Grim lowers the brow and points it down towards the nose (stern), ow pleads, glowing lifts. */
 const MOOD_BROWS = {
   grim: [-0.08, -0.015, -0.02], meh: [0, 0, 0], ow: [0.08, 0, 0.03], relief: [0, 0.02, 0], glowing: [0.01, 0.03, -0.01],
+  sleep: [0.02, -0.01, 0.02],
 };
 
 /**
@@ -1122,6 +1152,7 @@ function drawMouth(ctx, f, look, mood) {
     ctx.stroke();
   };
   if (mood === 'ow') { open(0.02, -0.1, 0.2, { teeth: true, tongue: true, wk: st === 'small' ? 0.9 : 0.72 }); return; }
+  if (mood === 'sleep') { open(0.0, -0.03, 0.05, { wk: 0.38 }); return; } // a small slack "o" of a sleeper
   if (mood === 'glowing') { open(-0.04, 0.03, st === 'small' ? 0.2 : 0.26, { teeth: true, tongue: true }); return; }
   if (mood === 'relief') {
     if (st === 'grin') open(-0.03, 0.02, 0.2, { teeth: true });
@@ -1151,8 +1182,11 @@ function drawMouth(ctx, f, look, mood) {
  */
 function drawFaceWear(ctx, f, look) {
   const { cx, cy, rx, ry, features: ft } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
+  // True when the look wears the named accessory.
   const has = (a) => look.acc.includes(a);
   if (has('moustache')) {
     const y = Y(ft.noseV + 0.16);
@@ -1289,7 +1323,9 @@ function drawMoodExtras(ctx, f, mood) {
  */
 function drawBeard(ctx, f, look) {
   const { cx, cy, rx, ry, features: ft } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
   const hair = look.hair;
   const end = 0.98; // where the sideburns meet the head outline beside the ears
@@ -1470,7 +1506,9 @@ function rivet(ctx, x, y, r) {
  */
 function drawArmorBody(ctx, f, look) {
   const { cx, cy, rx, ry, height: h } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
   ctx.fillStyle = shade(look.skin, -0.12);
   ctx.fillRect(X(-0.42), Y(0.6), rx * 0.84, ry * 0.5);
@@ -1578,8 +1616,12 @@ function drawPlume(ctx, f, colour, side, turn) {
  */
 function drawCozyHat(ctx, f, c) {
   const { cx, cy, rx, ry } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
+  // Bottom edge of the hat at x-unit u, a little above the hairline.
+  // Bottom edge of the hat at x-unit u, a little above the hairline.
   const bottom = (u) => hairline(f, u) - 0.04;
   ctx.beginPath();
   ctx.moveTo(X(1.16), Y(bottom(1.16) - 0.14));
@@ -1631,7 +1673,9 @@ function drawCozyHat(ctx, f, c) {
  */
 function drawHelmet(ctx, f, armor) {
   const { cx, cy, rx, ry } = f;
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => cy + v * ry;
   const brow = (u) => hairline(f, u) + 0.03; // the brow edge of the opening
   const top = HELMET.guardBottom;
@@ -1720,7 +1764,9 @@ function drawHelmet(ctx, f, armor) {
  * @returns {void}
  */
 function drawCracks(ctx, f) {
+  // Turns a face x-unit (u) into a canvas x position.
   const X = (u) => f.cx + u * f.rx;
+  // Turns a face y-unit (v) into a canvas y position.
   const Y = (v) => f.cy + v * f.ry;
   const cracks = [
     [[-0.55, -1.0], [-0.42, -0.86], [-0.5, -0.76], [-0.38, -0.62]],

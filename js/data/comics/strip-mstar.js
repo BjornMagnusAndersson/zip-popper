@@ -17,6 +17,7 @@ const PARTY = ['#e8505b', '#ffd25a', '#3fae8c', '#6a7be6', '#f08cbf', '#4fc3f7']
  */
 function confetti(x, y, w, h, n, seed, s = 1) {
   let r = seed * 9301 + 49297;
+  // Seeded random number generator: returns a number from 0 up to (not including) 1.
   const rnd = () => { r = (r * 9301 + 49297) % 233280; return r / 233280; };
   const out = [];
   for (let i = 0; i < n; i += 1) {

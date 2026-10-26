@@ -243,6 +243,23 @@
 .app-switchrow__label { font-weight: 800; font-size: 1.02rem; }
 .app-switchrow__text { display: grid; gap: 2px; padding: 6px 0; }
 .app-switchrow__hint { font-size: 0.85rem; font-weight: 600; opacity: 0.75; line-height: 1.3; }
+.app-sliderrow { display: grid; gap: 2px; padding: 6px 0; border-top: 2px dashed rgba(42, 33, 29, 0.25); }
+.app-sliderrow__top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.app-sliderrow__label { font-weight: 800; font-size: 1.02rem; }
+.app-sliderrow__value { font-weight: 900; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.app-slider {
+  --fill: 50%; width: 100%; height: 44px; margin: 0; padding: 0; background: transparent; cursor: pointer; touch-action: pan-y; appearance: none; -webkit-appearance: none;
+}
+.app-slider::-webkit-slider-runnable-track {
+  height: 14px; border-radius: 999px; border: 3px solid var(--ink); background: linear-gradient(to right, var(--mint) var(--fill), #e6d7cc var(--fill));
+}
+.app-slider::-moz-range-track { height: 8px; border-radius: 999px; border: 3px solid var(--ink); background: #e6d7cc; }
+.app-slider::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--mint); }
+.app-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 32px; height: 32px; margin-top: -12px; border-radius: 50%; border: 3px solid var(--ink); background: #fff; box-shadow: 2px 3px 0 var(--shadow);
+}
+.app-slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--ink); background: #fff; box-shadow: 2px 3px 0 var(--shadow); }
+.app-slider:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 12px; }
 .app-switch {
   position: relative; flex: none; display: flex; align-items: center; justify-content: flex-end; width: 94px; height: 44px; padding: 0 12px; border-radius: 999px;
   border: 3px solid var(--ink); background: #e6d7cc; font: inherit; font-size: 0.85rem; font-weight: 900; color: var(--ink); cursor: pointer; touch-action: manipulation;

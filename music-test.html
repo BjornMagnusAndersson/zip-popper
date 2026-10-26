@@ -36,6 +36,7 @@ import { createSound } from './js/core/sound.js';
 import { createMusic } from './js/core/music.js';
 
 await loadStrings('en');
+// Shorthand for document.getElementById.
 const $ = (id) => document.getElementById(id);
 const sound = createSound({ sfxOn: false, musicOn: true });
 const music = createMusic({ sound });

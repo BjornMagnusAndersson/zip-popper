@@ -22,6 +22,23 @@ export const SETTING_TOGGLES = [
   { id: 'squeeze', labelKey: 'ui.settings.squeeze', hintKey: 'ui.settings.squeezeHint' }, // T1.7
 ];
 
+/** The settings volume sliders in order: the settings field, its string key and the volume used before one is saved. */
+export const SETTING_SLIDERS = [
+  { id: 'musicVolume', labelKey: 'ui.settings.musicVolume', fallback: 0.7 },
+  { id: 'sfxVolume', labelKey: 'ui.settings.sfxVolume', fallback: 1 },
+];
+
+/**
+ * A volume (0 to 1) as a whole percent for the slider and its label.
+ * @param {unknown} v volume
+ * @param {number} [d] fallback volume when it is not a number
+ * @returns {number} 0 to 100
+ */
+export function volumePercent(v, d = 1) {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : d;
+  return Math.round(Math.min(1, Math.max(0, n)) * 100);
+}
+
 /**
  * Stars as a whole number from 0 to 3.
  * @param {unknown} n any value
@@ -84,6 +101,7 @@ export function nameLimit() {
  */
 export function coinRows(payout) {
   const p = payout ?? {};
+  // Turns a value into a whole number, or 0 when it is not a positive number.
   const num = (v) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
   const pops = num(p.popCoins);
   const tip = num(p.tip);

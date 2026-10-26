@@ -4,16 +4,25 @@
 import { VOICES } from './synthVoices.js';
 import { SOUND_TABLE } from './soundTable.js';
 
+/** The master gain of the sound effects at volume 1 (the music has its own chain and does not pass through it). */
+export const MASTER_GAIN = 0.6;
+
+/** Keep a volume between 0 and 1 (1 when it is not a number). @param {number} v volume @returns {number} clamped volume */
+export function clampSfxVolume(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
+}
+
 /**
  * Create the sound player.
- * @param {{sfxOn?: boolean, musicOn?: boolean, onChange?: (s: {sfxOn: boolean, musicOn: boolean}) => void,
- *   table?: object, baseUrl?: string}} [opts] start state of the switches, a callback when a switch changes (to remember
- *   it), the sound table (for tests) and the folder that file urls are relative to
- * @returns {object} player: unlock(), play(name, o), isOn(), setOn(on), isMusicOn(), setMusicOn(on), has(name), context(),
+ * @param {{sfxOn?: boolean, musicOn?: boolean, sfxVolume?: number, onChange?: (s: {sfxOn: boolean, musicOn: boolean}) => void,
+ *   table?: object, baseUrl?: string}} [opts] start state of the switches, the effects volume (0 to 1, default 1), a callback
+ *   when a switch changes (to remember it), the sound table (for tests) and the folder that file urls are relative to
+ * @returns {object} player: unlock(), play(name, o), isOn(), setOn(on), volume(), setVolume(v), isMusicOn(), setMusicOn(on), has(name), context(),
  *   onUnlock(fn), dispose()
  */
-export function createSound({ sfxOn = true, musicOn = true, onChange, table = SOUND_TABLE, baseUrl } = {}) {
+export function createSound({ sfxOn = true, musicOn = true, sfxVolume = 1, onChange, table = SOUND_TABLE, baseUrl } = {}) {
   let sfx = sfxOn;
+  let sfxVol = clampSfxVolume(sfxVolume); // the sound effects volume, 0 to 1 (1 = as loud as before the slider existed)
   let music = musicOn;
   let ctx = null;
   let master = null;
@@ -54,7 +63,7 @@ export function createSound({ sfxOn = true, musicOn = true, onChange, table = SO
     try {
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.6;
+      master.gain.value = MASTER_GAIN * sfxVol;
       const comp = ctx.createDynamicsCompressor();
       master.connect(comp).connect(ctx.destination);
       noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -199,6 +208,15 @@ export function createSound({ sfxOn = true, musicOn = true, onChange, table = SO
       sfx = Boolean(value);
       if (sfx) ensure();
       changed();
+    },
+    /** The sound effects volume. @returns {number} 0 to 1 */
+    volume: () => sfxVol,
+    /** Set the sound effects volume (music is not affected). @param {number} v 0 to 1 @returns {void} */
+    setVolume(v) {
+      sfxVol = clampSfxVolume(v);
+      if (!master || !ctx) return; // before the first tap: the level is applied when the audio is made
+      if (typeof master.gain.setTargetAtTime === 'function') master.gain.setTargetAtTime(MASTER_GAIN * sfxVol, ctx.currentTime, 0.03);
+      else master.gain.value = MASTER_GAIN * sfxVol;
     },
     /** Whether the music is on. @returns {boolean} on */
     isMusicOn: () => music,

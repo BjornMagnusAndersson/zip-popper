@@ -29,6 +29,9 @@
 //   onFinish is called once with everything the game needs (round-logic.js finishPayload).
 // - startFree(...): free play: random faces, the owned tools, never fails, no onFinish, "New face" button.
 // The pure rules for rounds live in round-logic.js. Nothing here is sent anywhere.
+// Hooks for a special mode wrapped round the scene (T4.5 torchlight, screens/torchlight.js): startRound may fix the
+// face's mood (mood: 'sleep') and pass onPop and onOw listeners; setMood, halt, faceBox and bumps let the wrapper
+// change the face, stop popping, and know where the face, its eyes and the bumps are on screen.
 import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
@@ -133,6 +136,7 @@ export function createPopMode({
   let ready = false; // mounted and measured: faces can be laid out
   let tier = firstTier;
   let room = 'studio'; // the room behind the face: 'studio' or 'home' (startRound's room, SPEC D19)
+  let moodOverride = null; // a fixed face mood from startRound or setMood (e.g. 'sleep'), null = the usual moods
   // How faces are made now: 'demo' (the old path), 'round' (one customer, startRound) or 'free' (startFree).
   // round: {customer, setup, holdFactors, roughReductions, irritation, request, onFinish, failMode, seed}
   let cfg = { kind: 'demo', failMode: career ? 'career' : 'free', unlockedTools: null };
@@ -225,12 +229,30 @@ export function createPopMode({
   fail.hidden = true;
   fail.setAttribute('role', 'dialog');
   fail.setAttribute('aria-label', t('pop.fail.title'));
+  const failNote = el('p', 'pop-fail__text pop-fail__note'); // what "Next customer" costs (a customer round with a known cost only)
+  failNote.hidden = true;
+  const failNext = button('pop-btn', t('pop.fail.next'), () => (cfg.kind === 'round' ? finishRound(current, 'next') : nextAfterFail()));
   fail.append(
     el('p', 'pop-fail__title', t('pop.fail.title')),
     el('p', 'pop-fail__text', t('pop.fail.text')),
+    failNote,
     button('pop-btn pop-btn--main', t('pop.fail.again'), () => (cfg.kind === 'round' ? finishRound(current, 'again') : newFace(true, true))),
-    button('pop-btn', t('pop.fail.next'), () => (cfg.kind === 'round' ? finishRound(current, 'next') : nextAfterFail())),
+    failNext,
   );
+  /**
+   * Set the header and the fail choice texts for what is being played (B3, B5): a customer round shows the customer's
+   * name and what "Next customer" costs in reputation; free play and the demo show the plain texts.
+   * @param {string|null} customerName the customer's name, or null
+   * @param {number|null} skipCost reputation "Next customer" costs, or null when unknown
+   * @returns {void}
+   */
+  function setRoundTexts(customerName, skipCost) {
+    title.textContent = customerName ? t('pop.titleCustomer', { name: customerName }) : t('pop.title');
+    const cost = Number.isFinite(skipCost) && skipCost > 0 ? Math.floor(skipCost) : null;
+    failNext.textContent = cost ? t('pop.fail.nextCost', { n: cost }) : t('pop.fail.next');
+    failNote.textContent = cost ? t('pop.fail.skipNote', { n: cost }) : '';
+    failNote.hidden = !cost;
+  }
   // Zoom buttons (T1.4, SPEC D9): the whole face is always the start; +, - and "whole face" are an optional extra
   // for small bumps. They float over the room beside the face (pop.css). Two fingers, the wheel and keys do the same.
   const zoomBox = el('div', 'pop-zoom');
@@ -544,7 +566,7 @@ export function createPopMode({
    */
   function faceTexture(c) {
     const cleared = c.scene ? c.scene.all().filter((p) => p.popped).length : 0;
-    const mood = c.wince && !c.healed ? 'ow' : faceMood(cleared, c.total, c.healed); // a short wince after an Ow
+    const mood = c.wince && !c.healed ? 'ow' : moodOverride ?? faceMood(cleared, c.total, c.healed); // a short wince after an Ow
     const redness = c.healed ? 0 : 1 - cleared / Math.max(1, c.total);
     const { canvas, ctx } = makeCanvas(c.w, c.h, c.dpr);
     ctx.lineCap = 'butt';
@@ -629,6 +651,7 @@ export function createPopMode({
       round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0,
       owed: new Set(), cleanTypes: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
       request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
+      hooks: round ? cfg.hooks : {}, // a special mode's onPop and onOw listeners (T4.5)
     };
     current = c;
     sizeCanvas(canvas, w, h);
@@ -637,7 +660,11 @@ export function createPopMode({
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
-      onOw: (at) => { if (current === c) showOw(c, at); },
+      onOw: (at) => {
+        if (current !== c) return;
+        showOw(c, at);
+        try { c.hooks.onOw?.(at); } catch (e) { console.warn('onOw failed:', e); }
+      },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },
       onView: (v) => { if (current === c) showView(v); },
       onIrritation: (lv) => {
@@ -661,6 +688,7 @@ export function createPopMode({
         drawCount();
         drawRequest(c);
         c.scene?.setTexture(faceTexture(c));
+        try { c.hooks.onPop?.(p, c.scene?.left() ?? 0); } catch (e) { console.warn('onPop failed:', e); }
       },
       onStep: (step) => {
         hint.textContent = hintFor(step);
@@ -736,7 +764,11 @@ export function createPopMode({
      *   per bump kind from economy.js holdFactor / roughReduction; unlockedTools = owned tools; request = requests.js
      *   pickRequest result or null; room = 'home' (living room, SPEC D19) or 'studio' (default); tier = studio
      *   room 0..2; career = false makes a round that cannot fail (default
-     *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload
+     *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload;
+     *   customerName = shown in the header ("Popping Pilot Pete", else "Pop them!"); skipCost = what "Next customer"
+     *   costs in reputation, shown on the fail choice (left out = no cost shown).
+     *   For a special mode (T4.5): mood = a fixed face mood ('sleep'; an Ow still winces), onPop(bump, left) after
+     *   every pop and onOw(at) after every Ow.
      * @returns {void}
      */
     startRound(o = {}) {
@@ -747,7 +779,10 @@ export function createPopMode({
         seed: Number.isFinite(o.seed) && o.seed > 0 ? Math.floor(o.seed) : 1 + Math.floor(Math.random() * 2e9),
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {}, irritation: irritationScales(o.difficulty),
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
+        hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
       };
+      moodOverride = typeof o.mood === 'string' ? o.mood : null;
+      setRoundTexts(typeof o.customerName === 'string' && o.customerName ? o.customerName : null, o.skipCost);
       buildToolBar(tools);
       room = o.room === 'home' ? 'home' : 'studio';
       if (Number.isFinite(o.tier)) tier = o.tier;
@@ -768,6 +803,7 @@ export function createPopMode({
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {},
       };
       if (Number.isFinite(o.seed) && o.seed > 0) { seed = Math.floor(o.seed); freshSeed = true; }
+      setRoundTexts(null, null);
       buildToolBar(roundTools(cfg.unlockedTools));
       room = 'studio'; // free play is always in the studio
       if (Number.isFinite(o.tier)) tier = o.tier;
@@ -788,6 +824,41 @@ export function createPopMode({
     },
     /** Show a new face. @returns {void} */
     newFace: () => newFace(true),
+    /**
+     * Fix the face's mood (a special mode: 'sleep', 'grim' when he wakes), or null for the usual moods. Repaints.
+     * @param {string|null} mood a face.js mood or null
+     * @returns {void}
+     */
+    setMood(mood) {
+      moodOverride = typeof mood === 'string' ? mood : null;
+      if (current?.scene) current.scene.setTexture(faceTexture(current));
+    },
+    /** Stop popping on the face in play (presses do nothing any more; a special mode's scripted end). @returns {void} */
+    halt() { current?.scene?.halt(); },
+    /**
+     * Where the face in play is on screen (stage px, through the zoom): its middle, half width and height, and its two
+     * eyes. Null before the first face.
+     * @returns {{cx: number, cy: number, rx: number, ry: number, eyes: {x: number, y: number}[]}|null} the face box
+     */
+    faceBox() {
+      const c = current;
+      if (!c?.scene) return null;
+      const { cx, cy, rx, ry, features: ft } = c.face;
+      const mid = c.scene.toScreen(cx, cy);
+      const edge = c.scene.toScreen(cx + rx, cy + ry);
+      const eyes = ft ? [-1, 1].map((s) => c.scene.toScreen(cx + s * rx * ft.eyeU, cy + ry * ft.eyeV)) : [];
+      return { cx: mid.x, cy: mid.y, rx: edge.x - mid.x, ry: edge.y - mid.y, eyes };
+    },
+    /**
+     * The bumps still to pop on the face in play, on screen (stage px, through the zoom).
+     * @returns {{x: number, y: number, r: number}[]} the bumps
+     */
+    bumps() {
+      const c = current;
+      if (!c?.scene) return [];
+      const z = c.scene.view?.().z ?? 1;
+      return c.scene.all().filter((p) => !p.popped).map((p) => ({ ...c.scene.toScreen(p.x, p.y), r: p.r * z }));
+    },
     /** Wake the popping sounds up (call from inside a tap). @returns {void} */
     unlock: () => sound.unlock(),
     /**

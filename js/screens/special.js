@@ -1,5 +1,5 @@
-// PLACEHOLDER (T3.1c) for the two small special modes inside the story: chapter 1 "torchlight" (T4.5 replaces this)
-// and chapter 4 "phoneScroll" (T4.6 replaces this). Shows the chapter title, "Coming soon" and a Continue button
+// PLACEHOLDER (T3.1c) for the small special modes inside the story: chapter 4 "phoneScroll" (T4.6 replaces this).
+// Chapter 1 "torchlight" has its own screen now (torchlight.js, T4.5). Shows the chapter title, "Coming soon" and a Continue button
 // that lets the story go on. State comes in, the tap goes out through a callback: no saving here.
 
 import { el, button, screenShell } from './dom.js';

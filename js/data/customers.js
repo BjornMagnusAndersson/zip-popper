@@ -42,6 +42,7 @@ export const LAST_CUSTOMER_CHAPTER = 5;
  * @returns {object} the customer entry
  */
 function regular(id, chapter, bumps, bumpTypes, face) {
+  // Builds the text key for one part of this customer, like customer.<id>.name.
   const k = (part) => `customer.${id}.${part}`;
   return {
     id,
@@ -181,6 +182,7 @@ export function makeCustomer(seed, { chapter = 2 } = {}) {
   // Bump count: chapter 2 gets 6 to 7, chapter 5 gets 8 to 10 (never outside 6 to 10).
   const low = Math.min(BUMP_MAX, BUMP_MIN + Math.floor((ch - FIRST_CUSTOMER_CHAPTER) * 0.67));
   const high = Math.min(BUMP_MAX, BUMP_MIN + 1 + (ch - FIRST_CUSTOMER_CHAPTER));
+  // Picks a random generic line of the given kind (name, intro and so on).
   const line = (kind) => genericKey(kind, between(rng, 1, GENERIC_COUNTS[kind]));
   return {
     id: `generic-${Number(seed) >>> 0}`,
