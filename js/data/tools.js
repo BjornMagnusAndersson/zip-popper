@@ -18,6 +18,11 @@
  * - roughScale: how rough the tool is on a cold bump (T1.2b, TOOLS.md decision 3): 1 = bare fingers, below 1 = gentler.
  *   It multiplies the bump's rough-press chance (data/bumps.js rough) and the irritation a cold pop adds. 0 = never.
  * - ick: true = adds the hidden "ick" in chapter 5 (gloves remove it). Data only for now.
+ * - payBonus: (optional) extra coins per bump id when this tool popped that bump clean (B13 round 2b), paid on top of
+ *   the bump's pay (data/bumps.js pay) by game/economy.js roundPayout. Bumps not listed get nothing extra.
+ * - peelBonus: (optional, nose strip) coins when the strip was peeled off in a finished round (B13 round 2c).
+ * - tip: (optional, patch) { perSpot, maxSpots }: coins per popped spot that got a patch, counted up to maxSpots, in a
+ *   finished round (B13 round 2c).
  */
 export const TOOLS = {
   fingers: {
@@ -25,9 +30,10 @@ export const TOOLS = {
     holdScale: { default: 1, blackhead: 1.5, hair: 1.5 }, // fingers can get a blackhead out too, just slowly
     roughScale: 1, ick: true,
   },
-  cottonPad: { // gentler, a bit faster on whiteheads (wiping goo is the cleanup step)
-    implemented: true, bar: true, unlockChapter: 2, use: 'squeeze', works: ['whitehead', 'red', 'big', 'gold', 'horn'],
-    holdScale: { default: 0.95, whitehead: 0.8 }, roughScale: 0.5,
+  cottonPad: { // gentler and faster on whiteheads and gold, pays a little more, wipes faster; a wrong tool on the rest (B13 round 2)
+    implemented: true, bar: true, unlockChapter: 2, use: 'squeeze', works: ['whitehead', 'gold'],
+    holdScale: { default: 0.95, whitehead: 0.65, gold: 0.85 }, roughScale: 0.6, // whitehead about 35 percent faster than fingers
+    payBonus: { whitehead: 1, gold: 2 }, // a clean pad pop pays +1 (whitehead) or +2 (gold) on top
   },
   tweezers: { // pulls blackheads and hairs only
     implemented: true, bar: true, unlockChapter: 2, use: 'pull', works: ['blackhead', 'hair'],
@@ -35,12 +41,14 @@ export const TOOLS = {
   },
   noseStrip: { // stick on the nose, rip off: clears the tiny dots at once; on a bump off the nose it is an Ow
     implemented: true, bar: true, unlockChapter: 3, use: 'strip', works: [], holdScale: { default: 1 }, roughScale: 0,
+    peelBonus: 6, // the dots are lots of tiny blackheads: a peeled strip pays +6 (B13 round 2c)
   },
   warmCloth: { // never required, never an Ow: hold on the face, bumps pop faster for a while
     implemented: true, bar: true, unlockChapter: 3, use: 'warm', works: [], holdScale: { default: 1 }, roughScale: 0,
   },
-  patch: { // hydrocolloid patch: stick on a popped spot (the tip bonus comes with the tips system)
+  patch: { // hydrocolloid patch: stick on a popped spot; the spot skips the cream and the customer tips for it
     implemented: true, bar: true, unlockChapter: 5, use: 'patch', works: [], holdScale: { default: 1 }, roughScale: 0,
+    tip: { perSpot: 2, maxSpots: 5 }, // +2 per patched spot, at most 5 spots = 10 coins (B13 round 2c)
   },
   cream: { // the cleanup cream: today it goes on by itself after the wipe (engine.js), no button
     implemented: false, bar: false, unlockChapter: 1, use: 'cleanup', works: [], holdScale: { default: 1 }, roughScale: 0,
@@ -60,6 +68,15 @@ export const WARM = {
   helpsCut: 0.4, // at a full meter, bumps that like warmth (data/bumps.js warmHelps) need 40 percent less hold time
   otherCut: 0.15, // ...and other bumps 15 percent less
   roughCut: 0.8, // at a full meter, the rough-press (Ow) chance and the irritation of a cold pop are 80 percent lower
+};
+
+/**
+ * The end-of-round goo wipe with the cotton pad as the tool in hand (B13 round 2b, first guesses). The rule the player
+ * sees: pick the cotton pad for the wipe and the wiping pad is bigger, so it takes about 40 percent less wiping.
+ */
+export const PAD_WIPE = {
+  reach: 1.6, // the wiping pad is 1.6x as wide, so about 1 / 1.6 = 62 percent of the finger travel (about 40 percent less)
+  autoTime: 0.6, // the keyboard's automatic wipe takes 60 percent of its usual time
 };
 
 /**

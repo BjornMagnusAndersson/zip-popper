@@ -95,9 +95,10 @@ export function nameLimit() {
 }
 
 /**
- * The lines of the coin breakdown on the result screen. Pops and total always show; tip, combo and request only when
- * they paid something.
- * @param {{popCoins?: number, tip?: number, combo?: number, requestBonus?: number, total?: number}} payout from economy.js roundPayout
+ * The lines of the coin breakdown on the result screen. Pops and total always show; the cotton pad bonus, patch tips,
+ * nose strip bonus, tip, combo and request only when they paid something.
+ * @param {{popCoins?: number, toolBonus?: number, patchTips?: number, stripBonus?: number, tip?: number, combo?: number,
+ *   requestBonus?: number, total?: number}} payout from economy.js roundPayout
  * @returns {{id: string, key: string, amount: number}[]} rows in order, the last one is the total
  */
 export function coinRows(payout) {
@@ -105,11 +106,17 @@ export function coinRows(payout) {
   // Turns a value into a whole number, or 0 when it is not a positive number.
   const num = (v) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
   const pops = num(p.popCoins);
+  const pad = num(p.toolBonus);
+  const patch = num(p.patchTips);
+  const strip = num(p.stripBonus);
   const tip = num(p.tip);
   const combo = num(p.combo);
   const request = num(p.requestBonus);
-  const total = Number.isFinite(p.total) ? num(p.total) : pops + tip + combo + request;
+  const total = Number.isFinite(p.total) ? num(p.total) : pops + pad + patch + strip + tip + combo + request;
   const rows = [{ id: 'pops', key: 'ui.result.pops', amount: pops }];
+  if (pad > 0) rows.push({ id: 'pad', key: 'ui.result.padBonus', amount: pad });
+  if (patch > 0) rows.push({ id: 'patch', key: 'ui.result.patchTips', amount: patch });
+  if (strip > 0) rows.push({ id: 'strip', key: 'ui.result.stripBonus', amount: strip });
   if (tip > 0) rows.push({ id: 'tip', key: 'ui.result.tip', amount: tip });
   if (combo > 0) rows.push({ id: 'combo', key: 'ui.result.combo', amount: combo });
   if (request > 0) rows.push({ id: 'request', key: 'ui.result.request', amount: request });
@@ -140,6 +147,19 @@ export function reputationLine(result) {
   }
   const gain = Math.floor(Number(r.reputationChange));
   return gain > 0 ? { key: 'ui.result.rep.gain', vars: { n: gain } } : null;
+}
+
+/**
+ * Can a scrolling list still go further down? (T5.3b, for the "more below" arrow in the shop.) A gap of a few pixels
+ * counts as the end, so rounding on phone screens does not leave the arrow stuck on.
+ * @param {number} scrollTop how far the list is scrolled
+ * @param {number} clientHeight the visible height of the list
+ * @param {number} scrollHeight the full height of the list's content
+ * @returns {boolean} true when there is more below the visible part
+ */
+export function canScrollMore(scrollTop, clientHeight, scrollHeight) {
+  if (![scrollTop, clientHeight, scrollHeight].every(Number.isFinite)) return false;
+  return scrollHeight - clientHeight - scrollTop > 4;
 }
 
 /**

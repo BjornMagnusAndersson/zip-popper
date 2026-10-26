@@ -1,9 +1,11 @@
 // The shop screen (T3.1a): tabs Tools / Studio / Outfit, each item with its price, a Buy button, the reason it is locked
 // (from economy.js whyNot, as a string key) or an "Owned" mark; the coins and the reputation tier show on top.
+// T5.3b: the coins sit in the top row and the wearing strip and studio button sit with the tabs (a narrow left column
+// in landscape), so the list gets the room.
 // The economy state comes in; a tap on Buy is only reported (onBuy). The game buys, saves and calls update(state).
 
 import { el, svg, button, icon, coinPill, header, screenShell } from './dom.js';
-import { SHOP_TABS, shopEntries, tierInfo, wornOutfit } from './screen-logic.js';
+import { SHOP_TABS, shopEntries, tierInfo, wornOutfit, canScrollMore } from './screen-logic.js';
 import { drawCharacter, OUTFITS } from '../game/comic-art.js';
 
 /**
@@ -21,12 +23,22 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
   let activeTab = SHOP_TABS.some((x) => x.id === tab) ? tab : 'tools';
 
   const head = header(t, t('ui.shop.title'), onBack, shell.signal);
+  const coinsSlot = el('span', 'app-shopcoins'); // the coins pill, in the top row next to the title (T5.3b)
+  head.append(coinsSlot);
   const stats = el('div', 'app-shopstats');
+  const extras = el('div', 'app-shopextras'); // the wearing strip and the "See your studio" button, above the list
   const tabs = el('div', 'app-tabs');
   tabs.setAttribute('role', 'tablist');
   tabs.setAttribute('aria-label', t('ui.shop.tabs'));
   const panel = el('div', 'app-body app-shoplist');
   panel.setAttribute('role', 'tabpanel');
+  // T5.3b: the list sits in a frame with a bouncing "more below" arrow that shows only while the list can scroll further.
+  const listFrame = el('div', 'app-shoplistframe');
+  const more = el('button', 'app-shopmore');
+  more.type = 'button';
+  more.setAttribute('aria-label', t('ui.shop.moreBelow'));
+  more.append(icon('back'));
+  listFrame.append(panel, more);
 
   const tabButtons = SHOP_TABS.map((x) => {
     const b = el('button', 'app-tab', t(x.labelKey));
@@ -37,20 +49,24 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     return b;
   });
 
-  /** Draw the coins, the reputation tier and the progress to the next tier. @returns {void} */
+  /** Draw the coins (top row) and one reputation pill with the progress to the next tier inside it. @returns {void} */
   function renderStats() {
     const info = tierInfo(current.reputation);
     stats.textContent = '';
+    coinsSlot.textContent = '';
     const coins = coinPill(t('ui.coins', { n: current.money }), 'app-pill--big');
     coins.setAttribute('aria-label', t('ui.shop.coinsLabel', { n: current.money }));
-    const rep = el('span', 'app-pill app-pill--rep');
-    rep.append(icon('heart'), el('span', 'app-pill__text', t('ui.shop.rep', { n: current.reputation, tier: t(info.nameKey) })));
-    const line = el('p', 'app-shopstats__next', info.next
-      ? t('ui.shop.nextTier', { n: info.next.missing, tier: t(info.next.nameKey) })
-      : t('ui.shop.maxTier'));
-    const pills = el('div', 'app-shopstats__pills');
-    pills.append(coins, rep);
-    stats.append(pills, line);
+    coinsSlot.append(coins);
+    const rep = el('span', 'app-pill app-pill--rep app-pill--stack');
+    const words = el('span', 'app-pill__stack');
+    words.append(
+      el('span', 'app-pill__text', t('ui.shop.rep', { n: current.reputation, tier: t(info.nameKey) })),
+      el('span', 'app-shopstats__next', info.next
+        ? t('ui.shop.nextTier', { n: info.next.missing, tier: t(info.next.nameKey) })
+        : t('ui.shop.maxTier')),
+    );
+    rep.append(icon('heart'), words);
+    stats.append(rep);
   }
 
   /**
@@ -117,19 +133,32 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
       tabButtons[i].classList.toggle('app-tab--on', x.id === activeTab);
     });
     panel.textContent = '';
+    extras.textContent = '';
     const entries = shopEntries(current, activeTab);
     const kindIcon = { tools: 'tool', studio: 'studio', outfit: 'outfit' }[activeTab] ?? 'tool';
-    if (activeTab === 'outfit') panel.append(wearingStrip());
-    if (activeTab === 'studio' && onStudio) panel.append(button('app-btn app-shop-studio', t('ui.shop.seeStudio'), () => onStudio(), shell.signal));
+    if (activeTab === 'outfit') extras.append(wearingStrip());
+    if (activeTab === 'studio' && onStudio) extras.append(button('app-btn app-shop-studio', t('ui.shop.seeStudio'), () => onStudio(), shell.signal));
     if (entries.length === 0) panel.append(el('p', 'app-empty', t('ui.shop.empty')));
     for (const item of entries) panel.append(itemCard(item, kindIcon));
     panel.scrollTop = keep;
+    updateMore();
   }
+  /** Show the "more below" arrow only while the list can scroll further down. @returns {void} */
+  function updateMore() {
+    more.hidden = !canScrollMore(panel.scrollTop, panel.clientHeight, panel.scrollHeight);
+  }
+  more.addEventListener('click', () => panel.scrollBy({ top: Math.max(120, panel.clientHeight * 0.8), behavior: reducedMotion ? 'auto' : 'smooth' }), { signal: shell.signal });
+  panel.addEventListener('scroll', updateMore, { passive: true, signal: shell.signal });
+  window.addEventListener('resize', updateMore, { signal: shell.signal });
+  const watcher = typeof ResizeObserver === 'function' ? new ResizeObserver(updateMore) : null;
+  watcher?.observe(panel);
   render();
+  more.hidden = true;
+  requestAnimationFrame(updateMore);
 
   const bar = el('div', 'app-shopbar');
-  bar.append(stats, tabs);
-  shell.node.append(head, bar, panel);
+  bar.append(stats, tabs, extras);
+  shell.node.append(head, bar, listFrame);
   return {
     node: shell.node,
     /** Show new economy state and/or another tab. @param {{state?: object, tab?: string}} data new data @returns {void} */
@@ -138,6 +167,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
       if (data.tab && SHOP_TABS.some((x) => x.id === data.tab)) activeTab = data.tab;
       render();
     },
-    dispose: shell.dispose,
+    /** Stop watching the list and remove the screen. @returns {void} */
+    dispose() { watcher?.disconnect(); shell.dispose(); },
   };
 }

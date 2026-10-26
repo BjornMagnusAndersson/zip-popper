@@ -73,11 +73,11 @@ export const MASTERY_STRIP_LEVEL = 2;
  * Later customers keep the last value.
  */
 export const DIFFICULTY_BANDS = [
-  { upTo: 3, value: 0.6 },
-  { upTo: 6, value: 0.8 },
-  { upTo: 9, value: 1.0 },
-  { upTo: 12, value: 1.15 },
-  { upTo: 15, value: 1.3 },
+  { upTo: 3, value: 0.8 },
+  { upTo: 6, value: 1.0 },
+  { upTo: 9, value: 1.2 },
+  { upTo: 12, value: 1.35 },
+  { upTo: 15, value: 1.5 },
 ];
 
 /** Difficulty of the chapter 2 and 3 special customers, and of anything outside the career. */

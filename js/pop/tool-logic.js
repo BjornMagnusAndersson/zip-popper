@@ -3,7 +3,7 @@
 // with a tool and a warm face, how the warm meter fills and drains, where the nose strip goes on, and which popped
 // spot a patch lands on, the rough-press chance and the irritation meter (T1.2b), and when a customer storms off.
 // No DOM, no audio, no timers here. The tools themselves are in data/tools.js.
-import { TOOLS, TOOL_IDS, WARM, IRRITATION, toolInfo } from '../data/tools.js';
+import { TOOLS, TOOL_IDS, WARM, IRRITATION, PAD_WIPE, toolInfo } from '../data/tools.js';
 import { bumpInfo } from '../data/bumps.js';
 
 /** The tool in hand when a round starts. */
@@ -77,8 +77,11 @@ export function pressOutcome(toolId, bumpType, { onNose = false } = {}) {
  * @returns {string} a tool id that works on it (fingers when nothing else does)
  */
 export function bestToolFor(bumpType, available = TOOL_IDS) {
-  const list = bumpInfo(bumpType)?.bestTools ?? [];
-  return list.find((id) => available.includes(id) && toolWorksOn(id, bumpType)) ?? START_TOOL;
+  const list = (bumpInfo(bumpType)?.bestTools ?? []).filter((id) => available.includes(id) && toolWorksOn(id, bumpType));
+  // A tool that pays extra on this bump comes first (B13 round 2c: the cotton pad on whiteheads and gold), so keyboard
+  // players earn its pay bonus too; otherwise the first suitable tool in the bump's bestTools order.
+  const pays = list.find((id) => (toolInfo(id)?.payBonus?.[bumpType] ?? 0) > 0);
+  return pays ?? list[0] ?? START_TOOL;
 }
 
 /**
@@ -91,6 +94,59 @@ export function toolHoldScale(toolId, bumpType) {
   const s = toolInfo(toolId)?.holdScale;
   if (!s) return 1;
   return Object.hasOwn(s, bumpType) ? s[bumpType] : (s.default ?? 1);
+}
+
+/**
+ * How much wider the wiping pad is in the end-of-round goo wipe with this tool in hand (B13 round 2b): the cotton pad
+ * wipes a wider path (data/tools.js PAD_WIPE.reach), so the wipe takes less finger travel; any other tool = 1.
+ * @param {string} toolId the tool in hand during the wipe
+ * @returns {number} the multiplier for the wipe radius (1 or more)
+ */
+export function wipeReach(toolId) {
+  return toolId === 'cottonPad' ? PAD_WIPE.reach : 1;
+}
+
+/**
+ * Where the wiping pad waits when the wipe starts (B13 round 2c): the bottom right corner, moved up above any box of
+ * on-screen controls it would sit behind (landscape puts the tool bar over the bottom right of the face), and left of
+ * a box when moving up is not enough. It always stays inside the scene.
+ * @param {number} w scene width
+ * @param {number} h scene height
+ * @param {number} radius the drawn pad's radius
+ * @param {number} corner how far in from the bottom right corner the pad's middle starts
+ * @param {{x: number, y: number, w: number, h: number}[]} [covered] boxes of controls over the scene, scene px
+ * @returns {{x: number, y: number}} the pad's middle
+ */
+export function padRestSpot(w, h, radius, corner, covered = []) {
+  const gap = 8; // room between the pad and a box
+  /** Keep the pad's x inside the scene. @param {number} x x @returns {number} x */
+  const clampX = (x) => Math.max(radius, Math.min(w - radius, x));
+  /** Keep the pad's y inside the scene. @param {number} y y @returns {number} y */
+  const clampY = (y) => Math.max(radius, Math.min(h - radius, y));
+  let x = clampX(w - corner);
+  let y = clampY(h - corner);
+  const boxes = (Array.isArray(covered) ? covered : []).filter((b) => b && [b.x, b.y, b.w, b.h].every(Number.isFinite));
+  // Whether the pad at (px, py) overlaps a box (with the gap around it).
+  const hits = (px, py, b) => px + radius + gap > b.x && px - radius - gap < b.x + b.w
+    && py + radius + gap > b.y && py - radius - gap < b.y + b.h;
+  for (let round = 0; round < boxes.length + 1; round += 1) {
+    const b = boxes.find((bb) => hits(x, y, bb));
+    if (!b) break;
+    const up = b.y - radius - gap;
+    if (up >= Math.min(radius, h * 0.25)) y = clampY(up); // up above it, while there is room for that
+    else x = clampX(b.x - radius - gap); // a tall box: go beside it
+  }
+  return { x, y };
+}
+
+/**
+ * Seconds the keyboard's automatic wipe takes with this tool in hand: shorter with the cotton pad (PAD_WIPE.autoTime).
+ * @param {string} toolId the tool in hand during the wipe
+ * @param {number} baseSeconds the usual time
+ * @returns {number} seconds
+ */
+export function autoWipeSeconds(toolId, baseSeconds) {
+  return toolId === 'cottonPad' ? baseSeconds * PAD_WIPE.autoTime : baseSeconds;
 }
 
 /**

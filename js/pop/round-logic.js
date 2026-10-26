@@ -159,21 +159,31 @@ export function requestView(request, roundState, elapsedSeconds) {
 
 /**
  * What onFinish gets when a round ends (finished, or failed and the player picked Try again or Next customer).
- * @param {{round: object, elapsedSeconds: number, cleanBumpTypes?: string[], popTypes?: string[],
- *   failChoice?: 'again'|'next'|null, request?: object|null}} o the scoring.js round state, the popping time in
- *   seconds (start to the last bump, or to the fail), the kinds of the clean pops (no Ow on that bump), the kinds of
- *   every pop, the fail choice and the customer's request (or null)
- * @returns {{state: object, elapsedSeconds: number, cleanBumpTypes: string[], popTypes: string[], owCount: number,
- *   failed: boolean, failChoice: 'again'|'next'|null, request: 'gentle'|'hurry'|'combo'|false, stars: number}} payload
+ * @param {{round: object, elapsedSeconds: number, cleanBumpTypes?: string[], cleanBumpTools?: string[],
+ *   popTypes?: string[], failChoice?: 'again'|'next'|null, request?: object|null, patches?: number,
+ *   stripPeeled?: boolean}} o the scoring.js round state, the
+ *   popping time in seconds (start to the last bump, or to the fail), the kinds of the clean pops (no Ow on that bump),
+ *   the tool of each clean pop (same order; for the cotton pad's pay bonus, may be left out), the kinds of every pop,
+ *   the fail choice, the customer's request (or null), how many popped spots got a patch and whether the nose strip
+ *   was peeled off (both for their pay, B13 round 2c; may be left out)
+ * @returns {{state: object, elapsedSeconds: number, cleanBumpTypes: string[], cleanBumpTools: string[], popTypes: string[],
+ *   patches: number, stripPeeled: boolean, owCount: number, failed: boolean, failChoice: 'again'|'next'|null,
+ *   request: 'gentle'|'hurry'|'combo'|false, stars: number}} payload
  */
-export function finishPayload({ round, elapsedSeconds, cleanBumpTypes = [], popTypes = [], failChoice = null, request = null }) {
+export function finishPayload({
+  round, elapsedSeconds, cleanBumpTypes = [], cleanBumpTools = [], popTypes = [], failChoice = null, request = null,
+  patches = 0, stripPeeled = false,
+}) {
   const failed = Boolean(round?.failed);
   const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
   return {
     state: round,
     elapsedSeconds: elapsed,
     cleanBumpTypes: [...cleanBumpTypes],
+    cleanBumpTools: [...cleanBumpTools],
     popTypes: [...popTypes],
+    patches: Number.isFinite(patches) ? Math.max(0, Math.floor(patches)) : 0,
+    stripPeeled: stripPeeled === true,
     owCount: round?.owCount ?? 0,
     failed,
     failChoice: failed && (failChoice === 'again' || failChoice === 'next') ? failChoice : null,

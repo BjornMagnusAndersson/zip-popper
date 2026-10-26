@@ -5,6 +5,7 @@
 
 import { starsFor, comboBonus } from './scoring.js';
 import { bumpInfo } from '../data/bumps.js';
+import { toolInfo } from '../data/tools.js';
 import { defaultSave, normalizeSave } from '../core/save.js';
 import { outfitTier } from './studio.js';
 import {
@@ -24,20 +25,57 @@ function requestBonusFor(kind) {
 }
 
 /**
+ * The extra coins the tools earned (B13 round 2b): for each clean pop, the payBonus of the tool that popped it
+ * (data/tools.js, today only the cotton pad: +1 whitehead, +2 gold). No tool list = nothing extra.
+ * @param {string[]} bumpTypesPopped the bump types popped clean
+ * @param {string[]|null|undefined} bumpTools the tool of each clean pop, in the same order
+ * @returns {number} coins
+ */
+function toolPayBonus(bumpTypesPopped, bumpTools) {
+  if (!Array.isArray(bumpTools)) return 0;
+  return (bumpTypesPopped ?? []).reduce((sum, type, i) => {
+    const bonus = toolInfo(bumpTools[i])?.payBonus;
+    return sum + (bonus && Object.hasOwn(bonus, type) ? bonus[type] : 0);
+  }, 0);
+}
+
+/**
+ * The tips for patches (B13 round 2c): data/tools.js patch.tip.perSpot coins for each popped spot with a patch on it,
+ * counted up to patch.tip.maxSpots. Not a whole number of patches above 0 = nothing.
+ * @param {unknown} patches how many popped spots got a patch
+ * @returns {number} coins
+ */
+function patchTipsFor(patches) {
+  const tip = toolInfo('patch')?.tip;
+  const n = Number.isFinite(patches) ? Math.max(0, Math.floor(patches)) : 0;
+  if (!tip || n === 0) return 0;
+  return Math.min(n, tip.maxSpots) * tip.perSpot;
+}
+
+/**
  * What one finished customer pays. A failed customer (stormed off) pays nothing. Otherwise: the pay of each clean pop,
+ * the tool bonus (a clean cotton pad pop pays a little extra), the patch tips and the nose strip bonus (B13 round 2c),
  * the tip for the stars, the combo bonus (scoring.js) and the request bonus.
  * @param {object} roundState a scoring.js round state
  * @param {string[]} bumpTypesPopped the bump types that were popped clean (unknown types pay 0)
  * @param {boolean|string|null} requestDone false/null = no request done; 'gentle' | 'hurry' | 'combo' = that request done; true = done (default bonus)
- * @returns {{popCoins:number, tip:number, combo:number, requestBonus:number, total:number}} the coins
+ * @param {string[]|null} [bumpTools] the tool of each clean pop, same order as bumpTypesPopped (left out = no tool bonus)
+ * @param {{patches?: number, stripPeeled?: boolean}|null} [extras] how many popped spots got a patch, and whether the
+ *   nose strip was peeled off (left out = neither pays)
+ * @returns {{popCoins:number, toolBonus:number, patchTips:number, stripBonus:number, tip:number, combo:number,
+ *   requestBonus:number, total:number}} the coins
  */
-export function roundPayout(roundState, bumpTypesPopped, requestDone = false) {
-  if (roundState.failed) return { popCoins: 0, tip: 0, combo: 0, requestBonus: 0, total: 0 };
+export function roundPayout(roundState, bumpTypesPopped, requestDone = false, bumpTools = null, extras = null) {
+  if (roundState.failed) return { popCoins: 0, toolBonus: 0, patchTips: 0, stripBonus: 0, tip: 0, combo: 0, requestBonus: 0, total: 0 };
   const popCoins = (bumpTypesPopped ?? []).reduce((sum, t) => sum + (bumpInfo(t)?.pay ?? 0), 0);
+  const toolBonus = toolPayBonus(bumpTypesPopped, bumpTools);
+  const patchTips = patchTipsFor(extras?.patches);
+  const stripBonus = extras?.stripPeeled === true ? (toolInfo('noseStrip')?.peelBonus ?? 0) : 0;
   const tip = STAR_TIPS[starsFor(roundState)] ?? 0;
   const combo = comboBonus(roundState);
   const requestBonus = requestBonusFor(requestDone);
-  return { popCoins, tip, combo, requestBonus, total: popCoins + tip + combo + requestBonus };
+  const total = popCoins + toolBonus + patchTips + stripBonus + tip + combo + requestBonus;
+  return { popCoins, toolBonus, patchTips, stripBonus, tip, combo, requestBonus, total };
 }
 
 /**
@@ -46,10 +84,12 @@ export function roundPayout(roundState, bumpTypesPopped, requestDone = false) {
  * @param {string[]} bumpTypesPopped the bump types popped clean
  * @param {boolean|string|null} requestDone see roundPayout
  * @param {'again'|'next'} [choice] after a fail: 'again' (free) or 'next' (costs reputation)
+ * @param {string[]|null} [bumpTools] the tool of each clean pop (see roundPayout)
+ * @param {{patches?: number, stripPeeled?: boolean}|null} [extras] patches and the nose strip (see roundPayout)
  * @returns {object} { stars, failed, choice, payout, total, pops, bestCombo, requestDone }
  */
-export function buildRoundResult(roundState, bumpTypesPopped, requestDone = false, choice = 'again') {
-  const payout = roundPayout(roundState, bumpTypesPopped, requestDone);
+export function buildRoundResult(roundState, bumpTypesPopped, requestDone = false, choice = 'again', bumpTools = null, extras = null) {
+  const payout = roundPayout(roundState, bumpTypesPopped, requestDone, bumpTools, extras);
   return {
     stars: starsFor(roundState), failed: Boolean(roundState.failed), choice, payout, total: payout.total,
     pops: roundState.pops, bestCombo: roundState.bestCombo, requestDone: Boolean(requestDone),

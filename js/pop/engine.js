@@ -23,6 +23,7 @@ import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
+  wipeReach, autoWipeSeconds, padRestSpot,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
@@ -109,6 +110,9 @@ function affine(s, d) {
  *   tool?: string, face?: {cx: number, cy: number, rx: number, ry: number}, tools?: string[],
  *   onOw?: (o: {x: number, y: number, type: string, tool: string}) => void, onWarm?: (warmth: number) => void,
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
+ *   onStripPeeled?: () => void (the nose strip came off, B13 round 2c),
+ *   covered?: () => {x: number, y: number, w: number, h: number}[] (boxes of controls over the scene; the wipe pad
+ *   waits clear of them),
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
  *   irritation?: {rise: number, drain: number} (how touchy the customer is, T3.1b; 1 and 1 = normal),
  *   squeeze?: boolean (two fingers round a bump squeeze it, T1.7; off = two fingers always zoom),
@@ -561,7 +565,12 @@ export function createPopScene(canvas, o) {
     strands.length = 0;
     blobs.length = 0;
     const { cells, cols, rows, count } = found;
-    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad: { x: w - 40 * scale, y: h - 40 * scale }, last: null, id: null, auto: null, fade: 0 };
+    const corner = 40 * scale * wipeReach(tool); // the pad waits in the bottom corner (further in when it is the big one)
+    let covered = [];
+    try { covered = o.covered?.() ?? []; } catch (e) { console.warn('covered failed:', e); }
+    // ...but never behind the tool bar or other buttons (B13 round 2c); the boxes are screen px, so at zoom 1 only.
+    const pad = padRestSpot(w, h, 26 * scale * wipeReach(tool), corner, view.z === 1 ? covered : []);
+    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: 0 };
     setStep('wipe');
   }
 
@@ -675,7 +684,7 @@ export function createPopScene(canvas, o) {
    */
   function wipeAt(x, y) {
     if (!wipe || wipe.fade) return;
-    const r = 30 * scale;
+    const r = 30 * scale * wipeReach(tool); // the cotton pad in hand wipes a wider path (B13 round 2b)
     const from = wipe.last ?? { x, y };
     const dist = Math.hypot(x - from.x, y - from.y);
     const steps = Math.max(1, Math.ceil(dist / 4));
@@ -838,7 +847,12 @@ export function createPopScene(canvas, o) {
       if (strip.q >= 1 && !strip.flying) { strip.flying = true; play('peel'); buzz([12, 30, 18]); }
       if (strip.flying) {
         strip.lift = Math.min(1, strip.lift + dt * (reduced ? 4 : 2.2));
-        if (strip.lift >= 1) { strip.off = true; strip.flying = false; maybeNextStep(); }
+        if (strip.lift >= 1) {
+          strip.off = true;
+          strip.flying = false;
+          try { o.onStripPeeled?.(); } catch (e) { console.warn('onStripPeeled failed:', e); }
+          maybeNextStep();
+        }
       }
       if (strip.flying || (!peel && strip.q > 0.6 && strip.q < 1)) busy = true;
     }
@@ -849,7 +863,7 @@ export function createPopScene(canvas, o) {
       if (wipe.auto) {
         busy = true;
         wipe.auto.t += dt;
-        const t = wipe.auto.t / 1.6;
+        const t = wipe.auto.t / autoWipeSeconds(tool, 1.6);
         const rows = 4;
         const row = Math.min(rows - 1, Math.floor(t * rows));
         const f = t * rows - row;
@@ -987,7 +1001,7 @@ export function createPopScene(canvas, o) {
     }
     for (const d of drops) drawDrop(ctx, d);
     if (warmHold) drawCloth(ctx, warmHold.x, warmHold.y, 34 * scale, reduced ? 0 : time);
-    if (wipe && !wipe.fade) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale);
+    if (wipe && !wipe.fade) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale * wipeReach(tool)); // bigger with the cotton pad
     if (cream) {
       for (const d of cream.dollops) {
         const grow = smooth((cream.t - d.at) / 0.18);
@@ -1708,6 +1722,7 @@ export function createPopScene(canvas, o) {
     setTool(id) {
       if (!toolInfo(id)?.implemented) return false;
       tool = id;
+      if (wipe) kick(); // the wiping pad's size depends on the tool in hand: redraw it
       return true;
     },
     /** The tool in hand. @returns {string} a tool id */

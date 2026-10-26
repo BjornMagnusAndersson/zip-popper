@@ -345,7 +345,9 @@ export function createPopMode({
    * @returns {string} the text
    */
   function hintFor(step) {
-    if (step === 'wipe') return t('pop.hint.wipe');
+    if (step === 'wipe') { // with the cotton pad in the bar but not in hand: tell her it wipes faster (B13 round 2b)
+      return t(toolIds.includes('cottonPad') && toolId !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe');
+    }
     if (step === 'cream' || step === 'done') return t('pop.hint.cream');
     if (squeeze && canSqueeze(toolId)) { // T1.7: the squeeze switch is on and fingers are in hand
       if (squeezeHintOn) return t('round.squeezeHint');
@@ -363,7 +365,8 @@ export function createPopMode({
     toolId = id;
     for (const [k, b] of toolButtons) b.setAttribute('aria-pressed', String(k === id));
     current?.scene?.setTool(id);
-    if ((current?.scene?.step() ?? 'pop') === 'pop') hint.textContent = hintFor('pop');
+    const step = current?.scene?.step() ?? 'pop';
+    if (step === 'pop' || step === 'wipe') hint.textContent = hintFor(step);
   }
 
   /**
@@ -510,8 +513,9 @@ export function createPopMode({
     fail.hidden = true;
     if (!c.counted) { results.push(c.round); c.counted = true; }
     const payload = finishPayload({
-      round: c.round, elapsedSeconds: elapsedFor(c), cleanBumpTypes: c.cleanTypes, popTypes: c.popTypes,
-      failChoice: c.failed ? choice : null, request: c.request,
+      round: c.round, elapsedSeconds: elapsedFor(c), cleanBumpTypes: c.cleanTypes, cleanBumpTools: c.cleanTools,
+      popTypes: c.popTypes, failChoice: c.failed ? choice : null, request: c.request,
+      patches: c.patches, stripPeeled: c.stripPeeled, // patch tips and the nose strip bonus (B13 round 2c)
     });
     try { c.onFinish?.(payload); } catch (e) { console.warn('onFinish failed:', e); }
   }
@@ -520,6 +524,25 @@ export function createPopMode({
   function stageSize() {
     const r = stage.getBoundingClientRect();
     return { w: Math.max(240, Math.round(r.width)), h: Math.max(240, Math.round(r.height)) };
+  }
+
+  /**
+   * The boxes of the tool bar, the zoom buttons and the hint that lie over the stage (landscape puts them on top of
+   * the room), in stage CSS px. Hidden ones and ones outside the stage (portrait: the bar sits below it) are left out.
+   * @returns {{x: number, y: number, w: number, h: number}[]} boxes
+   */
+  function coveredRects() {
+    const s = stage.getBoundingClientRect();
+    const out = [];
+    for (const node of [bar, zoomBox, foot]) {
+      if (node.hidden) continue;
+      const r = node.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      const box = { x: r.left - s.left, y: r.top - s.top, w: r.width, h: r.height };
+      if (box.x >= s.width || box.y >= s.height || box.x + box.w <= 0 || box.y + box.h <= 0) continue;
+      out.push(box);
+    }
+    return out;
   }
 
   /**
@@ -649,8 +672,8 @@ export function createPopMode({
     stage.append(canvas);
     const c = {
       canvas, w, h, dpr, face, spec, seed: s, total: pimples.length, healed: false, scene: null,
-      round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0,
-      owed: new Set(), cleanTypes: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
+      round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0, stripPeeled: false,
+      owed: new Set(), cleanTypes: [], cleanTools: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
       request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
       hooks: round ? cfg.hooks : {}, // a special mode's onPop and onOw listeners (T4.5)
     };
@@ -673,7 +696,9 @@ export function createPopMode({
         showIrritation(lv);
         if (!c.failed && isFail(lv, cfg.failMode)) stormOff(c);
       },
-      onPatch: (n) => { c.patches = n; }, // the tip bonus for patches comes with the tips system
+      onPatch: (n) => { c.patches = n; }, // each patched spot pays a small tip (economy.js roundPayout)
+      onStripPeeled: () => { c.stripPeeled = true; }, // the peeled nose strip pays a bonus (economy.js roundPayout)
+      covered: () => coveredRects(), // where the tool bar and buttons sit over the face, so the wipe pad rests clear of them
       onNote: (n) => { if (n === 'patchFirst' && current === c) hint.textContent = t('tool.patch.notYet'); },
       onPop: (p) => {
         if (squeezeHintOn) { // the one-time squeeze hint has done its job: back to the tool's hint
@@ -684,7 +709,7 @@ export function createPopMode({
         const clean = !c.owed.has(p.id); // clean = no Ow on this bump (counts for mastery and pay)
         c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean });
         c.popTypes.push(p.type);
-        if (clean) c.cleanTypes.push(p.type);
+        if (clean) { c.cleanTypes.push(p.type); c.cleanTools.push(p.tool ?? START_TOOL); } // the tool counts for the pad bonus
         if (allHandled(c.round)) c.popEnd ??= elapsedFor(c);
         drawCount();
         drawRequest(c);

@@ -459,7 +459,8 @@ export function applyRound(save, payload, step) {
     skipPenalty = skipPenaltyNow(save);
     after = applyRoundResult(before, { failed: true, choice: 'next' });
   } else {
-    const result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false);
+    const extras = { patches: payload.patches ?? 0, stripPeeled: payload.stripPeeled === true }; // patch tips, strip bonus
+    const result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false, 'again', payload.cleanBumpTools ?? null, extras);
     after = applyRoundResult(before, result);
     for (const type of payload.cleanBumpTypes ?? []) after = recordCleanPop(after, type);
     payout = result.payout;

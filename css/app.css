@@ -184,30 +184,58 @@
 }
 
 /* ---------- Shop ---------- */
-.app-shopbar { flex: none; width: 100%; max-width: 560px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); display: grid; gap: 8px; }
-.app-shopstats { display: grid; gap: 4px; justify-items: center; }
-.app-shopstats__pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.app-shopstats__next { padding: 1px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.7); font-size: 0.8rem; font-weight: 800; text-align: center; }
-.app-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 999px; border: 3px solid var(--ink); background: var(--pink-soft); }
+.app-shopbar { flex: none; width: 100%; max-width: 560px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); display: grid; gap: 6px; }
+.app-screen--shop .app-head { padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 6px; }
+.app-shopcoins { flex: none; display: flex; }
+.app-shopcoins .app-pill--big { min-height: 40px; }
+.app-shopstats { display: grid; justify-items: stretch; }
+.app-pill--stack { white-space: normal; min-height: 0; padding: 3px 14px 3px 8px; border-radius: 22px; }
+.app-pill__stack { display: grid; gap: 0; min-width: 0; }
+.app-shopstats__next { font-size: 0.74rem; font-weight: 700; color: #6a3a50; }
+.app-shopextras { display: grid; gap: 6px; }
+.app-shopextras:empty { display: none; }
+.app-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 999px; border: 3px solid var(--ink); background: var(--pink-soft); }
 .app-tab {
   flex: 1; min-height: 44px; border: 0; border-radius: 999px; background: transparent; font: inherit; font-weight: 900; font-size: 1rem; color: var(--ink); cursor: pointer;
   touch-action: manipulation;
 }
 .app-tab--on { background: var(--mint); box-shadow: inset 0 0 0 3px var(--ink); }
-.app-shoplist { padding-top: 12px; padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px)); }
+/* T5.3b: the list frame holds the scrolling list and the bouncing "more below" arrow; the list has a thick visible scrollbar. */
+.app-shoplistframe { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; }
+.app-shoplist {
+  padding-top: 8px; padding-bottom: max(40px, calc(env(safe-area-inset-bottom) + 28px)); gap: 8px; max-width: 560px;
+  scrollbar-width: auto; scrollbar-color: var(--hot) rgba(255, 255, 255, 0.55);
+}
+.app-shoplist > * { flex: none; }
+.app-shoplist::-webkit-scrollbar { width: 12px; }
+.app-shoplist::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.55); border-radius: 999px; border: 2px solid var(--ink); }
+.app-shoplist::-webkit-scrollbar-thumb { background: var(--hot); border-radius: 999px; border: 2px solid var(--ink); min-height: 48px; }
+.app-shopmore {
+  position: absolute; left: 50%; bottom: max(8px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 2; display: grid; place-items: center;
+  width: 48px; height: 36px; padding: 0; border: 3px solid var(--ink); border-radius: 999px; background: var(--mint); color: var(--ink);
+  box-shadow: 0 3px 0 var(--ink); cursor: pointer; touch-action: manipulation; animation: app-more-bounce 1.1s ease-in-out infinite;
+}
+.app-shopmore .app-icon { width: 24px; height: 24px; transform: rotate(-90deg); }
+.app-shoplistframe::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; pointer-events: none; z-index: 1;
+  background: linear-gradient(180deg, rgba(238, 123, 163, 0), rgba(238, 123, 163, 0.85));
+}
+@keyframes app-more-bounce { 0%, 100% { margin-bottom: 0; } 50% { margin-bottom: 6px; } }
 .app-item {
-  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 16px; border: 3px solid var(--ink);
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 16px; border: 3px solid var(--ink);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 38%), var(--cream); box-shadow: 3px 4px 0 var(--shadow);
 }
 .app-item--locked { background-color: #f1ddd0; }
 .app-item--owned { background-color: #d9fbf3; }
 .app-item--scrub { background-color: var(--yellow); border-style: dashed; }
-.app-item__badge { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--ink); background: var(--yellow); }
-.app-item__badge .app-icon { width: 26px; height: 26px; }
+.app-item__badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--ink); background: var(--yellow); }
+.app-item__badge .app-icon { width: 24px; height: 24px; }
 .app-item__text { min-width: 0; display: grid; gap: 2px; }
-.app-item__name { font-size: 1.05rem; font-weight: 900; }
-.app-item__desc { font-size: 0.85rem; color: #5f4a41; }
-.app-item__side { display: grid; justify-items: end; gap: 6px; }
+.app-item__name { font-size: 1rem; font-weight: 900; }
+.app-item__desc { font-size: 0.82rem; line-height: 1.2; color: #5f4a41; }
+.app-item__side { display: grid; justify-items: end; gap: 2px; }
+.app-item__side .app-pill { min-height: 26px; padding-block: 0; font-size: 0.95rem; }
+.app-item__side .app-pill .app-icon { width: 18px; height: 18px; }
 .app-item__why, .app-item__note { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 800; color: #9c1f4a; }
 .app-item__why .app-icon { width: 18px; height: 18px; }
 .app-item__note { color: #1e6a5e; }
@@ -216,11 +244,11 @@
 .app-owned--scrub { padding: 4px 12px; border-radius: 999px; border: 3px solid var(--ink); background: var(--hot); color: #fff; text-shadow: 0 1px 0 rgba(42, 33, 29, 0.5); }
 .app-item--scrub .app-item__note { color: #7a4a00; }
 .app-wearing-tag { padding: 2px 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--mint); font-size: 0.8rem; font-weight: 900; }
-.app-wearing { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 16px; border: 3px solid var(--ink); background: var(--cream); box-shadow: 3px 4px 0 var(--shadow); }
-.app-wearing__pic { flex: none; width: 68px; height: 140px; border-radius: 12px; background: var(--pink-soft); border: 3px solid var(--ink); }
+.app-wearing { display: flex; align-items: center; gap: 12px; padding: 5px 12px; border-radius: 16px; border: 3px solid var(--ink); background: var(--cream); box-shadow: 3px 4px 0 var(--shadow); }
+.app-wearing__pic { flex: none; width: 52px; height: 108px; border-radius: 12px; background: var(--pink-soft); border: 3px solid var(--ink); }
 .app-wearing__text { display: grid; gap: 2px; }
 .app-wearing__label { font-size: 0.85rem; font-weight: 800; color: #5f4a41; }
-.app-wearing__name { font-size: 1.3rem; font-weight: 900; }
+.app-wearing__name { font-size: 1.2rem; font-weight: 900; }
 .app-empty { text-align: center; font-weight: 800; color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
 
 /* ---------- Comics ---------- */
@@ -318,7 +346,7 @@
 .app-studio__item { display: flex; align-items: flex-start; gap: 6px; }
 .app-studio__item .app-icon { width: 20px; height: 20px; }
 .app-shop-studio { width: 100%; }
-.app-shoplist > .app-shop-studio, .app-shoplist > .app-wearing, .app-shoplist > .app-empty { grid-column: 1 / -1; }
+.app-shoplist > .app-empty { grid-column: 1 / -1; }
 
 /* ---------- Animations ---------- */
 @keyframes app-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-6px) rotate(1.5deg); } }
@@ -333,9 +361,16 @@
   .app-body { max-width: 860px; padding-top: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); gap: 10px; }
   .app-studio { flex-direction: row; padding-top: 4px; }
   .app-studio__notes { width: min(32%, 260px); max-height: none; }
-  .app-shopbar { max-width: 860px; grid-template-columns: auto minmax(250px, 1fr); align-items: center; gap: 12px; }
-  .app-shoplist { padding-bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); }
-  .app-wearing__pic { width: 48px; height: 98px; }
+  /* T5.3b: the shop is two columns: header, coins, reputation, tabs and extras on the left, the list on the full height on the right. */
+  .app-screen--shop { display: grid; grid-template-columns: clamp(250px, 38%, 330px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 8px; }
+  .app-screen--shop .app-head { grid-column: 1; grid-row: 1; max-width: none; margin: 0; padding-bottom: 4px; }
+  .app-screen--shop .app-shopbar { grid-column: 1; grid-row: 2; max-width: none; margin: 0; align-self: start; max-height: 100%; overflow-y: auto; padding-bottom: 8px; }
+  .app-screen--shop .app-shoplistframe { grid-column: 2; grid-row: 1 / span 2; }
+  .app-screen--shop .app-shoplist { max-width: none; margin: 0; display: flex; flex-direction: column; flex: 1; padding: 8px max(12px, env(safe-area-inset-right)) max(36px, calc(env(safe-area-inset-bottom) + 24px)) 4px; gap: 8px; }
+  .app-screen--shop .app-item { flex: none; padding-block: 5px; }
+  .app-screen--shop .app-item__side { grid-auto-flow: column; align-items: center; justify-items: end; gap: 8px; }
+  .app-wearing__pic { width: 46px; height: 94px; }
+  .app-wearing { padding-block: 4px; }
   .app-title__tap { flex-direction: row; gap: 32px; }
   .app-title__start { margin-top: 6px; }
   .app-title__art { width: min(30vw, 62vh, 220px); }
@@ -357,15 +392,23 @@
   .app-result__left, .app-result__right { display: flex; flex-direction: column; flex: 1; justify-content: center; gap: 10px; min-width: 0; }
   .app-result__title { font-size: 1.6rem; }
   .app-star svg { width: 54px; height: 54px; }
-  .app-coins { padding: 6px 12px; }
-  .app-coins__row { min-height: 26px; }
+  .app-coins { padding: 6px 12px; gap: 1px; }
+  .app-coins__row { min-height: 24px; }
+  /* B13 round 2c: up to eight coin lines (patch tips, nose strip bonus): slimmer pills, and the column scrolls
+     instead of being cut off at the top and bottom when it is still too tall. */
+  .app-coins .app-pill { min-height: 24px; padding-block: 0; }
+  .app-coins .app-pill .app-icon { width: 18px; height: 18px; }
+  .app-result__right {
+    justify-content: safe center; gap: 6px; max-height: 100%; overflow-y: auto; scrollbar-width: thin;
+    padding: 2px 6px 6px 0; box-sizing: border-box; /* room for the box shadows inside the scroll area */
+  }
   .app-coins__row--total { margin-top: 2px; padding-top: 4px; }
   .app-result__quote { font-size: 0.85rem; padding: 4px 10px; }
   .app-rep { padding-block: 3px; }
   .app-fact { padding: 8px 12px; }
   .app-result .app-actions { flex-direction: row; }
   .app-result .app-actions > .app-btn { flex: 1; }
-  .app-shoplist, .app-comics, .app-settings { display: grid; grid-template-columns: 1fr 1fr; align-content: start; align-items: start; gap: 10px; }
+  .app-comics, .app-settings { display: grid; grid-template-columns: 1fr 1fr; align-content: start; align-items: start; gap: 10px; }
   .app-settings > .app-notice { grid-column: 1 / -1; }
   .app-about { display: grid; grid-template-columns: 110px 1fr 1fr; align-items: start; gap: 12px; }
   .app-about__art { width: 100px; }
@@ -373,11 +416,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-shopmore { animation: none; }
   .app-mascot__face, .app-mascot__sparkle, .app-title__start, .app-star--on { animation: none; }
   .app-switch__knob { transition: none; }
 }
 .app-still .app-mascot__face, .app-still .app-mascot__sparkle, .app-still .app-title__start, .app-still .app-star--on { animation: none; }
 .app-still .app-switch__knob { transition: none; }
+.app-still .app-shopmore { animation: none; }
 
 /* ---------- Game wiring (T3.1c): intro extras, special mode and end placeholders, the scrub job ---------- */
 .app-intro__face { display: block; width: 100%; height: 100%; object-fit: cover; }
