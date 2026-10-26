@@ -2,13 +2,15 @@
 // scene's backdrop (pop/backdrop.js drawStudio, in its 'view' places), with every studio upgrade she has bought and
 // scrubbed; she stands in it (game/comic-art.js heroine, in her best outfit) next to her chair. Under the picture (beside
 // it when the phone is held sideways): a short line about the tier and one caption per upgrade. A Back button.
-// The picture is painted again when the screen changes size (turning the phone). Nothing moves (reduced motion is
-// already met: the studio view's light is steady).
+// The picture is painted again when the screen changes size (turning the phone). The room does not move.
+// In scrubs (T5.2b) she starts with her scrub cap on and a hint line says so: tapping her (or Enter/Space, she is a
+// button) takes the cap off with a little hop, the cap floats over onto the chair, and her bun shows; again puts it
+// back. With reduced motion the cap just swaps, no hop and no flight.
 
 import { el, svg, icon, header, screenShell } from './dom.js';
 import { drawStudio, layerSpots } from '../pop/backdrop.js';
-import { drawCharacter } from '../game/comic-art.js';
-import { studioCaptions } from '../game/studio.js';
+import { drawCharacter, drawScrubCap, headSpot, OUTFITS } from '../game/comic-art.js';
+import { studioCaptions, capFlight, studioCapStart, CAP_FLIGHT_MS } from '../game/studio.js';
 
 const FIGURE_HEIGHT = 640; // comic-art.js: a standing figure at scale 1 is about this tall, floor to the top of the bun
 
@@ -27,14 +29,23 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
 
   const body = el('div', 'app-studio');
   const stage = el('div', 'app-studio__stage');
-  stage.setAttribute('role', 'img');
-  stage.setAttribute('aria-label', `${t('ui.studio.picture')} ${t(caps.tierKey)}`);
   const canvas = el('canvas', 'app-studio__room');
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', `${t('ui.studio.picture')} ${t(caps.tierKey)}`);
   const her = svg('svg', { class: 'app-studio__her', 'aria-hidden': 'true' });
   stage.append(canvas, her);
+  const capState = studioCapStart(outfit, OUTFITS);
+  let capOn = capState.capOn;
+  // The cap toggle (scrubs only): a see-through button over her, so it works by tap, mouse and keyboard.
+  const tap = capState.toggle ? el('button', 'app-studio__tap') : null;
+  if (tap) {
+    tap.type = 'button';
+    stage.append(tap);
+  }
 
   const notes = el('div', 'app-studio__notes');
   notes.append(el('p', 'app-studio__tier', t(caps.tierKey)));
+  if (tap) notes.append(el('p', 'app-studio__hint', t('ui.studio.capHint')));
   if (caps.emptyKey) notes.append(el('p', 'app-studio__empty', t(caps.emptyKey)));
   else {
     const list = el('ul', 'app-studio__list');
@@ -50,6 +61,8 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
 
   let size = '';
   let frame = 0;
+  let geo = null; // the picture's size and her place, from the last paint
+  let flight = 0; // the cap flight's animation frame (0 = none)
 
   /** Paint the room and place her for the stage's current size (skipped while the size is unchanged). @returns {void} */
   function paint() {
@@ -64,14 +77,114 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawStudio(ctx, w, h, tier, layers, { view: true });
-    const hero = layerSpots(w, h, true).hero;
+    const spots = layerSpots(w, h, true);
+    geo = { w, h, hero: spots.hero, chair: spots.chair };
     her.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    const shadow = svg('ellipse', { cx: hero.x, cy: hero.floor, rx: hero.h * 0.17, ry: hero.h * 0.025, fill: 'rgba(40,20,30,0.22)' });
-    const figure = drawCharacter('heroine', {
-      x: hero.x, y: hero.floor, scale: hero.h / FIGURE_HEIGHT, pose: 'hips', expr: 'happy', outfit, look: -1,
-    }).node;
-    her.replaceChildren(shadow, figure);
+    stopFlight();
+    drawHer();
   }
+
+  /** Her layer for the studio view (standing, hands on hips, cap on or off). @returns {object} the comic-art layer */
+  function herLayer() {
+    const hero = geo.hero;
+    return { x: hero.x, y: hero.floor, scale: hero.h / FIGURE_HEIGHT, pose: 'hips', expr: 'happy', outfit, look: -1, cap: capOn };
+  }
+
+  /** Where the cap sits on her head, in picture pixels. @returns {{x: number, y: number, scale: number, rot: number}} */
+  function capOnHead() {
+    const spot = headSpot('heroine', herLayer());
+    return { x: spot.x, y: spot.y, scale: spot.scale, rot: spot.tilt };
+  }
+
+  /** Where the cap rests on the chair seat when it is off, in picture pixels. @returns {{x: number, y: number, scale: number, rot: number}} */
+  function capOnChair() {
+    const chair = geo.chair;
+    const scale = headSpot('heroine', herLayer()).scale * 0.75;
+    return { x: chair.x + chair.wide * 0.06, y: chair.seat + 20 * scale, scale, rot: -12 };
+  }
+
+  /**
+   * One cap drawing at a place (picture pixels).
+   * @param {{x: number, y: number, scale: number, rot: number}} p the place
+   * @returns {SVGElement} the cap group
+   */
+  function capAt(p) {
+    const g = svg('g', { transform: capTransform(p) });
+    g.append(drawScrubCap());
+    return g;
+  }
+
+  /** The SVG transform that puts the cap at a place. @param {{x: number, y: number, scale: number, rot: number}} p @returns {string} */
+  function capTransform(p) {
+    return `translate(${p.x} ${p.y}) rotate(${p.rot}) scale(${p.scale})`;
+  }
+
+  /**
+   * Draw her (and the cap on the chair when it is off) for the current state.
+   * @param {{x: number, y: number, scale: number, rot: number}|null} [flying] the cap mid-flight (then it is drawn
+   *   there instead of on her head or the chair)
+   * @param {number} [hop] her hop 0..1
+   * @returns {SVGElement|null} the flying cap's group, to move it frame by frame
+   */
+  function drawHer(flying = null, hop = 0) {
+    if (!geo) return null;
+    const hero = geo.hero;
+    const shadow = svg('ellipse', { cx: hero.x, cy: hero.floor, rx: hero.h * 0.17, ry: hero.h * 0.025, fill: 'rgba(40,20,30,0.22)' });
+    const figure = svg('g', { class: 'app-studio__figure', transform: `translate(0 ${-hop * hero.h * 0.05})` });
+    figure.append(drawCharacter('heroine', { ...herLayer(), cap: flying ? false : capOn }).node);
+    const parts = [shadow, figure];
+    let capNode = null;
+    if (flying) parts.push(capNode = capAt(flying));
+    else if (tap && !capOn) parts.push(capAt(capOnChair()));
+    her.replaceChildren(...parts);
+    if (tap) {
+      // The button covers her from the floor to the top of her bun.
+      Object.assign(tap.style, {
+        left: `${((hero.x - hero.h * 0.22) / geo.w) * 100}%`, top: `${((hero.floor - hero.h * 1.02) / geo.h) * 100}%`,
+        width: `${((hero.h * 0.44) / geo.w) * 100}%`, height: `${((hero.h * 1.04) / geo.h) * 100}%`,
+      });
+      tap.setAttribute('aria-label', t(capOn ? 'ui.studio.capOff' : 'ui.studio.capOn'));
+    }
+    return capNode;
+  }
+
+  /** Stop a cap flight that is under way (the state is already the new one). @returns {void} */
+  function stopFlight() {
+    if (flight) cancelAnimationFrame(flight);
+    flight = 0;
+  }
+
+  /** Take the cap off, or put it back on: a little hop and the cap floats to the chair or back (instant with reduced motion). @returns {void} */
+  function toggleCap() {
+    if (!geo) return;
+    stopFlight();
+    const from = capOn ? capOnHead() : capOnChair();
+    capOn = !capOn;
+    const to = capOn ? capOnHead() : capOnChair();
+    if (reducedMotion || typeof requestAnimationFrame !== 'function') {
+      drawHer();
+      return;
+    }
+    const lift = geo.hero.h * 0.22;
+    const start = performance.now();
+    const node = drawHer(capFlight(0, from, to, lift), 0);
+    const figure = her.querySelector('.app-studio__figure');
+    /** Move the cap (and her hop) one frame on; draw the final state when the flight is over. @param {number} now @returns {void} */
+    const step = (now) => {
+      const k = (now - start) / CAP_FLIGHT_MS;
+      if (k >= 1) {
+        flight = 0;
+        drawHer();
+        return;
+      }
+      const p = capFlight(k, from, to, lift);
+      node.setAttribute('transform', capTransform(p));
+      figure.setAttribute('transform', `translate(0 ${-p.hop * geo.hero.h * 0.05})`);
+      flight = requestAnimationFrame(step);
+    };
+    flight = requestAnimationFrame(step);
+  }
+  tap?.addEventListener('click', toggleCap, { signal: shell.signal });
 
   /** Paint on the next frame (several size changes in a row paint once). @returns {void} */
   function schedule() {
@@ -89,6 +202,7 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
     dispose() {
       watch?.disconnect();
       if (frame) cancelAnimationFrame(frame);
+      stopFlight();
       shell.dispose();
     },
   };

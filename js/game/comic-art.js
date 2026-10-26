@@ -399,7 +399,8 @@ function head(c, e) {
   if (!armor) g.appendChild(hairFront(c, col, g));
   else if (c.beard) g.appendChild(hairFront({ ...c, hair: 'none' }, col, g).lastChild);
   const cap = OUTFITS[c.outfit]?.cap;
-  if (cap && !armor) g.appendChild(scrubCap(cap));
+  // `cap: false` on the layer = the cap is off (T5.2b): her own hair and bun, drawn underneath anyway, show.
+  if (cap && !armor && c.cap !== false) g.appendChild(scrubCap(cap));
   g.appendChild(mouth(e.mouth, 62));
   // A tiny clipped moustache under the nose (the inspector).
   if (c.moustache) g.appendChild(el('path', { d: 'M-26 50 Q-24 38 -4 40 L0 44 L4 40 Q24 38 26 50 Q0 56 -26 50Z', fill: col, ...ink(4) }));
@@ -1561,7 +1562,61 @@ export const ARTS = {
  */
 export function dressHeroine(arts, outfit) {
   if (!outfit || !(outfit in OUTFITS) || typeof arts.heroine !== 'function') return arts;
-  return { ...arts, heroine: (l, kit) => arts.heroine(l.outfit === undefined ? { ...l, outfit } : l, kit) };
+  const cap = !!OUTFITS[outfit].cap;
+  /** Her layer in the outfit; with a cap outfit the cap comes off when she relaxes (capOnFor, T5.2b). @param {object} l @returns {object} */
+  const dress = (l) => (cap ? { ...l, outfit, cap: capOnFor(l) } : { ...l, outfit });
+  return { ...arts, heroine: (l, kit) => arts.heroine(l.outfit === undefined ? dress(l) : l, kit) };
+}
+
+/** Poses where she is relaxed, celebrating or seen close up: in a `dressed` strip her scrub cap is off there (T5.2b). */
+export const CAP_OFF_POSES = ['cheer', 'sit', 'bust', 'wave', 'shrug'];
+/** Things in her hand that mean she is at work (then the cap stays on, whatever the pose). */
+export const WORK_HOLDS = ['tweezers', 'gloves', 'magnifier'];
+
+/**
+ * Whether her scrub cap is on in a comic layer (T5.2b): a layer's own `cap` (true or false) wins; otherwise the cap is
+ * on while she works (popping, standing at the chair, a work tool in hand) and off when she relaxes, celebrates or is
+ * seen close up (CAP_OFF_POSES), so her bun shows.
+ * @param {object} l the heroine layer
+ * @returns {boolean} true = cap on
+ */
+export function capOnFor(l) {
+  if (typeof l.cap === 'boolean') return l.cap;
+  if (WORK_HOLDS.includes(l.hold)) return true;
+  return !CAP_OFF_POSES.includes(l.pose ?? 'stand');
+}
+
+/**
+ * Where a figure's head sits and how big it is, in the layer's units (T5.2b: the studio view floats her cap from
+ * there). Matches drawCharacter: the head centre, its scale and its tilt.
+ * @param {string} who a key of CHARACTERS
+ * @param {object} l the layer (x, y, scale, flip, pose, expr)
+ * @returns {{x: number, y: number, scale: number, tilt: number, flip: number}} head centre, head scale (1 = radius
+ *   about 105), tilt in degrees and flip (-1 = mirrored)
+ */
+export function headSpot(who, l) {
+  const c = { ...CHARACTERS[who], ...l };
+  const pose = POSES[c.pose] ?? POSES.stand;
+  const b = BUILDS[c.build] ?? BUILDS.slim;
+  const s = (c.scale ?? 1) * (c.size ?? 1);
+  const fx = c.flip ? -1 : 1;
+  const tilt = (EXPRESSIONS[c.expr] ?? EXPRESSIONS.neutral).tilt ?? 0;
+  return {
+    x: c.x ?? 0,
+    y: (c.y ?? 0) + s * (-515 + (pose.down ?? 0) + (pose.shift ?? 0)),
+    scale: s * b.head,
+    tilt,
+    flip: fx,
+  };
+}
+
+/**
+ * Her scrub cap on its own, in head units (centre of the head at 0,0; T5.2b: the cap she takes off in the studio view).
+ * @param {string} [col] the cap colour (default the scrubs cap)
+ * @returns {SVGElement} the cap
+ */
+export function drawScrubCap(col = OUTFITS.scrubs.cap) {
+  return scrubCap(col);
 }
 
 /**

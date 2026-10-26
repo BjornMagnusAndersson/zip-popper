@@ -92,3 +92,44 @@ export function studioCaptions(tier, layers) {
     emptyKey: shown.length ? null : 'ui.studio.empty',
   };
 }
+
+/** How long her cap takes to float between her head and the chair in the studio view (T5.2b), in ms. */
+export const CAP_FLIGHT_MS = 750;
+
+/**
+ * Her cap's place part way through its little flight in the studio view (T5.2b, screens/studio.js): it pops up off
+ * her head, drifts over in a soft arc with a little wobble and settles on the chair seat (or the other way round).
+ * She does a small hop at the start. Positions are in the picture's pixels.
+ * @param {number} k progress 0..1 (clamped)
+ * @param {{x: number, y: number, scale: number, rot: number}} from where the cap starts
+ * @param {{x: number, y: number, scale: number, rot: number}} to where the cap lands
+ * @param {number} lift how high the arc goes above the higher end, in pixels
+ * @returns {{x: number, y: number, scale: number, rot: number, hop: number}} the cap's place, and her hop 0..1 (1 = top)
+ */
+export function capFlight(k, from, to, lift) {
+  const t = Math.min(1, Math.max(0, Number(k) || 0));
+  const ease = t * t * (3 - 2 * t); // smooth start and end
+  /** Part way from a to b, eased. @param {number} a @param {number} b @returns {number} */
+  const lerp = (a, b) => a + (b - a) * ease;
+  const arc = Math.sin(Math.PI * t) * lift;
+  const wobble = Math.sin(t * Math.PI * 3) * 14 * (1 - t);
+  const hopK = Math.min(1, t / 0.4);
+  return {
+    x: lerp(from.x, to.x),
+    y: lerp(from.y, to.y) - arc,
+    scale: lerp(from.scale, to.scale),
+    rot: lerp(from.rot, to.rot) + wobble,
+    hop: t < 0.4 ? Math.sin(Math.PI * hopK) : 0,
+  };
+}
+
+/**
+ * Whether the studio view lets her take her cap off, and how it starts (T5.2b): only the scrubs have a cap; it starts on.
+ * @param {string} outfit what she wears (comic-art.js OUTFITS name)
+ * @param {Record<string, object>} outfits the OUTFITS table
+ * @returns {{toggle: boolean, capOn: boolean}} toggle = tapping her takes the cap off and on
+ */
+export function studioCapStart(outfit, outfits) {
+  const toggle = !!outfits?.[outfit]?.cap;
+  return { toggle, capOn: toggle };
+}
