@@ -42,9 +42,16 @@ import { STRIP as strip2 } from './js/data/comics/strip-2.js';
 import { STRIP as strip3 } from './js/data/comics/strip-3.js';
 import { STRIP as strip4 } from './js/data/comics/strip-4.js';
 import { STRIP as strip5 } from './js/data/comics/strip-5.js';
+import { STRIP as books } from './js/data/comics/strip-books.js';
+import { STRIP as mplant } from './js/data/comics/strip-mplant.js';
+import { STRIP as mlamp } from './js/data/comics/strip-mlamp.js';
+import { STRIP as mmastery } from './js/data/comics/strip-mmastery.js';
+import { STRIP as mapron } from './js/data/comics/strip-mapron.js';
+import { STRIP as mtweezers } from './js/data/comics/strip-mtweezers.js';
+import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
 import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer } from './js/game/comic-art.js';
 
-const STRIPS = [strip0, strip1, strip2, strip3, strip4, strip5, testStrip, placeholder]; // add new strips here to see them in the chooser
+const STRIPS = [strip0, strip1, strip2, strip3, strip4, strip5, books,mplant, mlamp, mapron, mmastery, mtweezers, mstar, testStrip, placeholder]; // add new strips here to see them in the chooser
 const params = new URLSearchParams(location.search);
 
 /**
@@ -110,6 +117,7 @@ function showKit() {
     ...[[260, 'nils', 'neutral'], [560, 'greta', 'happy'], [860, 'heroine', 'shocked'], [1160, 'penny', 'happy']].flatMap(([x, art, expr]) => [{ art: 'chair', x, y: 860, scale: 0.85 }, { art, x, y: 860, scale: 0.85, pose: 'sit', expr }])]);
   tile(p, 'armor: plumes 4 + knitted cozy', 600, 820, [{ art: 'husband', x: 300, y: 790, outfit: 'armor', visor: 'down', plumes: 4, cozy: '#f27eb2', expr: 'proud', pose: 'hips' }]);
   tile(p, 'burst + sparkles + torch', 700, 600, [{ art: 'burst', x: 260, y: 260 }, { art: 'sparkles', x: 520, y: 180 }, { art: 'torch', x: 520, y: 520 }]);
+  tile(p, 'plant: eyes sad, wide, smug, happy + scarf, bud, sweat', 1100, 420, ['sad', 'wide', 'smug', 'happy'].map((eyes, i) => ({ art: 'plant', x: 140 + i * 270, y: 400, eyes, scarf: i === 2 ? '#e8505b' : undefined, bud: i === 1, sweat: i === 1 })));
 }
 
 if (params.has('kit')) showKit();

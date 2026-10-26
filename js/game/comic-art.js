@@ -66,6 +66,8 @@ export const EXPRESSIONS = {
   grumpy: { eyes: 'half', brows: 'angry', mouth: 'frown' },
   sleepy: { eyes: 'closed', brows: 'flat', mouth: 'flat', zzz: true },
   ow: { eyes: 'squint', brows: 'worried', mouth: 'o', sweat: true },
+  // Peering hard at something too small or too dark to see (milestone "First lamp").
+  squint: { eyes: 'squint', brows: 'angry', mouth: 'flat', tilt: 6 },
 };
 
 /** Body poses: [elbow, hand] for the figure's left (viewer's left) and right arm, relative to the floor point;
@@ -85,7 +87,7 @@ export const POSES = {
 };
 
 /** Things a figure can hold in the right hand. */
-export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves'];
+export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'highlighter', 'book'];
 
 let gid = 0; // counter for unique gradient ids
 
@@ -636,6 +638,21 @@ function heldThing(what, at, k = 1) {
     g.appendChild(line('M-28 -146 Q-18 -164 4 -168', 6, { stroke: '#ffffff', opacity: 0.9 }));
   } else if (what === 'gloves') {
     g.appendChild(el('g', { transform: 'translate(0 18) scale(0.85)' }, [gloveBox()]));
+  } else if (what === 'highlighter') {
+    // A fat neon-yellow highlighter pen, chisel tip up (the psychology books, strip "books" on).
+    g.appendChild(el('rect', { x: -14, y: -86, width: 28, height: 104, rx: 10, fill: '#e9f542', ...ink(4.5) }));
+    g.appendChild(el('path', { d: 'M-10 -86 L-6 -112 L8 -104 L10 -86Z', fill: '#c8d900', ...ink(3.5) }));
+    g.appendChild(el('rect', { x: -16, y: -30, width: 32, height: 14, rx: 4, fill: '#2b2f3a' }));
+  } else if (what === 'book') {
+    // An open book held up by its spine: two pages with lines, some lines already highlighted yellow.
+    g.appendChild(el('path', { d: 'M0 -20 Q-50 -40 -96 -26 L-96 -150 Q-50 -164 0 -144Z M0 -20 Q50 -40 96 -26 L96 -150 Q50 -164 0 -144Z', fill: '#fffaf2', ...ink(4.5) }));
+    g.appendChild(el('path', { d: 'M-96 -26 L-96 -14 Q-50 -28 0 -8 Q50 -28 96 -14 L96 -26', fill: '#6a7be6', ...ink(4) }));
+    for (const [i, y] of [-128, -108, -88, -68, -48].entries()) {
+      for (const s of [-1, 1]) {
+        if ((i + (s > 0 ? 1 : 0)) % 2 === 0) g.appendChild(line(`M${s * 18} ${y} L${s * 80} ${y - 4}`, 12, { stroke: '#e9f542', opacity: 0.85 }));
+        g.appendChild(line(`M${s * 18} ${y} L${s * 80} ${y - 4}`, 3, { opacity: 0.45 }));
+      }
+    }
   } else if (what === 'snack') {
     g.appendChild(el('path', { d: 'M-30 -70 L30 -70 L24 10 L-24 10Z', fill: '#f3a33a', ...ink(4.5) }));
     for (const [x, y] of [[-14, -78], [4, -84], [18, -76]]) g.appendChild(el('circle', { cx: x, cy: y, r: 11, fill: '#fff4c8', ...ink(3.5) }));
@@ -1265,8 +1282,130 @@ function gloves(l) {
   return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) rotate(${l.rotate ?? 0}) scale(${l.scale ?? 1})` }, [gloveBox()]) };
 }
 
+/**
+ * The plant on its own (milestone "First plant" on): a lush leafy plant in a terracotta pot, for close-ups and for
+ * carrying around. Same look as the room's plant, but it scales. Running gag: it watches with eyes on the pot.
+ * @param {object} l layer: x, y (floor, middle of the pot), scale, eyes ('sad' | 'wide' | 'smug' | 'happy'),
+ *   scarf (colour of Greta's knitted scarf), bud (true or a colour: a round pink bud on top), sweat (a worried drop)
+ * @returns {{node: SVGElement}} the plant
+ */
+function plant(l) {
+  const g = el('g');
+  for (const [a, len] of [[-72, 130], [-48, 190], [-24, 240], [0, 270], [24, 235], [48, 185], [72, 125]]) {
+    const lg = el('g', { transform: `translate(0 -130) rotate(${a})` });
+    lg.appendChild(el('ellipse', { cx: 0, cy: -len / 2, rx: 28, ry: len / 2, fill: Math.abs(a) % 48 ? '#3fae8c' : '#59b85f', ...ink(5) }));
+    lg.appendChild(line(`M0 -8 L0 ${-len * 0.8}`, 3.5, { stroke: '#2e8a6c', opacity: 0.6 }));
+    g.appendChild(lg);
+  }
+  if (l.bud) {
+    // A round bud on a little stem (it looks a lot like something poppable).
+    g.appendChild(line('M8 -200 Q30 -250 46 -282', 6, { stroke: '#2e8a6c' }));
+    g.appendChild(el('circle', { cx: 50, cy: -298, r: 24, fill: l.bud === true ? '#ff9cb5' : l.bud, ...ink(5) }));
+    g.appendChild(el('ellipse', { cx: 42, cy: -308, rx: 7, ry: 9, fill: '#ffffff', opacity: 0.75 }));
+  }
+  g.appendChild(el('path', { d: 'M-62 -130 L62 -130 L48 0 L-48 0Z', fill: '#e8735a', ...ink(6) }));
+  g.appendChild(el('rect', { x: -74, y: -152, width: 148, height: 30, rx: 8, fill: '#f08b70', ...ink(6) }));
+  if (l.scarf) {
+    // Greta's knitted scarf around the stems, with a dangling end and white stripes.
+    g.appendChild(el('path', { d: 'M-40 -190 Q0 -170 44 -192 L46 -156 Q0 -134 -42 -154Z', fill: l.scarf, ...ink(5) }));
+    g.appendChild(el('path', { d: 'M22 -158 L58 -76 L86 -88 L48 -164Z', fill: l.scarf, ...ink(5) }));
+    g.appendChild(line('M-14 -178 l0 34 M14 -180 l0 34 M46 -112 l24 -10', 6, { stroke: '#ffffff', opacity: 0.8 }));
+  }
+  const k = l.eyes;
+  if (k) {
+    // Eyes on the pot, like the room's plant: sad (droopy lids), wide (amazed), smug (half shut, smirk), happy (^ ^).
+    for (const s of [-1, 1]) {
+      if (k === 'happy') {
+        g.appendChild(line(`M${s * 24 - 15} -72 Q${s * 24} -94 ${s * 24 + 15} -72`, 6));
+        continue;
+      }
+      g.appendChild(el('ellipse', { cx: s * 24, cy: -78, rx: 17, ry: k === 'wide' ? 24 : 18, fill: '#ffffff', ...ink(4) }));
+      g.appendChild(el('circle', { cx: s * 24, cy: k === 'sad' ? -70 : -76, r: k === 'wide' ? 6 : 8.5, fill: INK }));
+      if (k !== 'wide') g.appendChild(el('path', { d: `M${s * 24 - 20} ${-84 + (k === 'sad' ? -s * 6 : 0)} L${s * 24 + 20} ${-84 + (k === 'sad' ? s * 6 : 0)} L${s * 24 + 20} -100 L${s * 24 - 20} -100Z`, fill: '#e8735a', ...ink(4) }));
+    }
+    if (k === 'smug') g.appendChild(line('M-18 -36 Q6 -22 24 -44', 5));
+    if (k === 'happy') g.appendChild(line('M-20 -44 Q0 -22 20 -44', 5));
+    if (k === 'sad') g.appendChild(line('M-14 -30 Q0 -42 14 -30', 5));
+    if (k === 'wide') g.appendChild(el('ellipse', { cx: 0, cy: -34, rx: 10, ry: 13, fill: INK }));
+  }
+  if (l.sweat) g.appendChild(el('path', { d: 'M76 -150 C90 -128 92 -112 78 -110 C64 -112 66 -128 76 -150Z', fill: '#9ad8ff', ...ink(3.5) }));
+  const s = l.scale ?? 1;
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${l.flip ? -s : s} ${s})` }, [g]) };
+}
+
+/**
+ * A small scruffy dog (milestone "First 3-star day" on): tan fur, a brown patch and floppy ears, a red collar.
+ * Faces right; flip faces left. About 230 units tall at scale 1.
+ * @param {object} l layer: x, y (floor, middle), scale, flip, stance ('stand' | 'run' | 'sleep' | 'peek' = head and
+ *   paws only, to hide behind something), face ('happy' | 'bark' | 'scared' | 'sleep'), color (fur)
+ * @returns {{node: SVGElement, mouth: number[]}} the dog
+ */
+function dog(l) {
+  const fur = l.color ?? '#f2d29b';
+  const patch = '#b5793f';
+  const pose = l.stance ?? 'stand';
+  const face = l.face ?? (pose === 'sleep' ? 'sleep' : 'happy');
+  const g = el('g');
+  const tail = (d) => { g.appendChild(line(d, 24)); g.appendChild(line(d, 13, { stroke: fur })); };
+  const lift = pose === 'run' ? -40 : 0;
+  // Head position: resting on the paws when asleep, else up front.
+  const [hx, hy] = pose === 'sleep' ? [96, -62] : [85, -165 + lift];
+  if (pose === 'run') for (const y of [-70, -110, -150]) g.appendChild(line(`M-150 ${y} l-90 0`, 6, { opacity: 0.6 }));
+  if (pose === 'sleep') {
+    tail('M-90 -30 Q-110 10 -40 10');
+    g.appendChild(el('ellipse', { cx: 0, cy: -48, rx: 100, ry: 46, fill: fur, ...ink(6) }));
+    g.appendChild(el('ellipse', { cx: -24, cy: -64, rx: 34, ry: 20, fill: patch }));
+    for (const z of [[150, -150, 16], [185, -195, 22]]) g.appendChild(line(`M${z[0]} ${z[1]} l${z[2]} 0 l${-z[2]} ${z[2]} l${z[2]} 0`, 4));
+  } else if (pose !== 'peek') {
+    if (pose === 'run') tail(`M-78 ${-104 + lift} L-150 ${-122 + lift}`);
+    else if (face === 'scared') tail('M-78 -84 Q-100 -40 -60 -28');
+    else tail('M-78 -110 Q-124 -150 -108 -205');
+    // Legs: straight when standing, stretched front and back when running.
+    for (const [x, a] of [[-55, 50], [-25, 40], [35, -40], [62, -50]]) {
+      g.appendChild(el('rect', { x: x - 12, y: -82 + lift, width: 24, height: 82, rx: 12, fill: fur, ...ink(5), transform: pose === 'run' ? `rotate(${a} ${x} ${-82 + lift})` : '' }));
+    }
+    g.appendChild(el('ellipse', { cx: 0, cy: -95 + lift, rx: 86, ry: 50, fill: fur, ...ink(6) }));
+    g.appendChild(el('ellipse', { cx: -22, cy: -112 + lift, rx: 34, ry: 22, fill: patch }));
+  }
+  // Far ear, head, snout, nose, near ear, collar.
+  const earTurn = face === 'bark' || pose === 'run' ? 110 : face === 'scared' ? 8 : 28;
+  g.appendChild(el('ellipse', { cx: 0, cy: 30, rx: 15, ry: 32, fill: tint(patch, -0.2), ...ink(4), transform: `translate(${hx + 18} ${hy - 42}) rotate(${-earTurn * 0.6})` }));
+  g.appendChild(el('circle', { cx: hx, cy: hy, r: 50, fill: fur, ...ink(6) }));
+  g.appendChild(el('ellipse', { cx: hx + 40, cy: hy + 15, rx: 32, ry: 24, fill: '#fbe6c2', ...ink(5) }));
+  g.appendChild(el('ellipse', { cx: hx + 67, cy: hy + 7, rx: 12, ry: 9, fill: INK }));
+  // Mouth and eyes by face.
+  if (face === 'bark') {
+    g.appendChild(el('ellipse', { cx: hx + 48, cy: hy + 36, rx: 18, ry: 15, fill: '#7a2b2b', ...ink(4) }));
+    g.appendChild(el('ellipse', { cx: hx + 48, cy: hy + 44, rx: 9, ry: 6, fill: '#ff8fa3' }));
+    for (const a of [-30, 0, 30]) g.appendChild(line(`M${hx + 90} ${hy + 20} l40 0`, 5, { transform: `rotate(${a} ${hx + 80} ${hy + 20})` }));
+  } else if (face === 'happy') {
+    g.appendChild(line(`M${hx + 26} ${hy + 30} Q${hx + 42} ${hy + 44} ${hx + 60} ${hy + 30}`, 4));
+    g.appendChild(el('path', { d: `M${hx + 36} ${hy + 36} q8 22 18 0Z`, fill: '#ff8fa3', ...ink(3) }));
+  } else if (face === 'scared') {
+    g.appendChild(line(`M${hx + 28} ${hy + 34} q8 -6 14 0 q8 6 14 0`, 4));
+    g.appendChild(el('path', { d: `M${hx - 46} ${hy - 40} C${hx - 34} ${hy - 20} ${hx - 34} ${hy - 6} ${hx - 46} ${hy - 6} C${hx - 58} ${hy - 6} ${hx - 58} ${hy - 20} ${hx - 46} ${hy - 40}Z`, fill: '#9ad8ff', ...ink(3) }));
+  }
+  if (face === 'sleep') g.appendChild(line(`M${hx + 2} ${hy - 12} Q${hx + 12} ${hy - 4} ${hx + 22} ${hy - 12}`, 5));
+  else if (face === 'happy') g.appendChild(line(`M${hx + 2} ${hy - 12} Q${hx + 12} ${hy - 24} ${hx + 22} ${hy - 12}`, 5));
+  else {
+    const big = face === 'scared' || face === 'bark';
+    g.appendChild(el('ellipse', { cx: hx + 12, cy: hy - 14, rx: big ? 14 : 9, ry: big ? 17 : 11, fill: '#ffffff', ...ink(4) }));
+    g.appendChild(el('circle', { cx: hx + 15, cy: hy - 12, r: face === 'scared' ? 4 : 7, fill: INK }));
+  }
+  g.appendChild(el('ellipse', { cx: 0, cy: 34, rx: 18, ry: 38, fill: patch, ...ink(5), transform: `translate(${hx - 22} ${hy - 38}) rotate(${earTurn})` }));
+  if (pose !== 'sleep') {
+    g.appendChild(el('rect', { x: hx - 34, y: hy + 40, width: 60, height: 14, rx: 7, fill: '#e8505b', ...ink(4), transform: `rotate(-18 ${hx - 4} ${hy + 47})` }));
+    g.appendChild(el('circle', { cx: hx + 2, cy: hy + 62, r: 9, fill: '#ffd25a', ...ink(3) }));
+  }
+  if (pose === 'peek' || pose === 'sleep') for (const dx of [-10, 50]) g.appendChild(el('ellipse', { cx: hx + dx, cy: hy + 52, rx: 20, ry: 12, fill: fur, ...ink(4) }));
+  const s = l.scale ?? 1;
+  const f = l.flip ? -1 : 1;
+  const mouth = [(l.x ?? 0) + f * s * (hx + 50), (l.y ?? 0) + s * (hy + 30)];
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${f * s} ${s})` }, [g]), mouth };
+}
+
 /** Props, rooms and effects by name. */
-export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves };
+export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog };
 
 /** Every art piece a strip can name with `art:` (characters and props). Each takes the layer and returns { node, mouth? }. */
 export const ARTS = {
