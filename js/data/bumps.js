@@ -55,9 +55,10 @@ export const BUMPS = {
     spawn: { chance: 0.4, maxPerFace: 1, zones: ['cheekL', 'cheekR', 'jawL', 'jawR'] }, // roomy spots, so it can grow big
     grow: { from: 0.8, seconds: 24 }, // starts fairly big, so it reads on a phone from the start
   },
-  hair: { // an ingrown hair: a silly, very long hair is pulled out (behaviour in T1.3)
-    implemented: false, hold: 1.6, radius: [13, 17], goo: 'hair', drops: 0,
+  hair: { // an ingrown hair (T1.3): a small red bump; tweezers pull out a silly, very long curly hair (no goo)
+    implemented: true, hold: 1.6, radius: [13, 17], goo: 'hair', drops: 0,
     bestTools: ['tweezers'], warmHelps: false, needsTool: 'tweezers', pay: 6,
+    spawn: { chance: 0.3, maxPerFace: 1, zones: ['chin', 'jawL', 'jawR', 'cheekL', 'cheekR'] }, // where beard hairs grow
   },
 };
 

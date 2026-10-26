@@ -15,8 +15,8 @@ export const FACE_PARTS = {
   accessories: ['glasses', 'sunglasses', 'bowtie', 'earrings', 'hat', 'tiara', 'clown-nose', 'pilot-cap', 'flower', 'moustache', 'beanie', 'headband', 'veil', 'scarf'],
 };
 
-/** The bump types a customer face may carry (all from the seed). */
-export const BUMP_TYPES = ['whitehead', 'red', 'blackhead', 'big', 'gold'];
+/** The bump types a customer face may carry (the seed's five, plus the Evil Horn and the ingrown hair from T1.3). */
+export const BUMP_TYPES = ['whitehead', 'red', 'blackhead', 'big', 'gold', 'horn', 'hair'];
 
 /** The reaction levels each customer has a line for. */
 export const REACTIONS = ['happy', 'ok', 'ow'];

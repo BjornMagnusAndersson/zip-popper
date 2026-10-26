@@ -395,7 +395,7 @@ function torso(c, b, out, sy, hy, parent) {
  * @param {number[]} hand hand
  * @param {object} out outfit
  * @param {string} skinFill hand fill
- * @param {{open?: boolean, wiggle?: boolean, point?: boolean, side: number}} o hand shape
+ * @param {{open?: boolean, wiggle?: boolean, point?: boolean, hold?: boolean, side: number}} o hand shape (hold: no hand here)
  * @returns {SVGElement} arm
  */
 function arm(sh, elb, hand, out, skinFill, o) {
@@ -410,22 +410,56 @@ function arm(sh, elb, hand, out, skinFill, o) {
     g.appendChild(el('path', { d: `M${sh[0]} ${sh[1]} L${mid[0]} ${mid[1]}`, stroke: sleeve, 'stroke-width': 44, 'stroke-linecap': 'round' }));
   }
   if (out.armor) g.appendChild(el('circle', { cx: elb[0] * 0.5 + (sh[0] + hand[0]) * 0.25, cy: elb[1] * 0.5 + (sh[1] + hand[1]) * 0.25, r: 22, fill: '#aeb9c6', ...ink(4.5) }));
+  if (o.hold) return g; // a hand holding something is drawn over the thing instead (see drawCharacter)
   const hf = out.armor ? '#aeb9c6' : skinFill;
-  const hg = el('g', { transform: `translate(${hand[0]} ${hand[1]})` });
   if (o.open || o.wiggle) {
-    // An open hand: palm plus four fingers fanned up (wiggling a bit for "happy hands").
-    const fingers = [-30, -10, 10, 30];
-    fingers.forEach((a, i) => hg.appendChild(el('rect', { x: -7, y: -52, width: 14, height: 34, rx: 7, fill: hf, ...ink(4.5), transform: `rotate(${a + (o.wiggle ? (i % 2 ? 8 : -6) : 0)})` })));
-    hg.appendChild(el('ellipse', { cx: o.side * -22, cy: 0, rx: 9, ry: 16, fill: hf, ...ink(4.5), transform: `rotate(${o.side * -40})` }));
-    hg.appendChild(el('circle', { r: 27, fill: hf, ...ink(5) }));
-    if (o.wiggle) for (const s of [-1, 1]) hg.appendChild(line(`M${s * 40} -50 q${s * 10} -6 ${s * 6} -18 M${s * 48} -24 q${s * 12} -2 ${s * 14} -14`, 4));
-  } else if (o.point) {
-    hg.appendChild(el('rect', { x: 0, y: -8, width: 52, height: 16, rx: 8, fill: hf, ...ink(4.5) }));
-    hg.appendChild(el('circle', { r: 27, fill: hf, ...ink(5) }));
+    g.appendChild(el('g', { transform: `translate(${hand[0]} ${hand[1]})` }, [openHand(hf, o)]));
   } else {
-    hg.appendChild(el('circle', { r: 27, fill: hf, ...ink(5) }));
+    const turn = Math.atan2(hand[1] - elb[1], hand[0] - elb[0]) * 180 / Math.PI - 90; // fingers follow the forearm
+    g.appendChild(el('g', { transform: `translate(${hand[0]} ${hand[1]}) rotate(${turn})` }, [closedHand(hf, o)]));
   }
-  g.appendChild(hg);
+  return g;
+}
+
+/**
+ * An open cartoon hand at (0, 0), fingers fanned upwards: four separate fingers (index to pinky) and a thumb on the
+ * body side. Wiggle ("happy hands") tilts the fan, bends every other finger a little and adds small motion lines.
+ * @param {string} hf hand fill
+ * @param {{wiggle?: boolean, side: number}} o hand shape
+ * @returns {SVGElement} the hand
+ */
+function openHand(hf, o) {
+  const g = el('g');
+  const inner = -o.side; // the thumb side, towards the body
+  const tilt = o.wiggle ? 7 * o.side : 0;
+  const lens = [32, 37, 34, 27]; // index, middle, ring, pinky
+  g.appendChild(el('rect', { x: -6.5, y: -41, width: 13, height: 30, rx: 6.5, fill: hf, ...ink(4.5), transform: `rotate(${inner * 78 + tilt})` }));
+  lens.forEach((len, i) => {
+    const l = len - (o.wiggle && i % 2 ? 6 : 0);
+    g.appendChild(el('rect', { x: -6, y: -14 - l, width: 12, height: l, rx: 6, fill: hf, ...ink(4.5), transform: `rotate(${inner * (48 - 32 * i) + tilt})` }));
+  });
+  g.appendChild(el('circle', { r: 25, fill: hf, ...ink(5) }));
+  if (o.wiggle) for (const s of [-1, 1]) g.appendChild(line(`M${s * 50} -56 q${s * 10} -6 ${s * 6} -18 M${s * 58} -28 q${s * 12} -2 ${s * 14} -14`, 4));
+  return g;
+}
+
+/**
+ * A closed cartoon hand at (0, 0) with the fingers towards +y: a rounded fist with three short knuckle lines
+ * (four curled fingers) and a thumb on the body side. Pointing: the index finger sticks out, three stay curled.
+ * @param {string} hf hand fill
+ * @param {{point?: boolean, side: number}} o hand shape
+ * @returns {SVGElement} the hand
+ */
+function closedHand(hf, o) {
+  const g = el('g');
+  const tx = o.point ? o.side : -o.side; // the thumb side in this frame (on top when pointing)
+  if (o.point) g.appendChild(el('rect', { x: tx * 12 - 7.5, y: 6, width: 15, height: 50, rx: 7.5, fill: hf, ...ink(4.5) }));
+  g.appendChild(el('ellipse', { cx: 0, cy: 2, rx: 25, ry: 27, fill: hf, ...ink(5) }));
+  for (const x of o.point ? [0, -tx * 12] : [-12, 0, 12]) {
+    const edge = 2 + 27 * Math.sqrt(1 - (x / 25) ** 2) - 1;
+    g.appendChild(line(`M${x} ${edge.toFixed(1)} L${x * 0.9} 14`, 4));
+  }
+  g.appendChild(el('ellipse', { cx: tx * 18, cy: -3, rx: 8.5, ry: 15, fill: hf, ...ink(4.5), transform: `rotate(${tx * -18} ${tx * 18} -3)` }));
   return g;
 }
 
@@ -533,10 +567,15 @@ export function drawCharacter(who, l) {
     pose.arms.forEach(([elb, hand], i) => {
       const side = i ? 1 : -1;
       const dy = [elb[1] + down, hand[1] + down];
-      const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side };
-      body.appendChild(arm(shoulders[i], [elb[0], dy[0]], [hand[0], dy[1]], out, skinFill, o));
       const held = i === 1 && c.hold ? heldThing(c.hold, [hand[0], dy[1]]) : null;
-      if (held) body.appendChild(held);
+      const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side, hold: !!held };
+      body.appendChild(arm(shoulders[i], [elb[0], dy[0]], [hand[0], dy[1]], out, skinFill, o));
+      if (held) {
+        // The fist goes over the thing, fingers wrapped across it and the thumb on top, so it looks gripped.
+        const turn = 90 + (c.hold === 'torch' ? -35 : 0);
+        body.appendChild(held);
+        body.appendChild(el('g', { transform: `translate(${hand[0]} ${dy[1]}) rotate(${turn}) scale(0.9)` }, [closedHand(out.armor ? '#aeb9c6' : skinFill, { side })]));
+      }
     });
   }
   const node = el('g', { transform: `translate(${c.x ?? 0} ${c.y ?? 0}) scale(${fx * s} ${s}) translate(0 ${shift})` }, [body]);

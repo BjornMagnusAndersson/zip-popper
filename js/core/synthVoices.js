@@ -44,6 +44,14 @@ export const VOICES = {
     k.tone(520, t + 0.47, 0.16, { vol: 0.35, slideTo: 160 }); // thwop
     k.hiss(t + 0.47, 0.08, { type: 'lowpass', freq: 900, vol: 0.18 });
   },
+  /** The ingrown hair coming out: a twangy "boi-oing" that wobbles down, then a tiny "plip". @param {object} k kit @param {number} t start */
+  pluck(k, t) {
+    k.tone(2600, t, 0.02, { type: 'square', vol: 0.04 }); // the tweezers' click
+    for (let i = 0; i < 5; i += 1) { // the boing: a rubbery twang that wobbles up and down and sinks
+      k.tone(520 - i * 50, t + 0.03 + i * 0.07, 0.08, { type: 'triangle', vol: 0.2 - i * 0.03, slideTo: 760 - i * 70 });
+    }
+    k.tone(1300, t + 0.42, 0.05, { vol: 0.12, slideTo: 1900 }); // plip
+  },
   /** The strip tearing off the skin. @param {object} k kit @param {number} t start */
   peel(k, t) {
     k.hiss(t, 0.32, { type: 'highpass', freq: 1800, to: 4200, vol: 0.12 });

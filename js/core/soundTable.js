@@ -19,6 +19,7 @@ export const SOUND_TABLE = {
   squelch: { type: 'synth', voice: 'squelch', category: 'sfx' },
   splat: { type: 'synth', voice: 'splat', category: 'sfx' },
   creak: { type: 'synth', voice: 'creak', category: 'sfx' }, // the Evil Horn creaking out (T1.3)
+  pluck: { type: 'synth', voice: 'pluck', category: 'sfx' }, // the long ingrown hair flopping out (T1.3)
   // tools and care
   tweeze: { type: 'synth', voice: 'tweeze', category: 'sfx' },
   peel: { type: 'synth', voice: 'peel', category: 'sfx' },

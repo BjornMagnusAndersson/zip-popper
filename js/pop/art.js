@@ -123,6 +123,7 @@ export function drawPimple(ctx, p, amt, appear, time) {
   const halo = {
     red: ['rgba(232,104,104,0.55)', 2.5], whitehead: ['rgba(232,128,116,0.36)', 1.9], big: ['rgba(226,96,96,0.58)', 2.3],
     blackhead: ['rgba(170,110,90,0.16)', 1.6], gold: ['rgba(255,196,70,0.5)', 2.3], horn: ['rgba(214,104,140,0.45)', 2.1],
+    hair: ['rgba(232,104,104,0.5)', 2.2],
   }[type] ?? ['rgba(232,128,116,0.36)', 1.9];
   const hr = s * halo[1];
   const g = ctx.createRadialGradient(x, y, s * 0.4, x, y, hr);
@@ -169,6 +170,20 @@ export function drawPimple(ctx, p, amt, appear, time) {
   }
   ctx.fillStyle = dome;
   ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill();
+  if (type === 'hair' && amt < 0.04) { // an ingrown hair: a tiny dark curl shows through the skin (it slides out when pulled)
+    ctx.strokeStyle = 'rgba(60,36,30,0.72)';
+    ctx.lineWidth = Math.max(1.2, s * 0.13);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i += 1) { // a little spiral, about one and a half turns
+      const a = i / 24 * Math.PI * 3;
+      const rr = s * (0.12 + 0.4 * i / 24);
+      const px = x + Math.cos(a) * rr;
+      const py = y + Math.sin(a) * rr * 0.8;
+      if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+  }
   // The creamy head: always on whiteheads and big ones, grows on pink ones as they are squeezed.
   const headR = type === 'whitehead' ? s * (0.55 + 0.15 * amt)
     : type === 'big' ? s * (0.42 + 0.2 * amt)
@@ -240,6 +255,65 @@ export function drawHorn(ctx, x, y, size, angle = 0) {
   ctx.beginPath();
   ctx.ellipse(-bw * 0.2, -hh * 0.4, size * 0.07, size * 0.24, 0.25, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * Where the points of a silly long curly hair are: it leaves (x, y) in direction dir and curls in loops along the
+ * way (a stretched spring), waving gently. Shared by drawHair and the engine (the tweezers hold the last point).
+ * @param {number} x root x
+ * @param {number} y root y
+ * @param {number} dir direction in radians the hair goes
+ * @param {number} reach how far the hair has come out, in px (straight-line distance to the tip, about)
+ * @param {number} scale scene scale (loop size)
+ * @param {number} time seconds, for the wave (0 = still, for reduced motion)
+ * @returns {{x: number, y: number}[]} points from the root to the tip
+ */
+export function hairPoints(x, y, dir, reach, scale, time) {
+  const R = 8 * scale; // loop radius
+  const a = R * 0.5; // advance per radian: below R, so the curve makes loops
+  const turns = Math.max(0, reach) / a;
+  const n = Math.max(2, Math.ceil(turns * 5));
+  const c = Math.cos(dir);
+  const sn = Math.sin(dir);
+  const pts = [];
+  for (let i = 0; i <= n; i += 1) {
+    const th = (i / n) * turns;
+    const u = a * th - R * Math.sin(th) * 0.9;
+    const k = turns > 0 ? th / turns : 0;
+    const v = R * (1 - Math.cos(th)) * 0.7 + Math.sin(th * 0.18 - time * 3) * R * 1.4 * k; // the curl, plus a wave
+    pts.push({ x: x + c * u - sn * v, y: y + sn * u + c * v });
+  }
+  return pts;
+}
+
+/**
+ * A silly long curly hair (the ingrown hair coming out): a dark wiry line with a pale halo so it reads on any skin.
+ * Cartoon only: no blood, no root bulb, just a springy hair.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, y: number}[]} pts the points (hairPoints)
+ * @param {number} width line width in px
+ * @returns {void}
+ */
+export function drawHair(ctx, pts, width) {
+  if (pts.length < 2) return;
+  /** Trace the hair's path. @returns {void} */
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i].x, pts[i].y);
+  };
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  path();
+  ctx.strokeStyle = 'rgba(255,246,236,0.75)'; // pale halo
+  ctx.lineWidth = width * 2.6;
+  ctx.stroke();
+  path();
+  ctx.strokeStyle = '#3b2620';
+  ctx.lineWidth = width;
+  ctx.stroke();
   ctx.restore();
 }
 

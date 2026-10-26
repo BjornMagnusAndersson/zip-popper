@@ -21,7 +21,7 @@ import {
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
-  drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn,
+  drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints,
 } from './art.js';
 
 const GRID = 8; // mesh cells across the squeezed area
@@ -50,6 +50,13 @@ const sceneBump = (p, reduced) => ({ ...p, hold: p.hold ?? holdTime(p.type), pre
  * @returns {boolean} true for horn bumps
  */
 const horned = (p) => bumpInfo(p.type)?.goo === 'horn';
+
+/**
+ * Whether a bump is an ingrown hair (a silly long hair slides out while it is held, then flops out).
+ * @param {object} p the bump
+ * @returns {boolean} true for hair bumps
+ */
+const haired = (p) => bumpInfo(p.type)?.goo === 'hair';
 
 /**
  * Whether a bump comes out as a plug (a pull, no goo) instead of a squeeze.
@@ -137,7 +144,9 @@ export function createPopScene(canvas, o) {
   const splats = []; // goo on the lens
   const tweezers = []; // tweezers pulling a blackhead out
   const horns = []; // Evil Horns flying off after they creaked out
+  const hairs = []; // ingrown hairs flopping away after they came out
   let quake = -1; // time the last horn came out (the picture wobbles for a moment); -1 = none
+  let quakeK = 1; // how hard that wobble is (1 = horn, smaller for a hair)
   let hold = null; // {p, id, since} the pimple being squeezed
   let peel = null; // {id, x0, q0} the strip being peeled
   let wipe = null; // {dirt, cells, dirty, clean, pad, auto, fading}
@@ -380,7 +389,12 @@ export function createPopScene(canvas, o) {
     p.pressure = 0;
     if (hold?.p === p) hold = null;
     if (keyHold?.p === p) keyHold = null;
-    if (pulled(p)) { // the plug comes out (held in tweezers, or popped out by fingers)
+    if (haired(p)) { // the long hair flops out with a twangy pluck and a small wobble (no goo; the pink mark stays)
+      hairs.push({ x: p.x, y: p.y, dir: hairDir(p), reach: hairReach(p, 1), t: 0, spin: rand() < 0.5 ? -1 : 1 });
+      play('pluck');
+      buzz(16);
+      if (!reduced) { quake = time; quakeK = 0.35; }
+    } else if (pulled(p)) { // the plug comes out (held in tweezers, or popped out by fingers)
       tweezers.push({ x: p.x, y: p.y, t: 0, r: p.r, withTweezers: tweezed(p) });
       play('tweeze');
       buzz(14);
@@ -389,7 +403,7 @@ export function createPopScene(canvas, o) {
       squirt(p);
       play('creak');
       buzz([18, 30, 18, 30, 40]);
-      if (!reduced) quake = time;
+      if (!reduced) { quake = time; quakeK = 1; }
     } else {
       squirt(p);
       play(p.type === 'big' ? 'pop_big' : p.type === 'gold' ? 'pop_gold' : 'pop_small');
@@ -410,7 +424,7 @@ export function createPopScene(canvas, o) {
     // Wait until the goo has landed, then start the wipe.
     const start = () => {
       if (disposed || step !== 'pop') return;
-      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || (strip && strip.flying)) { setTimeout(start, 120); return; }
+      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || (strip && strip.flying)) { setTimeout(start, 120); return; }
       beginWipe();
     };
     setTimeout(start, reduced ? 200 : 450);
@@ -510,6 +524,7 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) mv(p, ['r', 'r0', 'rMax']);
     for (const k of marks) mv(k);
     for (const hn of horns) mv(hn);
+    for (const hr of hairs) mv(hr, ['reach']);
     for (const pa of patches) mv(pa);
     if (face) Object.assign(face, { cx: face.cx * s + tx, cy: face.cy * s + ty, rx: face.rx * s, ry: face.ry * s });
     if (warmHold) mv(warmHold, []);
@@ -695,6 +710,11 @@ export function createPopScene(canvas, o) {
       busy = true;
       if (horns[i].t > 1.1) horns.splice(i, 1);
     }
+    for (let i = hairs.length - 1; i >= 0; i -= 1) {
+      hairs[i].t += dt;
+      busy = true;
+      if (hairs[i].t > 1.3) hairs.splice(i, 1);
+    }
     if (quake >= 0) busy = true; // until wobbleScreen() has put the picture back
     if (strip && !strip.off) {
       if (!peel && strip.q > 0.6 && strip.q < 1) strip.q = Math.min(1, strip.q + dt * 2.2);
@@ -790,7 +810,30 @@ export function createPopScene(canvas, o) {
     }
     // Tweezers: open over a blackhead while it is squeezed, then pull the plug up and away.
     for (const p of pimples) {
+      if (haired(p)) continue; // the hair's tweezers grip the hair's tip (below)
       if (tweezed(p) && !p.popped && p.pressure > 0.02) drawTweezers(ctx, p.x, p.y, 1 - p.pressure, scale);
+    }
+    for (const p of pimples) { // an ingrown hair being pulled: it slides out and keeps coming; the tweezers hold its tip
+      if (!haired(p) || p.popped || p.pressure <= 0.02) continue;
+      const pts = hairPoints(p.x, p.y, hairDir(p), hairReach(p, p.pressure), scale, reduced ? 0 : time);
+      drawHair(ctx, pts, Math.max(1.6, 2.2 * scale));
+      const tip = pts[pts.length - 1];
+      if (tweezed(p)) drawTweezers(ctx, tip.x, tip.y, Math.max(0, 1 - p.pressure * 8), scale);
+    }
+    for (const hr of hairs) { // a hair that came out: it springs up, flops over and falls away, fading
+      const pts = hairPoints(hr.x, hr.y, hr.dir, hr.reach, scale, reduced ? 0 : time);
+      const tip = pts[pts.length - 1];
+      const t = hr.t;
+      const turn = reduced ? 0 : hr.spin * t * 1.6;
+      const dx = hr.spin * t * 30 * scale;
+      const dy = (-50 * t + 220 * t * t) * scale;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 0.8) / 0.5);
+      ctx.translate(tip.x + dx, tip.y + dy); // turn round the tip, where the tweezers hold it
+      ctx.rotate(turn);
+      ctx.translate(-tip.x, -tip.y);
+      drawHair(ctx, pts, Math.max(1.6, 2.2 * scale));
+      ctx.restore();
     }
     for (const tw of tweezers) {
       const up = smooth(tw.t / 0.6) * 46 * scale;
@@ -844,12 +887,40 @@ export function createPopScene(canvas, o) {
     wobbleScreen();
   }
 
-  /** The picture wobbles for a moment after an Evil Horn comes out (never with reduced motion). @returns {void} */
+  /**
+   * Which way an ingrown hair comes out: up and a little towards the middle of the face, so the long hair crosses
+   * the skin (silly, and easy to see) and has room to keep coming.
+   * @param {object} p the hair bump
+   * @returns {number} direction in radians
+   */
+  function hairDir(p) {
+    const cx = face ? face.cx : w / 2;
+    const side = p.x < cx ? 1 : -1;
+    return Math.atan2(-1, side * 0.4);
+  }
+
+  /**
+   * How far the hair has come out: it keeps coming while held (pressure 0..1), up to longer than the face is wide,
+   * but never past the edge of the picture.
+   * @param {object} p the hair bump
+   * @param {number} pressure 0..1
+   * @returns {number} reach in px
+   */
+  function hairReach(p, pressure) {
+    const full = face ? face.rx * 1.6 : 200 * scale;
+    const d = hairDir(p);
+    const c = Math.cos(d);
+    const sn = Math.sin(d);
+    const room = Math.min(c ? ((c > 0 ? w - p.x : p.x) - 24) / Math.abs(c) : Infinity, sn < 0 ? (p.y - 24) / -sn : Infinity);
+    return Math.max(0, Math.min(full, room)) * Math.max(0, Math.min(1, pressure));
+  }
+
+  /** The picture wobbles for a moment after an Evil Horn (or, softly, a hair) comes out (never with reduced motion). @returns {void} */
   function wobbleScreen() {
     if (quake < 0) return;
     const age = time - quake;
     if (age >= 0.6 || reduced) { canvas.style.transform = ''; quake = -1; return; }
-    const k = 1 - age / 0.6;
+    const k = (1 - age / 0.6) * quakeK;
     canvas.style.transform = `translate(${(Math.sin(age * 47) * 5 * k).toFixed(2)}px, ${(Math.sin(age * 31) * 2 * k).toFixed(2)}px) rotate(${(Math.sin(age * 38) * 1.4 * k).toFixed(2)}deg)`;
   }
 
