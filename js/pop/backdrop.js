@@ -1,21 +1,29 @@
 // The studio room behind the face in the pop scene (T1.0b, SPEC D10 and D11). It follows the studio upgrades:
 // tier 0 = "dingy and dank" (grimy tiles, cracked and peeling paint, a flickering bare bulb, a bucket and an old sink),
-// tier 1 = a bit better, tier 2 = clean, sparkly and spa-like. Tiers 1 and 2 are only a recolour of tier 0 for now;
-// task T5.1 gives them their own drawings (add them as new cases in drawRoom).
+// tier 1 = a bit better (mostly cleaned, warmer, a few repairs: filler patches, one new tile, tape on the pipe, a
+// shade on the bulb, a towel), tier 2 = clean, sparkly and spa-like (mint and white, a glowing globe lamp, a spa
+// shelf with towels, a candle and a little plant, a diffuser, sparkles, soft light). T5.1a.
+// On top, each studio upgrade the player owns draws its own object (game/studio.js says which and in what order):
+// wallPaint (fresh lavender wall with a stencilled band), sign (a shiny new sign with a tick), chair (a pink tufted
+// wingback chair behind the customer), plant (a hanging plant with little eyes on its pot) and lamp (a ring light on
+// a stand). They sit where the face does not cover them, in portrait and landscape. drawStudio paints the same room
+// without the face in mind, for the studio view (T5.1c).
 // Before the studio (chapters 0 to 4, SPEC D19) the pop scene is at home instead: room 'home' paints the couple's
 // living room in the comics' colours, with a floor lamp whose warm light breathes gently (steady with reduced motion).
 // Cartoon only: stains are olive and brown water marks, never anything like blood.
-// The still room is painted once per size and tier into an offscreen canvas (cheap on phones); only the lamp's light
-// is drawn on top each time it changes. With reduced motion the lamp never flickers.
+// The still room is painted once per size, tier and set of layers into an offscreen canvas (cheap on phones); only the
+// lamp's light is drawn on top each time it changes. With reduced motion the lamp never flickers.
 // The pure parts (lampLevel, nextBackdropChange) need no DOM, so they can be tested in Node.
 import { rng } from './logic.js';
+import { studioLayersShown, studioKey } from '../game/studio.js';
 
 /** The backdrop tiers there are (same as the studio tiers in SPEC section 4). */
 export const BACKDROP_TIERS = [0, 1, 2];
 
 /**
- * Colours per tier. Tier 0 is muted greenish greys; 1 and 2 are placeholder recolours until T5.1.
- * grime: how many stains, cracks and peeling bits (0 = none); flicker: whether the bare bulb flickers.
+ * Colours per tier. Tier 0 is muted greenish greys; tier 1 warm creams and browns; tier 2 mint, white and gold.
+ * grime: how many stains, cracks and peeling bits (0 = none); flicker: whether the bare bulb flickers;
+ * repairs: tier 1's mended bits (filler patches, a new tile, tape, a bulb shade, a towel); spa: tier 2's spa look.
  */
 const PALETTES = {
   0: {
@@ -24,14 +32,16 @@ const PALETTES = {
     sink: '#c9cbbf', shelf: '#6b5a44', light: '255,228,150', bulb: '#fff2bf', vignette: 'rgba(24,34,26,0.5)', grime: 1, flicker: true,
   },
   1: {
-    wallTop: '#c9b48f', wallBottom: '#b9a37f', tile: '#e6ddc8', grout: '#a99c80', floor: '#7a6650', floorLine: '#634f3c',
-    stain: '140,112,60', peel: '#d8c8a6', crack: '#7d6a50', pipe: '#9a8f7a', metal: '#b8b1a2', bucket: '#5f8fa0',
-    sink: '#f1eee4', shelf: '#8a6a48', light: '255,236,190', bulb: '#fff7dc', vignette: 'rgba(60,44,24,0.3)', grime: 0.35, flicker: false,
+    wallTop: '#d9c39c', wallBottom: '#c9b087', tile: '#ece3cf', grout: '#b3a487', floor: '#86694d', floorLine: '#6c533c',
+    stain: '140,112,60', peel: '#e6d6b4', crack: '#7d6a50', pipe: '#a39782', metal: '#c2bbac', bucket: '#4f9bb0',
+    sink: '#f6f3ea', shelf: '#9a744c', light: '255,226,170', bulb: '#fff7dc', vignette: 'rgba(70,46,22,0.28)', grime: 0.3,
+    flicker: false, repairs: true, patch: '#e8d7b5', newTile: '#fbf6ea', tape: '#9aa3ab', towel: '#5fb8c9', shade: '#f2e6c9', mat: '#c9604d',
   },
   2: {
-    wallTop: '#e9f5f2', wallBottom: '#d3ece7', tile: '#ffffff', grout: '#bfe0da', floor: '#c7b8d8', floorLine: '#a998bf',
-    stain: '0,0,0', peel: '#ffffff', crack: '#bfe0da', pipe: '#d8e6e3', metal: '#e4ecea', bucket: '#f6a6c1',
-    sink: '#ffffff', shelf: '#e8c9a8', light: '255,250,235', bulb: '#ffffff', vignette: 'rgba(120,150,150,0.12)', grime: 0, flicker: false,
+    wallTop: '#eaf7f3', wallBottom: '#d2ede6', tile: '#ffffff', grout: '#c4e4dd', floor: '#d9c6a6', floorLine: '#c3ad8a',
+    stain: '0,0,0', peel: '#ffffff', crack: '#bfe0da', pipe: '#ffffff', metal: '#e0bd62', bucket: '#f6a6c1',
+    sink: '#ffffff', shelf: '#e2c49c', light: '255,248,228', bulb: '#ffffff', vignette: 'rgba(110,150,140,0.14)', grime: 0,
+    flicker: false, spa: true, towel: '#f9c6d6', towel2: '#bfe8de', rug: '#f4d9e4', leaf: '#5fbf8e', leafDark: '#3f9c72',
   },
   // Their living room at home (SPEC D19: chapters 0 to 4 happen at home). The same colours as the comics' 'living'
   // room (comic-art.js ROOMS.living): peach striped wallpaper, wooden floor, the teal sofa, the yellow floor lamp,
@@ -148,7 +158,7 @@ export function nextBackdropChange(time, tier = 0, reduced = false) {
  */
 function lampSpot(w, h) {
   const r = Math.max(8, Math.min(16, Math.min(w, h) * 0.028));
-  return w > h ? { x: w * 0.25, y: h * 0.34, r } : { x: w * 0.17, y: h * 0.11, r };
+  return w > h ? { x: w * 0.2, y: h * 0.34, r } : { x: w * 0.17, y: h * 0.11, r };
 }
 
 /**
@@ -189,7 +199,7 @@ function crack(ctx, x, y, len, rand, colour) {
  * @param {number} a strength 0..1
  * @returns {void}
  */
-function stain(ctx, x, y, r, rgb, a) {
+export function stain(ctx, x, y, r, rgb, a) {
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
   g.addColorStop(0, `rgba(${rgb},${0.1 * a})`);
   g.addColorStop(0.75, `rgba(${rgb},${0.22 * a})`);
@@ -411,11 +421,13 @@ function bucket(ctx, x, floor, s, pal) {
  * @param {number} y corner y
  * @param {number} s size
  * @param {number} dir 1 = web grows to the right, -1 = to the left
+ * @param {string} [colour] thread colour (the scrub job draws darker, thicker webs)
+ * @param {number} [lw] thread width
  * @returns {void}
  */
-function cobweb(ctx, x, y, s, dir) {
-  ctx.strokeStyle = 'rgba(235,240,230,0.45)';
-  ctx.lineWidth = 1;
+export function cobweb(ctx, x, y, s, dir, colour = 'rgba(235,240,230,0.45)', lw = 1) {
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = lw;
   const spokes = 5;
   for (let i = 0; i <= spokes; i += 1) {
     const a = (i / spokes) * (Math.PI / 2);
@@ -795,30 +807,512 @@ function drawHomeLight(ctx, w, h, pal, level) {
   ctx.beginPath(); ctx.ellipse(L.x, by, L.s * 0.3, L.s * 0.1, 0, 0, Math.PI * 2); ctx.fill();
 }
 
+// ---- The studio's tier pieces and upgrade layers (T5.1a) ----
+
+/** The soft ink line of outlined pieces (the same as the comics). */
+const INK = { ink: '#2a211d' };
+/** The wallPaint upgrade's fresh wall: a soft lavender with a white stencilled band of pink dots. */
+const PAINT = { wallTop: '#efe6fb', wallBottom: '#dfd0f4', band: '#ffffff', dot: '#f08fb0' };
+/** Leaf greens for the plants. */
+const LEAF = '#5fbf8e';
+const LEAF_DARK = '#3f9c72';
+
 /**
- * Paint the still part of the room (everything but the lamp's light) for a tier.
- * Tiers 1 and 2: the same room recoloured and cleaned up for now (T5.1 adds their own pieces here).
+ * A four-point cartoon sparkle (a star with curved sides).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} z half size
+ * @param {string} colour fill colour
+ * @param {number} [alpha] see-through 0..1
+ * @returns {void}
+ */
+export function sparkle(ctx, x, y, z, colour, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  ctx.moveTo(x, y - z);
+  ctx.quadraticCurveTo(x + z * 0.18, y - z * 0.18, x + z, y);
+  ctx.quadraticCurveTo(x + z * 0.18, y + z * 0.18, x, y + z);
+  ctx.quadraticCurveTo(x - z * 0.18, y + z * 0.18, x - z, y);
+  ctx.quadraticCurveTo(x - z * 0.18, y - z * 0.18, x, y - z);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * A smoothed-over filler patch on the wall (tier 1's repairs): a paler blob with trowel swooshes.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} s size
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function fillerPatch(ctx, x, y, s, pal) {
+  ctx.fillStyle = pal.patch;
+  ctx.beginPath(); ctx.ellipse(x, y, s, s * 0.62, -0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(1, s * 0.06);
+  for (let i = 0; i < 3; i += 1) {
+    ctx.beginPath(); ctx.arc(x - s * 0.35 + i * s * 0.32, y + s * 0.25, s * 0.38, Math.PI * 1.15, Math.PI * 1.7); ctx.stroke();
+  }
+}
+
+/**
+ * The white stencilled band of the freshly painted wall (wallPaint upgrade): a white stripe with pink dots.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} y top of the band
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function paintBand(ctx, w, y, u) {
+  const bh = Math.max(7, u * 2.4);
+  ctx.fillStyle = PAINT.band;
+  ctx.fillRect(0, y, w, bh);
+  ctx.fillStyle = 'rgba(214,110,150,0.25)';
+  ctx.fillRect(0, y + bh, w, Math.max(1, u * 0.3));
+  ctx.fillStyle = PAINT.dot;
+  const step = Math.max(14, u * 5);
+  for (let x = step / 2; x < w; x += step) {
+    ctx.beginPath(); ctx.arc(x, y + bh / 2, bh * 0.24, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/**
+ * Tier 2's ceiling: a white moulding with a thin gold line instead of the old pipe.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} py middle of where the pipe would be
+ * @param {number} pr the pipe's half thickness
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function cornice(ctx, w, py, pr, pal) {
+  ctx.fillStyle = 'rgba(60,110,100,0.12)';
+  ctx.fillRect(0, 0, w, py + pr * 1.6);
+  ctx.fillStyle = pal.pipe;
+  ctx.fillRect(0, 0, w, py + pr * 1.2);
+  ctx.fillStyle = pal.metal;
+  ctx.fillRect(0, py + pr * 0.6, w, Math.max(1.5, pr * 0.3));
+}
+
+/**
+ * Tier 2's spa shelf: a light wooden plank with rolled towels, a lit candle and a little succulent in a pot.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x left
+ * @param {number} y top of the plank
+ * @param {number} len plank length
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function spaShelf(ctx, x, y, len, pal) {
+  const k = len / 120;
+  const lw = Math.max(1, 1.5 * k);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(60,110,100,0.15)';
+  ctx.fillRect(4 * k, 6 * k, len, 8 * k);
+  box(ctx, 0, 0, len, 8 * k, 2 * k);
+  inked(ctx, pal.shelf, lw, INK);
+  for (const [cx, cy, col] of [[14, -9, pal.towel], [32, -9, pal.towel2], [23, -25, pal.towel]]) { // rolled towels
+    ctx.beginPath(); ctx.arc(cx * k, cy * k, 8.5 * k, 0, Math.PI * 2);
+    inked(ctx, col, lw, INK);
+    ctx.strokeStyle = 'rgba(42,33,29,0.35)';
+    ctx.lineWidth = lw * 0.8;
+    ctx.beginPath(); ctx.arc(cx * k, cy * k, 4 * k, 0.4, Math.PI * 1.8); ctx.stroke();
+  }
+  const g = ctx.createRadialGradient(65 * k, -32 * k, 0, 65 * k, -32 * k, 20 * k); // the candle's warm glow
+  g.addColorStop(0, 'rgba(255,214,140,0.55)');
+  g.addColorStop(1, 'rgba(255,214,140,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(45 * k, -52 * k, 40 * k, 40 * k);
+  box(ctx, 58 * k, -22 * k, 14 * k, 22 * k, 2 * k);
+  inked(ctx, '#fff6e6', lw, INK);
+  ctx.fillStyle = '#ffc94d'; // the flame
+  ctx.beginPath(); ctx.moveTo(65 * k, -37 * k);
+  ctx.quadraticCurveTo(71 * k, -28 * k, 65 * k, -25 * k);
+  ctx.quadraticCurveTo(59 * k, -28 * k, 65 * k, -37 * k);
+  ctx.fill();
+  for (const a of [-50, -25, 0, 25, 50]) { // the succulent's fat leaves
+    ctx.save();
+    ctx.translate(96 * k, -15 * k);
+    ctx.rotate((a * Math.PI) / 180);
+    ctx.beginPath(); ctx.ellipse(0, -7 * k, 3.6 * k, 7.5 * k, 0, 0, Math.PI * 2);
+    inked(ctx, a ? LEAF : LEAF_DARK, lw * 0.8, INK);
+    ctx.restore();
+  }
+  ctx.beginPath();
+  ctx.moveTo(86 * k, -16 * k); ctx.lineTo(106 * k, -16 * k); ctx.lineTo(103 * k, 0); ctx.lineTo(89 * k, 0); ctx.closePath();
+  inked(ctx, '#f4a07a', lw, INK);
+  ctx.restore();
+}
+
+/**
+ * Tier 2's diffuser on the floor (instead of the bucket): a pink ceramic drop with soft steam curls rising.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} floor floor y (its bottom)
+ * @param {number} s height
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function diffuser(ctx, x, floor, s, pal) {
+  const lw = Math.max(1.2, s * 0.04);
+  ctx.fillStyle = 'rgba(60,90,80,0.18)';
+  ctx.beginPath(); ctx.ellipse(x, floor, s * 0.5, s * 0.09, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.12, floor - s * 0.92);
+  ctx.bezierCurveTo(x - s * 0.55, floor - s * 0.5, x - s * 0.5, floor, x, floor);
+  ctx.bezierCurveTo(x + s * 0.5, floor, x + s * 0.55, floor - s * 0.5, x + s * 0.12, floor - s * 0.92);
+  ctx.closePath();
+  inked(ctx, pal.bucket, lw, INK);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.beginPath(); ctx.ellipse(x - s * 0.18, floor - s * 0.42, s * 0.06, s * 0.18, 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)'; // steam curls
+  ctx.lineWidth = Math.max(2, s * 0.06);
+  ctx.lineCap = 'round';
+  for (const dx of [-0.12, 0.1]) {
+    ctx.beginPath();
+    ctx.moveTo(x + s * dx, floor - s);
+    ctx.bezierCurveTo(x + s * (dx - 0.3), floor - s * 1.3, x + s * (dx + 0.3), floor - s * 1.5, x + s * dx, floor - s * 1.85);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+/**
+ * A towel hanging from a hook on the wall (tiers 1 and 2), with two stripes.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x middle
+ * @param {number} y the hook
+ * @param {number} s towel height
+ * @param {string} colour towel colour
+ * @returns {void}
+ */
+function towel(ctx, x, y, s, colour) {
+  const lw = Math.max(1, s * 0.03);
+  ctx.beginPath(); ctx.arc(x, y, s * 0.06, 0, Math.PI * 2);
+  inked(ctx, '#c2bbac', lw, INK);
+  box(ctx, x - s * 0.24, y + s * 0.04, s * 0.48, s, s * 0.08);
+  inked(ctx, colour, lw, INK);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  for (const f of [0.72, 0.84]) ctx.fillRect(x - s * 0.24, y + s * f, s * 0.48, s * 0.05);
+}
+
+/**
+ * Where each studio upgrade sits, in portrait and landscape. Sizes go by u = 1% of the short side.
+ * Pop scene (view false): places the face does not cover (and clear of the scene's buttons); the chair is a big
+ * back that peeks out round the customer's head.
+ * Studio view (view true, T5.1c, no face): the room as a room. She stands on the floor (hero: where her feet are and
+ * how tall she is), the empty chair stands beside her at a chair's size (about two thirds of her height, clear of the
+ * sink), and the ring light stands on its tripod at about her head height.
+ * @param {number} w width
+ * @param {number} h height
+ * @param {boolean} [view] true = the full studio view's places and sizes
+ * @returns {object} u, floorY and a spot per layer (sign, chair, plant, lamp); in the view also hero {x, floor, h}
+ */
+export function layerSpots(w, h, view = false) {
+  const u = Math.min(w, h) / 100;
+  const land = w > h;
+  const floorY = h * (land ? 0.86 : 0.9);
+  if (view) return viewSpots(w, h, u, land, floorY);
+  if (land) {
+    return {
+      u, floorY,
+      sign: { x: w * 0.83, y: h * 0.06, s: Math.max(70, Math.min(150, w * 0.14)) },
+      chair: { x: w * 0.5, top: h * 0.12, wide: Math.min(w * 0.5, h * 1.1), seat: h * 0.72 },
+      plant: { x: w * 0.68, y: h * 0.2, s: Math.max(18, u * 8) },
+      lamp: { x: w * 0.31, y: h * 0.52, r: Math.max(14, u * 7) },
+    };
+  }
+  return {
+    u, floorY,
+    sign: { x: w * 0.72, y: h * 0.035, s: Math.max(64, Math.min(130, w * 0.22)) },
+    chair: { x: w * 0.5, top: h * 0.14, wide: w * 0.96, seat: h * 0.72 },
+    plant: { x: w * 0.075, y: h * 0.2, s: Math.max(18, u * 8) },
+    lamp: { x: w * 0.925, y: h * 0.43, r: Math.max(14, u * 6.5) },
+  };
+}
+
+/**
+ * The studio view's places (layerSpots with view true). Everything stands on one line a little way into the floor
+ * (ground), so she, the chair and the ring light look as if they stand in the room, not on the wall's edge.
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} u size unit
+ * @param {boolean} land landscape
+ * @param {number} floorY where the wall meets the floor
+ * @returns {object} the spots
+ */
+function viewSpots(w, h, u, land, floorY) {
+  const ground = floorY + (h - floorY) * 0.45;
+  const heroH = land ? Math.min(h * 0.68, w * 0.5) : Math.min(h * 0.46, w * 0.9);
+  const cw = heroH * 0.43; // the chair's width: its top reaches about two thirds of her height
+  const chairX = land ? w * 0.43 : w * 0.38;
+  const chair = { x: chairX, wide: cw, top: ground - cw * 1.55, seat: ground - cw * 0.5, floor: ground };
+  const lampR = Math.max(9, heroH * 0.075);
+  return {
+    u, floorY, ground,
+    hero: { x: land ? w * 0.63 : w * 0.72, floor: ground, h: heroH },
+    sign: land ? { x: w * 0.83, y: h * 0.06, s: Math.max(70, Math.min(150, w * 0.14)) }
+      : { x: w * 0.72, y: h * 0.035, s: Math.max(64, Math.min(130, w * 0.22)) },
+    chair,
+    plant: land ? { x: w * 0.07, y: h * 0.16, s: Math.max(16, u * 7) } : { x: w * 0.075, y: h * 0.2, s: Math.max(18, u * 8) },
+    lamp: { x: land ? w * 0.27 : w * 0.925, y: ground - heroH * 0.86, r: lampR, floor: ground },
+  };
+}
+
+/**
+ * The sign upgrade: a shiny new sign hanging straight from a nail, with a big green tick, a pink heart and gold
+ * sparkles (no words: the old sign in the comics has none either) and no stain this time.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, y: number, s: number}} p the nail and the sign's width
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function shinySign(ctx, p, u) {
+  const sw = p.s;
+  const sh = p.s * 0.5;
+  const top = p.y + sh * 0.4;
+  const x0 = p.x - sw / 2;
+  const lw = Math.max(1.4, u * 0.5);
+  ctx.strokeStyle = INK.ink;
+  ctx.lineWidth = Math.max(1, u * 0.35);
+  ctx.beginPath(); ctx.moveTo(x0 + sw * 0.15, top); ctx.lineTo(p.x, p.y); ctx.lineTo(x0 + sw * 0.85, top); ctx.stroke();
+  ctx.fillStyle = 'rgba(40,30,30,0.18)';
+  box(ctx, x0 + u * 0.8, top + u, sw, sh, sh * 0.2); ctx.fill();
+  box(ctx, x0, top, sw, sh, sh * 0.2);
+  inked(ctx, '#fffaf0', lw, INK);
+  ctx.strokeStyle = '#3fae8c';
+  ctx.lineWidth = Math.max(2, sh * 0.07);
+  box(ctx, x0 + sh * 0.1, top + sh * 0.1, sw - sh * 0.2, sh * 0.8, sh * 0.14); ctx.stroke();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(3, sh * 0.14);
+  ctx.beginPath();
+  ctx.moveTo(x0 + sw * 0.2, top + sh * 0.5); ctx.lineTo(x0 + sw * 0.32, top + sh * 0.7); ctx.lineTo(x0 + sw * 0.52, top + sh * 0.28);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  const hx = x0 + sw * 0.73; // a pink heart
+  const hy = top + sh * 0.5;
+  const hz = sh * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(hx, hy + hz);
+  ctx.bezierCurveTo(hx - hz * 1.6, hy - hz * 0.2, hx - hz * 0.7, hy - hz * 1.3, hx, hy - hz * 0.45);
+  ctx.bezierCurveTo(hx + hz * 0.7, hy - hz * 1.3, hx + hz * 1.6, hy - hz * 0.2, hx, hy + hz);
+  inked(ctx, '#f48fb1', lw * 0.8, INK);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)'; // a gloss streak across the corner
+  ctx.beginPath();
+  ctx.moveTo(x0 + sw * 0.08, top + sh * 0.12); ctx.lineTo(x0 + sw * 0.18, top + sh * 0.12); ctx.lineTo(x0 + sw * 0.1, top + sh * 0.88); ctx.lineTo(x0 + sw * 0.04, top + sh * 0.88);
+  ctx.closePath(); ctx.fill();
+  sparkle(ctx, x0 + sw * 0.96, top + sh * 0.05, sh * 0.2, '#ffd25a');
+  sparkle(ctx, x0 + sw * 0.03, top + sh * 0.95, sh * 0.13, '#ffd25a');
+  ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, u * 0.7), 0, Math.PI * 2);
+  inked(ctx, '#c2c8d0', lw * 0.7, INK);
+}
+
+/**
+ * The chair upgrade: a padded pink wingback chair with buttoned tufting, rolled arms, a seat and wooden legs. In
+ * the pop scene the customer sits in front of it, so its wings and round top peek out around the head.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, top: number, wide: number, seat: number}} c middle, top of the back, width, top of the seat
+ * @param {number} floorY floor
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function wingChair(ctx, c, floorY, u) {
+  if (c.floor !== undefined) floorY = c.floor; // the studio view: it stands on the view's ground line
+  const W = c.wide;
+  const x0 = c.x - W / 2;
+  const backH = c.seat - c.top;
+  const lw = Math.max(1.4, u * 0.5);
+  const fill = '#ef86a8';
+  const dark = '#dc6b92';
+  ctx.fillStyle = 'rgba(40,20,30,0.2)'; // shadow on the floor
+  ctx.beginPath(); ctx.ellipse(c.x, floorY + u, W * 0.5, u * 2.5, 0, 0, Math.PI * 2); ctx.fill();
+  const seatH = backH * 0.22;
+  for (const lx of [x0 + W * 0.17, x0 + W * 0.83]) {
+    box(ctx, lx - W * 0.025, c.seat + seatH * 0.8, W * 0.05, Math.max(u, floorY - c.seat - seatH * 0.8 + u), u * 0.6);
+    inked(ctx, '#8a5a3a', lw, INK);
+  }
+  ctx.beginPath();
+  ctx.roundRect(x0 + W * 0.1, c.top, W * 0.8, backH + seatH * 0.5, [W * 0.36, W * 0.36, u * 2, u * 2]);
+  inked(ctx, fill, lw, INK);
+  ctx.save(); // buttoned tufting, kept inside the back
+  ctx.beginPath();
+  ctx.roundRect(x0 + W * 0.1, c.top, W * 0.8, backH, [W * 0.36, W * 0.36, 0, 0]);
+  ctx.clip();
+  const rows = 5;
+  const step = W * 0.13;
+  for (let r = 0; r < rows; r += 1) {
+    const y = c.top + backH * (0.16 + r * 0.17);
+    for (let x = x0 + W * 0.18 + (r % 2) * step * 0.5; x < x0 + W * 0.86; x += step) {
+      ctx.strokeStyle = 'rgba(150,40,80,0.28)';
+      ctx.lineWidth = Math.max(1, u * 0.3);
+      ctx.beginPath();
+      ctx.moveTo(x - step * 0.35, y - backH * 0.06); ctx.lineTo(x, y); ctx.lineTo(x + step * 0.35, y - backH * 0.06);
+      ctx.moveTo(x - step * 0.35, y + backH * 0.06); ctx.lineTo(x, y); ctx.lineTo(x + step * 0.35, y + backH * 0.06);
+      ctx.stroke();
+      ctx.fillStyle = '#b94a72';
+      ctx.beginPath(); ctx.arc(x, y, Math.max(1.6, u * 0.65), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; // shine on the round top
+  ctx.beginPath(); ctx.ellipse(c.x - W * 0.17, c.top + backH * 0.07, W * 0.12, Math.max(2, u * 1.3), -0.35, 0, Math.PI * 2); ctx.fill();
+  for (const side of [-1, 1]) { // the wings, then the rolled arms in front of them
+    const wx = side < 0 ? x0 : x0 + W * 0.8;
+    box(ctx, wx, c.top + backH * 0.2, W * 0.2, backH * 0.8, W * 0.09);
+    inked(ctx, dark, lw, INK);
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    box(ctx, wx + W * 0.05, c.top + backH * 0.26, W * 0.035, backH * 0.4, W * 0.02); ctx.fill();
+  }
+  box(ctx, x0 + W * 0.12, c.seat, W * 0.76, seatH, u * 2);
+  inked(ctx, fill, lw, INK);
+  for (const side of [-1, 1]) {
+    const ax = side < 0 ? x0 - W * 0.02 : x0 + W * 0.78;
+    box(ctx, ax, c.seat - seatH * 0.4, W * 0.24, seatH * 1.3, seatH * 0.5);
+    inked(ctx, fill, lw, INK);
+  }
+}
+
+/**
+ * The plant upgrade: a plant hanging from the ceiling in a coral pot on three cords, with trailing vines, and two
+ * little eyes on the pot (the plant from the comics, judging quietly).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, y: number, s: number}} p middle of the pot rim and the pot's size
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function hangingPlant(ctx, p, u) {
+  const s = p.s;
+  const lw = Math.max(1.2, u * 0.4);
+  ctx.strokeStyle = '#c9a26b';
+  ctx.lineWidth = Math.max(1, u * 0.3);
+  for (const dx of [-0.55, 0, 0.55]) { ctx.beginPath(); ctx.moveTo(p.x, 0); ctx.lineTo(p.x + dx * s, p.y - s * 0.3); ctx.stroke(); }
+  for (const [dx, len, sway] of [[-0.45, 2.6, -1], [0.05, 3.4, 1], [0.45, 2.1, 1]]) { // vines with leaves
+    const x1 = p.x + dx * s;
+    const cx = x1 + sway * s * 0.5;
+    const y2 = p.y + len * s;
+    ctx.strokeStyle = LEAF_DARK;
+    ctx.lineWidth = Math.max(1, u * 0.35);
+    ctx.beginPath(); ctx.moveTo(x1, p.y); ctx.quadraticCurveTo(cx, p.y + len * s * 0.5, x1, y2); ctx.stroke();
+    for (let i = 1; i <= 5; i += 1) {
+      const q = i / 5;
+      const lx = (1 - q) * (1 - q) * x1 + 2 * (1 - q) * q * cx + q * q * x1;
+      const ly = p.y + len * s * q;
+      const side = i % 2 ? 1 : -1;
+      ctx.beginPath(); ctx.ellipse(lx + side * s * 0.13, ly, s * 0.15, s * 0.09, side * 0.5, 0, Math.PI * 2);
+      inked(ctx, i % 2 ? LEAF : LEAF_DARK, lw * 0.7, INK);
+    }
+  }
+  for (const [a, len] of [[-55, 0.7], [50, 0.7], [-25, 0.95], [20, 0.9], [0, 1.05]]) { // leaves above the rim
+    ctx.save();
+    ctx.translate(p.x, p.y - s * 0.25);
+    ctx.rotate((a * Math.PI) / 180);
+    ctx.beginPath(); ctx.ellipse(0, -len * s * 0.45, s * 0.16, len * s * 0.45, 0, 0, Math.PI * 2);
+    inked(ctx, a % 20 ? LEAF : LEAF_DARK, lw, INK);
+    ctx.restore();
+  }
+  ctx.beginPath(); // the pot: a round bowl with a rim
+  ctx.moveTo(p.x - s * 0.6, p.y - s * 0.3);
+  ctx.lineTo(p.x + s * 0.6, p.y - s * 0.3);
+  ctx.quadraticCurveTo(p.x + s * 0.58, p.y + s * 0.45, p.x, p.y + s * 0.45);
+  ctx.quadraticCurveTo(p.x - s * 0.58, p.y + s * 0.45, p.x - s * 0.6, p.y - s * 0.3);
+  inked(ctx, '#e8735a', lw, INK);
+  box(ctx, p.x - s * 0.66, p.y - s * 0.4, s * 1.32, s * 0.2, s * 0.08);
+  inked(ctx, '#f08c70', lw, INK);
+  for (const ex of [-0.2, 0.2]) { // the eyes, glancing sideways
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(p.x + ex * s, p.y + s * 0.05, s * 0.1, s * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = INK.ink;
+    ctx.beginPath(); ctx.arc(p.x + ex * s + s * 0.04, p.y + s * 0.07, s * 0.05, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/**
+ * The lamp upgrade: a ring light on a stand with a tripod foot and a soft halo (the lamp from the comics).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, y: number, r: number}} L middle of the ring and its radius
+ * @param {number} floorY floor
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function ringLight(ctx, L, floorY, u) {
+  if (L.floor !== undefined) floorY = L.floor; // the studio view: it stands on the view's ground line
+  const lw = Math.max(1.2, u * 0.45);
+  const R = L.r * 3.4;
+  const g = ctx.createRadialGradient(L.x, L.y, L.r * 0.5, L.x, L.y, R);
+  g.addColorStop(0, 'rgba(255,251,226,0.6)');
+  g.addColorStop(0.4, 'rgba(255,251,226,0.22)');
+  g.addColorStop(1, 'rgba(255,251,226,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(L.x - R, L.y - R, R * 2, R * 2);
+  ctx.strokeStyle = '#4a5160';
+  ctx.lineWidth = Math.max(2, u * 0.7);
+  ctx.beginPath();
+  ctx.moveTo(L.x, floorY - u * 4); ctx.lineTo(L.x - u * 5, floorY + u * 0.5);
+  ctx.moveTo(L.x, floorY - u * 4); ctx.lineTo(L.x + u * 5, floorY + u * 0.5);
+  ctx.moveTo(L.x, floorY - u * 4); ctx.lineTo(L.x + u * 1, floorY + u * 2);
+  ctx.stroke();
+  box(ctx, L.x - u * 0.7, L.y + L.r * 1.1, u * 1.4, Math.max(u, floorY - u * 3.5 - L.y - L.r * 1.1), u * 0.5);
+  inked(ctx, '#8a96a6', lw, INK);
+  ctx.lineWidth = L.r * 0.46;
+  ctx.strokeStyle = '#3a3f4a';
+  ctx.beginPath(); ctx.arc(L.x, L.y, L.r, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = L.r * 0.28;
+  ctx.strokeStyle = '#fffbe6';
+  ctx.beginPath(); ctx.arc(L.x, L.y, L.r, 0, Math.PI * 2); ctx.stroke();
+  sparkle(ctx, L.x - L.r * 0.7, L.y - L.r * 0.7, L.r * 0.3, '#ffffff', 0.9);
+}
+
+/**
+ * Draw one studio upgrade in its spot (wallPaint is part of the wall, painted with it, so it is skipped here).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {string} id the layer id (game/studio.js STUDIO_LAYERS)
+ * @param {object} spots layerSpots result
+ * @returns {void}
+ */
+function drawLayer(ctx, id, spots) {
+  if (id === 'sign') shinySign(ctx, spots.sign, spots.u);
+  else if (id === 'chair') wingChair(ctx, spots.chair, spots.floorY, spots.u);
+  else if (id === 'plant') hangingPlant(ctx, spots.plant, spots.u);
+  else if (id === 'lamp') ringLight(ctx, spots.lamp, spots.floorY, spots.u);
+}
+
+/**
+ * Paint the still part of the room (everything but the ceiling lamp's light) for a tier and the owned upgrades.
+ * Tier 0 dingy and dank, tier 1 a bit better (repairs), tier 2 the spa; then each owned layer in draw order.
  * @param {CanvasRenderingContext2D} ctx where to paint (CSS px)
  * @param {number} w width
  * @param {number} h height
  * @param {number|string} tier 0, 1 or 2, or 'home' for the living room
+ * @param {string[]} [layers] owned studio layer ids (save.studioLayers); the home room ignores them
+ * @param {boolean} [view] true = the studio view's places and sizes for the layers (layerSpots); the pop scene leaves
+ *   it out
  * @returns {void}
  */
-function drawRoom(ctx, w, h, tier) {
+function drawRoom(ctx, w, h, tier, layers = [], view = false) {
   const pal = paletteFor(tier);
   if (pal.pulse) { drawHome(ctx, w, h, pal); return; }
+  const shown = studioLayersShown(layers);
+  const painted = shown.includes('wallPaint');
   const rand = rng(9173 + tier);
   const land = w > h;
+  const u = Math.min(w, h) / 100;
   const floorY = h * (land ? 0.86 : 0.9);
   const tileTop = h * (land ? 0.5 : 0.42);
   const t = Math.max(26, Math.min(54, Math.round(Math.min(w, h) / 8.5)));
-  // Painted upper wall.
+  // Upper wall: the tier's paint, or the fresh wallPaint colour (which covers every stain, crack and patch).
+  const wc = painted ? PAINT : pal;
   const wall = ctx.createLinearGradient(0, 0, 0, tileTop);
-  wall.addColorStop(0, pal.wallTop);
-  wall.addColorStop(1, pal.wallBottom);
+  wall.addColorStop(0, wc.wallTop);
+  wall.addColorStop(1, wc.wallBottom);
   ctx.fillStyle = wall;
   ctx.fillRect(0, 0, w, tileTop);
-  if (pal.grime > 0) {
+  if (pal.grime > 0 && !painted) {
     for (let i = 0; i < 2 + Math.round(w / 400); i += 1) stain(ctx, rand() * w, tileTop * (0.2 + rand() * 0.6), t * (0.6 + rand() * 0.7), pal.stain, pal.grime * 0.8);
     for (let i = 0; i < Math.round((2 + w / 260) * pal.grime); i += 1) {
       peel(ctx, w * (0.05 + rand() * 0.9), tileTop * (0.15 + rand() * 0.7), t * (0.35 + rand() * 0.35), pal, rand);
@@ -828,16 +1322,40 @@ function drawRoom(ctx, w, h, tier) {
       crack(ctx, w * 0.06, tileTop * 0.3, tileTop * 0.5, rand, pal.crack);
     }
   }
-  // A pipe along the top with a joint (and, in the dingy room, a brown drip stain under it).
+  if (pal.repairs && !painted) { // where the worst cracks were: smoothed over with filler
+    fillerPatch(ctx, w * 0.06, tileTop * 0.55, t * 0.5, pal);
+    fillerPatch(ctx, w * (land ? 0.7 : 0.92), tileTop * (land ? 0.62 : 0.3), t * 0.45, pal);
+  }
+  if (pal.spa) { // soft daylight falling across the wall
+    const beam = ctx.createLinearGradient(w * 0.6, 0, w * 0.85, h * 0.8);
+    beam.addColorStop(0, 'rgba(255,255,255,0.35)');
+    beam.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = beam;
+    ctx.beginPath(); ctx.moveTo(w * 0.55, 0); ctx.lineTo(w * 0.8, 0); ctx.lineTo(w * 1.05, h * 0.85); ctx.lineTo(w * 0.7, h * 0.85); ctx.closePath(); ctx.fill();
+  }
+  // The ceiling: an old pipe with a joint (tiers 0 and 1: in 0 a brown drip stain under it, in 1 taped up), or the
+  // spa's white moulding (tier 2).
   const py = Math.max(6, h * 0.035);
   const pr = Math.max(4, t * 0.13);
-  ctx.fillStyle = pal.pipe;
-  ctx.fillRect(0, py - pr, w, pr * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.fillRect(0, py - pr, w, pr * 0.5);
   const jx = w * (land ? 0.62 : 0.72);
-  ctx.fillStyle = pal.metal;
-  ctx.fillRect(jx - pr * 1.4, py - pr * 1.4, pr * 2.8, pr * 2.8);
+  if (pal.spa) {
+    cornice(ctx, w, py, pr, pal);
+  } else {
+    ctx.fillStyle = pal.pipe;
+    ctx.fillRect(0, py - pr, w, pr * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(0, py - pr, w, pr * 0.5);
+    ctx.fillStyle = pal.metal;
+    ctx.fillRect(jx - pr * 1.4, py - pr * 1.4, pr * 2.8, pr * 2.8);
+  }
+  if (pal.repairs) { // grey tape wrapped round the joint: fixed!
+    ctx.fillStyle = pal.tape;
+    ctx.save(); ctx.translate(jx, py); ctx.rotate(-0.25);
+    ctx.fillRect(-pr * 2, -pr * 0.55, pr * 4, pr * 1.1);
+    ctx.rotate(0.5);
+    ctx.fillRect(-pr * 1.9, -pr * 0.5, pr * 3.8, pr * 1);
+    ctx.restore();
+  }
   if (pal.grime > 0.5) {
     const len = Math.min(tileTop * 0.35, t * 2.2);
     const dg = ctx.createLinearGradient(0, py, 0, py + len);
@@ -849,7 +1367,19 @@ function drawRoom(ctx, w, h, tier) {
     ctx.beginPath(); ctx.arc(jx, py + pr * 2.4, pr * 0.55, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.moveTo(jx - pr * 0.5, py + pr * 2.3); ctx.lineTo(jx, py + pr * 1.3); ctx.lineTo(jx + pr * 0.5, py + pr * 2.3); ctx.fill();
   }
+  if (painted) paintBand(ctx, w, py + pr * 1.9, u);
   tiles(ctx, w, tileTop, floorY, t, pal, rand);
+  if (pal.repairs) { // one brand-new tile where the missing one was
+    const gap = Math.max(2, t * 0.06);
+    const c = land ? Math.floor((w * 0.27) / t) : 0;
+    const x = c * t + gap / 2;
+    const y = tileTop + t + gap / 2;
+    ctx.fillStyle = pal.newTile;
+    ctx.fillRect(x, y, t - gap, t - gap);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(x + (t - gap) * 0.12, y + (t - gap) * 0.12, (t - gap) * 0.4, Math.max(2, t * 0.06));
+    sparkle(ctx, x + (t - gap) * 0.78, y + (t - gap) * 0.3, t * 0.14, '#ffffff', 0.9);
+  }
   // Floor.
   ctx.fillStyle = pal.floor;
   ctx.fillRect(0, floorY, w, h - floorY);
@@ -858,26 +1388,46 @@ function drawRoom(ctx, w, h, tier) {
   for (let x = -w; x < w * 2; x += t * 1.6) { ctx.beginPath(); ctx.moveTo(x, floorY); ctx.lineTo(w / 2 + (x - w / 2) * 1.8, h); ctx.stroke(); }
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(0, floorY, w, 3);
-  // Furniture: a shelf high up on the right, an old sink on the left, a bucket and mop on the right.
-  const shelfLen = Math.max(70, Math.min(130, w * 0.2));
-  if (land) {
-    shelf(ctx, w * 0.78, h * 0.34, shelfLen, pal);
-    sink(ctx, w * 0.12, h * 0.56, Math.max(60, Math.min(110, w * 0.11)), pal);
-    bucket(ctx, w * 0.84, floorY + (h - floorY) * 0.55, Math.max(34, Math.min(70, h * 0.14)), pal);
-  } else {
-    shelf(ctx, w - shelfLen - w * 0.05, h * 0.2, shelfLen, pal);
-    sink(ctx, w * 0.1, tileTop + t * 0.6, Math.max(56, w * 0.18), pal);
-    bucket(ctx, w * 0.88, floorY + (h - floorY) * 0.55, Math.max(30, w * 0.1), pal);
+  if (pal.spa) { // a soft round rug
+    ctx.fillStyle = pal.rug;
+    ctx.beginPath(); ctx.ellipse(w / 2, floorY + (h - floorY) * 0.6, w * 0.32, (h - floorY) * 0.35, 0, 0, Math.PI * 2); ctx.fill();
   }
+  // Furniture: a shelf high up on the right, a sink on the left, a bucket and mop (the spa: a diffuser) on the right.
+  const shelfLen = Math.max(70, Math.min(130, w * 0.2));
+  const sinkX = land ? w * 0.12 : w * 0.1;
+  const sinkY = land ? h * 0.56 : tileTop + t * 0.6;
+  const sinkS = land ? Math.max(60, Math.min(110, w * 0.11)) : Math.max(56, w * 0.18);
+  const backX = land ? w * 0.84 : w * 0.88;
+  const backS = land ? Math.max(34, Math.min(70, h * 0.14)) : Math.max(30, w * 0.1);
+  const floorMid = floorY + (h - floorY) * 0.55;
+  if (pal.repairs) { // a little bath mat under the sink
+    ctx.fillStyle = pal.mat;
+    ctx.beginPath(); ctx.roundRect(sinkX - sinkS * 0.45, floorY + (h - floorY) * 0.25, sinkS * 0.9, (h - floorY) * 0.45, 6); ctx.fill();
+  }
+  if (pal.spa) spaShelf(ctx, land ? w * 0.78 : w - shelfLen - w * 0.05, h * (land ? 0.34 : 0.2), shelfLen, pal);
+  else shelf(ctx, land ? w * 0.78 : w - shelfLen - w * 0.05, h * (land ? 0.34 : 0.2), shelfLen, pal);
+  sink(ctx, sinkX, sinkY, sinkS, pal);
+  if (pal.towel) towel(ctx, sinkX + sinkS * 0.72, sinkY - sinkS * 0.3, sinkS * 0.55, pal.towel);
+  if (pal.spa) diffuser(ctx, backX, floorMid, backS, pal);
+  else bucket(ctx, backX, floorMid, backS, pal);
   if (pal.grime > 0.5) cobweb(ctx, w, py + pr, Math.max(36, t * 1.3), -1);
-  // The lamp's cord and socket (the light itself is drawn on top each time, see drawLight).
+  // The ceiling lamp's cord and socket (the light itself is drawn on top each time, see drawLight). Gold in the spa.
   const L = lampSpot(w, h);
-  ctx.strokeStyle = '#2f342c';
+  ctx.strokeStyle = pal.spa ? pal.metal : '#2f342c';
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(L.x, 0); ctx.quadraticCurveTo(L.x + 4, L.y * 0.5, L.x, L.y - L.r * 1.6); ctx.stroke();
-  ctx.fillStyle = '#3a3f37';
+  ctx.fillStyle = pal.spa ? pal.metal : '#3a3f37';
   ctx.beginPath(); ctx.roundRect(L.x - L.r * 0.55, L.y - L.r * 1.8, L.r * 1.1, L.r * 1.0, 2); ctx.fill();
-  // Dank corners: a dark vignette.
+  // The upgrades the player owns, back to front.
+  const spots = layerSpots(w, h, view);
+  for (const id of shown) drawLayer(ctx, id, spots);
+  if (pal.spa) { // sparkles all over: everything is clean
+    const sp = rng(4242);
+    for (let i = 0; i < 14; i += 1) {
+      sparkle(ctx, sp() * w, sp() * floorY, u * (1 + sp() * 1.8), i % 3 ? '#ffffff' : '#f3d27a', 0.9);
+    }
+  }
+  // The corners: a vignette (dark and dank in tier 0, soft in the better tiers).
   const v = ctx.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.35, w / 2, h * 0.45, Math.hypot(w, h) * 0.62);
   v.addColorStop(0, 'rgba(0,0,0,0)');
   v.addColorStop(1, pal.vignette);
@@ -886,7 +1436,9 @@ function drawRoom(ctx, w, h, tier) {
 }
 
 /**
- * The lamp's light: the glowing bulb and a warm pool of light on the wall (dimmer and the room darker while it flickers).
+ * The ceiling lamp's light: a warm pool of light on the wall and the lamp itself. Tier 0: a bare bulb (dimmer and
+ * the room darker while it flickers). Tier 1: the bulb under a simple enamel shade. Tier 2: a glowing glass globe
+ * with a big soft light.
  * @param {CanvasRenderingContext2D} ctx where to draw (CSS px)
  * @param {number} w width
  * @param {number} h height
@@ -902,30 +1454,154 @@ function drawLight(ctx, w, h, tier, level) {
     ctx.fillStyle = `rgba(10,16,12,${(1 - level) * 0.3})`;
     ctx.fillRect(0, 0, w, h);
   }
-  const R = Math.min(w, h) * 0.5;
+  const R = Math.min(w, h) * (pal.spa ? 0.7 : 0.5);
   const g = ctx.createRadialGradient(L.x, L.y, L.r, L.x, L.y, R);
-  g.addColorStop(0, `rgba(${pal.light},${0.42 * level})`);
+  g.addColorStop(0, `rgba(${pal.light},${(pal.spa ? 0.5 : 0.42) * level})`);
   g.addColorStop(1, `rgba(${pal.light},0)`);
   ctx.fillStyle = g;
   ctx.fillRect(L.x - R, L.y - R, R * 2, R * 2);
+  if (pal.spa) { // the glass globe
+    const gr = L.r * 1.25;
+    const gy = L.y + L.r * 0.2;
+    const gg = ctx.createRadialGradient(L.x - gr * 0.3, gy - gr * 0.3, gr * 0.1, L.x, gy, gr);
+    gg.addColorStop(0, '#ffffff');
+    gg.addColorStop(1, '#fff3d6');
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.arc(L.x, gy, gr, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(224,189,98,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath(); ctx.ellipse(L.x - gr * 0.4, gy - gr * 0.35, gr * 0.18, gr * 0.28, 0.6, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
   ctx.fillStyle = level > 0.6 ? pal.bulb : '#9c9878';
   ctx.beginPath(); ctx.ellipse(L.x, L.y, L.r * 0.85, L.r, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = `rgba(255,255,255,${0.7 * level})`;
   ctx.beginPath(); ctx.arc(L.x - L.r * 0.3, L.y - L.r * 0.3, L.r * 0.25, 0, Math.PI * 2); ctx.fill();
+  if (pal.repairs) { // a simple enamel shade over the bulb, lit from inside at its rim
+    ctx.beginPath();
+    ctx.moveTo(L.x - L.r * 0.5, L.y - L.r * 1.8);
+    ctx.lineTo(L.x + L.r * 0.5, L.y - L.r * 1.8);
+    ctx.lineTo(L.x + L.r * 1.9, L.y - L.r * 0.05);
+    ctx.lineTo(L.x - L.r * 1.9, L.y - L.r * 0.05);
+    ctx.closePath();
+    inked(ctx, pal.shade, 1.4, INK);
+    ctx.fillStyle = `rgba(255,240,200,${0.9 * level})`;
+    ctx.beginPath(); ctx.ellipse(L.x, L.y - L.r * 0.05, L.r * 1.85, L.r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+  }
 }
 
-const cache = new Map(); // "w x h @ dpr : tier" -> offscreen canvas with the still room
-
 /**
- * The still room for a size and tier, painted once into an offscreen canvas (only the two newest sizes are kept).
+ * Paint the whole studio, full size, for a tier and the owned upgrades: the still room and the ceiling lamp's light
+ * (steady, never flickering). For the studio view screen (T5.1c); the pop scene uses drawBackdrop instead.
+ * @param {CanvasRenderingContext2D} ctx where to paint (already scaled so 1 unit = 1 CSS px)
  * @param {number} w width in CSS px
  * @param {number} h height in CSS px
- * @param {number} tier 0..2
+ * @param {number} tier studio tier 0..2 (unknown tiers fall back to 0)
+ * @param {string[]} [layers] owned studio layer ids (save.studioLayers)
+ * @param {{view?: boolean}} [o] view: true (default) = the studio view's places and sizes for the layers (no face in
+ *   front, so the chair is chair-sized and stands on the floor); false = the pop scene's places
+ * @returns {void}
+ */
+export function drawStudio(ctx, w, h, tier, layers = [], o = {}) {
+  const kind = backdropKind('studio', tier);
+  drawRoom(ctx, w, h, kind, layers, o.view !== false);
+  drawLight(ctx, w, h, kind, 1);
+}
+
+/**
+ * Where each studio upgrade sits in its close-up for the scrub job (T5.1b): big and in the middle. The grime recipes
+ * in screens/scrub-logic.js are placed to match these, as shares of the picture.
+ * @param {string} id studio item id (lamp, plant, chair, sign; anything else gets no spot)
+ * @param {number} w width
+ * @param {number} h height
+ * @returns {{u: number, floorY: number, spot: object|null}} size unit, floor line and the item's spot for its drawer
+ */
+export function closeupSpot(id, w, h) {
+  const floorY = h * 0.86;
+  if (id === 'lamp') { const r = h * 0.22; return { u: r / 7, floorY, spot: { x: w / 2, y: h * 0.37, r, floor: h * 0.93 } }; }
+  if (id === 'chair') {
+    const cw = h * 0.57;
+    const ground = h * 0.95;
+    return { u: cw / 40, floorY, spot: { x: w / 2, wide: cw, top: ground - cw * 1.55, seat: ground - cw * 0.5, floor: ground } };
+  }
+  if (id === 'plant') { const s = h * 0.2; return { u: s / 8, floorY, spot: { x: w / 2, y: h * 0.3, s } }; }
+  if (id === 'sign') { const s = Math.min(w * 0.69, h * 1.1); return { u: s / 29, floorY, spot: { x: w / 2, y: h * 0.1, s } }; }
+  return { u: h / 40, floorY, spot: null };
+}
+
+/**
+ * The freshly painted wall up close (the wallPaint upgrade): lavender paint, the stencilled band, the skirting board
+ * and a strip of floor.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} floorY floor line
+ * @returns {void}
+ */
+function closeupWall(ctx, w, h, floorY) {
+  const u = h / 40;
+  const g = ctx.createLinearGradient(0, 0, 0, floorY);
+  g.addColorStop(0, PAINT.wallTop);
+  g.addColorStop(1, PAINT.wallBottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, floorY);
+  paintBand(ctx, w, h * 0.08, u);
+  ctx.fillStyle = '#86694d';
+  ctx.fillRect(0, floorY, w, h - floorY);
+  box(ctx, -4, floorY - u * 1.6, w + 8, u * 1.8, 0); // skirting board
+  inked(ctx, '#ffffff', Math.max(1.2, u * 0.3), INK);
+}
+
+/**
+ * Paint a studio upgrade up close, clean, for the scrub job (T5.1b): a warm wall with soft light behind it, the floor,
+ * and the item drawn by the same drawer as in the room (ringLight, wingChair, hangingPlant, shinySign), only bigger.
+ * The wallPaint upgrade is the wall itself. The grime goes on top in screens/scrub.js.
+ * @param {CanvasRenderingContext2D} ctx where to paint (CSS px)
+ * @param {number} w width
+ * @param {number} h height
+ * @param {string} id studio item id
+ * @returns {void}
+ */
+export function drawCloseup(ctx, w, h, id) {
+  const { u, floorY, spot } = closeupSpot(id, w, h);
+  if (id === 'wallPaint') { closeupWall(ctx, w, h, floorY); return; }
+  const pal = PALETTES[1];
+  const g = ctx.createLinearGradient(0, 0, 0, floorY);
+  g.addColorStop(0, pal.wallTop);
+  g.addColorStop(1, pal.wallBottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, floorY);
+  const glow = ctx.createRadialGradient(w / 2, h * 0.45, h * 0.05, w / 2, h * 0.45, w * 0.55);
+  glow.addColorStop(0, 'rgba(255,248,228,0.55)');
+  glow.addColorStop(1, 'rgba(255,248,228,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, w, floorY);
+  ctx.fillStyle = pal.floor;
+  ctx.fillRect(0, floorY, w, h - floorY);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(0, floorY, w, Math.max(2, h * 0.01));
+  if (id === 'lamp') ringLight(ctx, spot, floorY, u);
+  else if (id === 'chair') wingChair(ctx, spot, floorY, u);
+  else if (id === 'plant') hangingPlant(ctx, spot, u);
+  else if (id === 'sign') shinySign(ctx, spot, u);
+}
+
+const cache = new Map(); // "w x h @ dpr : tier : layers" -> offscreen canvas with the still room
+
+/**
+ * The still room for a size, tier and set of layers, painted once into an offscreen canvas (only the two newest are
+ * kept).
+ * @param {number} w width in CSS px
+ * @param {number} h height in CSS px
+ * @param {number|string} tier 0..2 or 'home'
  * @param {number} dpr pixel ratio
+ * @param {string[]} [layers] owned studio layer ids
  * @returns {HTMLCanvasElement} the painted room
  */
-function roomCanvas(w, h, tier, dpr) {
-  const key = `${w}x${h}@${dpr}:${tier}`;
+function roomCanvas(w, h, tier, dpr, layers = []) {
+  const key = `${w}x${h}@${dpr}:${studioKey(tier, tier === 'home' ? [] : layers)}`;
   let c = cache.get(key);
   if (c) return c;
   c = document.createElement('canvas');
@@ -933,7 +1609,7 @@ function roomCanvas(w, h, tier, dpr) {
   c.height = Math.max(1, Math.round(h * dpr));
   const cx = c.getContext('2d');
   cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawRoom(cx, w, h, tier);
+  drawRoom(cx, w, h, tier, layers);
   cache.set(key, c);
   while (cache.size > 2) cache.delete(cache.keys().next().value);
   return c;
@@ -945,14 +1621,15 @@ function roomCanvas(w, h, tier, dpr) {
  * @param {CanvasRenderingContext2D} ctx where to draw (already scaled so 1 unit = 1 CSS px)
  * @param {number} w width in CSS px
  * @param {number} h height in CSS px
- * @param {{room?: string, tier?: number, time?: number, reduced?: boolean, dpr?: number}} [o] room 'studio'
- *   (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), seconds since the scene started (for the flicker or
- *   the home lamp's breathing), reduced motion (steady light), pixel ratio (read from ctx when left out)
+ * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number}} [o] room
+ *   'studio' (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), the owned studio layers (save.studioLayers,
+ *   T5.1a; the home room ignores them), seconds since the scene started (for the flicker or the home lamp's
+ *   breathing), reduced motion (steady light), pixel ratio (read from ctx when left out)
  * @returns {void}
  */
 export function drawBackdrop(ctx, w, h, o = {}) {
   const tier = backdropKind(o.room, o.tier);
   const dpr = o.dpr ?? (ctx.getTransform?.().a || 1);
-  ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr), 0, 0, w, h);
+  ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []), 0, 0, w, h);
   drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));
 }

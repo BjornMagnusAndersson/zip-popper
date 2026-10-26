@@ -3,12 +3,13 @@
 // Flow: first start = name screen, then the menu; later starts = title, then the menu. Continue plays the next story
 // step (chapter-logic.js): a chapter strip, a special mode (torchlight, T4.5; phone scroll, T4.6), a customer (intro, pop
 // round, result), the hygiene scare strip (gloves), the teaser strip and the "To be continued" screen. Free play,
-// Comics, Shop (with the placeholder scrub job until T5.1b), Settings and About hang off the menu.
+// Comics, Shop (with the wipe-and-scrub job for studio upgrades, T5.1b), Settings and About hang off the menu.
 // The save is written after every customer, purchase, scrub job, comic seen and setting change, so a reload goes on
 // exactly where the player was. All the rules are pure helpers in app-logic.js (tested in Node); this file only shows
 // screens and passes what happened back to those helpers. All text comes from the string table (t).
 // Testing flags (page address): ?test (a throwaway in-memory save; nothing is written to the phone), with ?test also
-// ?chapter=N&customer=M (jump: customer M is next), ?money=500, ?rep=40, ?name=Maja; ?seed=N (every face uses that
+// ?chapter=N&customer=M (jump: customer M is next), ?money=500, ?rep=40, ?name=Maja, ?layers=lamp,plant or
+// ?layers=all (studio upgrades owned, T5.1a); ?seed=N (every face uses that
 // seed, also without ?test); ?demo is handled by index.html (the old pop demo).
 
 import { t } from '../core/strings.js';
@@ -39,6 +40,7 @@ import { createTorchlightScreen } from '../screens/torchlight.js';
 import { createPhoneScrollScreen } from '../screens/phone-scroll.js';
 import { createScrubScreen } from '../screens/scrub.js';
 import { createEndScreen } from '../screens/end.js';
+import { createStudioScreen } from '../screens/studio.js';
 import * as L from './app-logic.js';
 
 /** Which shop tab shows an item kind (to come back to the same tab after a purchase). */
@@ -261,9 +263,18 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     show(createMenuScreen({
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
       onContinue: () => { sound.unlock(); continueStory(); }, onFreePlay: startFreePlay, onComics: showComics,
-      onShop: () => showShop(showMenu), onSettings: showSettings, onAbout: () => showAbout(showMenu),
-      showShop: L.shopOpen(save),
+      onShop: () => showShop(showMenu), onStudio: () => showStudio(showMenu), onSettings: showSettings,
+      onAbout: () => showAbout(showMenu), showShop: L.shopOpen(save), showStudio: L.shopOpen(save),
     }));
+  }
+
+  /**
+   * The studio view (T5.1c): her whole studio with every upgrade she has, and her in it.
+   * @param {() => void} back where Back goes
+   * @returns {void}
+   */
+  function showStudio(back) {
+    show(createStudioScreen({ t, reducedMotion: still(), ...L.studioViewArgs(save), onBack: back }));
   }
 
   /**
@@ -405,6 +416,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function showShop(back, tab = 'tools') {
     const shop = show(createShopScreen({
       t, reducedMotion: still(), state: economyFromSave(save), tab, onBack: back,
+      onStudio: () => showStudio(() => showShop(back, 'studio')),
       onBuy: (id) => {
         const out = L.buyItem(save, id);
         if (!out.ok) return;
@@ -419,15 +431,16 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
 
   /**
-   * The scrub job of a bought studio item (PLACEHOLDER screen until T5.1b). Required: the item shows and its strip
-   * plays only after it. Gives +1 reputation.
+   * The scrub job of a bought studio item (T5.1b: wipe and scrub that item clean in a close-up). Required: the item
+   * shows and its strip plays only after it. Gives +1 reputation.
    * @param {string} itemId the studio item
    * @param {() => void} then what comes after
    * @returns {void}
    */
   function runScrub(itemId, then) {
+    sound.unlock();
     show(createScrubScreen({
-      t, reducedMotion: still(), itemNameKey: `ui.item.${itemId}.name`,
+      t, sound, reducedMotion: still(), itemId, itemNameKey: `ui.item.${itemId}.name`,
       onDone: () => {
         const out = L.scrubDone(save, itemId);
         persist(out.save);

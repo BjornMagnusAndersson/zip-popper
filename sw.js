@@ -31,7 +31,9 @@ const PRECACHE = [
   './js/screens/phone-scroll.js',
   './css/phone-scroll.css',
   './js/screens/scrub.js',
+  './js/screens/scrub-logic.js',
   './js/screens/end.js',
+  './js/screens/studio.js',
   './strings/en.json',
   './js/core/save.js',
   './js/core/sound.js',
@@ -55,6 +57,7 @@ const PRECACHE = [
   './js/game/phonescroll-logic.js',
   './js/game/app.js',
   './js/game/app-logic.js',
+  './js/game/studio.js',
   './js/game/scoring.js',
   './js/game/economy.js',
   './js/game/requests.js',
@@ -92,7 +95,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v21';
+const CACHE_VERSION = 'v24';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache.

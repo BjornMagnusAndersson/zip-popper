@@ -1,4 +1,5 @@
-// The main menu (T3.1a): Continue (shows the current chapter's title), Free play, Comics, Shop, Settings, About.
+// The main menu (T3.1a): Continue (shows the current chapter's title), Free play, Comics, Shop, Your studio (T5.1c),
+// Settings, About.
 // State comes in, every tap goes out through a callback. update({playerName, chapterTitleKey}) refreshes the greeting
 // and the Continue line when the save changes.
 
@@ -9,15 +10,17 @@ import { mascotArt } from './mascot.js';
  * Build the main menu.
  * @param {{t: (key: string, vars?: object) => string, playerName?: string, chapterTitleKey?: string,
  *   onContinue?: () => void, onFreePlay?: () => void, onComics?: () => void, onShop?: () => void,
- *   onSettings?: () => void, onAbout?: () => void, showShop?: boolean, reducedMotion?: boolean}} opts
+ *   onStudio?: () => void, onSettings?: () => void, onAbout?: () => void, showShop?: boolean, showStudio?: boolean,
+ *   reducedMotion?: boolean}} opts
  *   t = string function; playerName = the player's name (plain text); chapterTitleKey = string key of the current chapter's
  *   title; the on... callbacks report which button was tapped; showShop = false leaves the Shop button out (the
- *   shop opens with the career chapter)
+ *   shop opens with the career chapter); showStudio = true adds the "Your studio" button (the studio view, T5.1c;
+ *   the game shows it where the shop is open)
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void, dispose: () => void}} the screen
  */
 export function createMenuScreen({
-  t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onShop, onSettings, onAbout, showShop = true,
-  reducedMotion = false,
+  t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onShop, onStudio, onSettings, onAbout, showShop = true,
+  showStudio = false, reducedMotion = false,
 }) {
   const shell = screenShell('menu', { label: t('ui.menu.title'), reducedMotion });
   const body = el('div', 'app-body app-menu');
@@ -47,6 +50,7 @@ export function createMenuScreen({
   add('ui.menu.freePlay', onFreePlay);
   add('ui.menu.comics', onComics);
   if (showShop) add('ui.menu.shop', onShop);
+  if (showStudio) add('ui.menu.studio', onStudio);
   add('ui.menu.settings', onSettings);
   add('ui.menu.about', onAbout);
 

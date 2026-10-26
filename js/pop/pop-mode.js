@@ -106,20 +106,20 @@ function buzz(pattern) {
 /**
  * Create the pop scene.
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
- *   count?: number, tier?: number, career?: boolean, onReputationHit?: (amount: number) => void,
+ *   count?: number, tier?: number, layers?: string[], career?: boolean, onReputationHit?: (amount: number) => void,
  *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
- *   bumps per face, the studio tier for the room behind (0..2), career = a Story/Career round that can fail (free play
+ *   bumps per face, the studio tier for the room behind (0..2) and its owned upgrade layers (T5.1a), career = a Story/Career round that can fail (free play
  *   when false), the reputation hook called by "Next customer" after a fail, and reducedMotion = true for the calm
  *   version whatever the phone says (the player's Settings switch)
  * @returns {{node: HTMLElement, mount: (host: HTMLElement) => void, newFace: () => void, unlock: () => void,
- *   setTier: (tier: number) => void, results: () => object[], startRound: (o: object) => void,
+ *   setTier: (tier: number, layers?: string[]) => void, results: () => object[], startRound: (o: object) => void,
  *   startFree: (o?: object) => void, setUnlockedTools: (list: string[]) => void, dispose: () => void}} the scene's
  *   element and its controls (startRound and startFree: see their own comments below)
  */
 export function createPopMode({
-  t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, career = false,
+  t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, layers: firstLayers = [], career = false,
   onReputationHit = () => {}, reducedMotion = false, squeeze = false, squeezeHint = false, onSqueezeHint = () => {},
 }) {
   // Two-finger squeeze (T1.7): squeeze = the Settings switch; squeezeHint = show "squeeze between two fingers" until
@@ -135,6 +135,7 @@ export function createPopMode({
   let disposed = false;
   let ready = false; // mounted and measured: faces can be laid out
   let tier = firstTier;
+  let layers = Array.isArray(firstLayers) ? [...firstLayers] : []; // owned studio upgrades drawn in the room (T5.1a)
   let room = 'studio'; // the room behind the face: 'studio' or 'home' (startRound's room, SPEC D19)
   let moodOverride = null; // a fixed face mood from startRound or setMood (e.g. 'sleep'), null = the usual moods
   // How faces are made now: 'demo' (the old path), 'round' (one customer, startRound) or 'free' (startFree).
@@ -553,7 +554,7 @@ export function createPopMode({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const reduced = still();
     const time = (performance.now() - back.start) / 1000;
-    drawBackdrop(ctx, w, h, { room, tier, time, reduced, dpr });
+    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr });
     const next = nextBackdropChange(time, backdropKind(room, tier), reduced);
     if (Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
   }
@@ -758,12 +759,12 @@ export function createPopMode({
      * for "Try again", with the same seed for the same face). Before mount() it waits for the mount.
      * @param {{customer: {face: object}, bumpCount: number, allowedTypes: string[], difficulty?: number, seed?: number,
      *   holdFactors?: Object<string, number>, roughReductions?: Object<string, number>, unlockedTools?: string[],
-     *   request?: object|null, room?: string, tier?: number, career?: boolean, decoys?: boolean,
+     *   request?: object|null, room?: string, tier?: number, layers?: string[], career?: boolean, decoys?: boolean,
      *   onFinish: (result: object) => void}} o customer = chapter-logic.js customerSpec customer; difficulty =
      *   customerSpec difficulty (1 = normal); seed = the face (random when left out); holdFactors / roughReductions =
      *   per bump kind from economy.js holdFactor / roughReduction; unlockedTools = owned tools; request = requests.js
      *   pickRequest result or null; room = 'home' (living room, SPEC D19) or 'studio' (default); tier = studio
-     *   room 0..2; career = false makes a round that cannot fail (default
+     *   room 0..2; layers = owned studio upgrades drawn in the studio (save.studioLayers, T5.1a); career = false makes a round that cannot fail (default
      *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload;
      *   customerName = shown in the header ("Popping Pilot Pete", else "Pop them!"); skipCost = what "Next customer"
      *   costs in reputation, shown on the fail choice (left out = no cost shown).
@@ -786,15 +787,16 @@ export function createPopMode({
       buildToolBar(tools);
       room = o.room === 'home' ? 'home' : 'studio';
       if (Number.isFinite(o.tier)) tier = o.tier;
+      if (Array.isArray(o.layers)) layers = [...o.layers];
       paintBackdrop();
       startNow(true);
     },
     /**
      * Free play (SPEC section 5): random faces, the owned tools, mastery still helps, never fails, no onFinish, and
      * the "New face" button. Before mount() it waits for the mount.
-     * @param {{unlockedTools?: string[], tier?: number, seed?: number, holdFactors?: Object<string, number>,
+     * @param {{unlockedTools?: string[], tier?: number, layers?: string[], seed?: number, holdFactors?: Object<string, number>,
      *   roughReductions?: Object<string, number>}} [o] owned tools (all built ones when left out), studio room 0..2,
-     *   the first face's seed, and mastery as for startRound
+     *   its owned upgrade layers (T5.1a), the first face's seed, and mastery as for startRound
      * @returns {void}
      */
     startFree(o = {}) {
@@ -807,6 +809,7 @@ export function createPopMode({
       buildToolBar(roundTools(cfg.unlockedTools));
       room = 'studio'; // free play is always in the studio
       if (Number.isFinite(o.tier)) tier = o.tier;
+      if (Array.isArray(o.layers)) layers = [...o.layers];
       paintBackdrop();
       startNow(true);
     },
@@ -864,9 +867,10 @@ export function createPopMode({
     /**
      * Change the studio room behind the face (SPEC D11: it follows the studio upgrades).
      * @param {number} next tier 0..2
+     * @param {string[]} [nextLayers] the owned upgrade layers (left out = keep the ones shown now)
      * @returns {void}
      */
-    setTier(next) { tier = next; paintBackdrop(); },
+    setTier(next, nextLayers) { tier = next; if (Array.isArray(nextLayers)) layers = [...nextLayers]; paintBackdrop(); },
     /** Every finished or failed customer so far (round data with stars, Ows, failed and reputationHit). @returns {object[]} rounds */
     results: () => results.slice(),
     /** Stop everything when leaving the page. @returns {void} */

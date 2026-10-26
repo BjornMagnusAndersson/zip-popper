@@ -8,12 +8,13 @@ import { SHOP_TABS, shopEntries, tierInfo } from './screen-logic.js';
 /**
  * Build the shop screen.
  * @param {{t: (key: string, vars?: object) => string, state: object, tab?: string, onBuy?: (itemId: string) => void,
- *   onBack?: () => void, reducedMotion?: boolean}} opts
+ *   onBack?: () => void, onStudio?: () => void, reducedMotion?: boolean}} opts
  *   t = string function; state = the economy state (money, reputation, items ...); tab = which tab to start on;
- *   onBuy = Buy was tapped for an item id; onBack = Back
+ *   onBuy = Buy was tapped for an item id; onBack = Back; onStudio = "See your studio" on the Studio tab (T5.1c; left
+ *   out = no such button)
  * @returns {{node: HTMLElement, update: (data: {state?: object, tab?: string}) => void, dispose: () => void}} the screen
  */
-export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, reducedMotion = false }) {
+export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStudio, reducedMotion = false }) {
   const shell = screenShell('shop', { label: t('ui.shop.title'), reducedMotion });
   let current = state;
   let activeTab = SHOP_TABS.some((x) => x.id === tab) ? tab : 'tools';
@@ -98,6 +99,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, reduc
     panel.textContent = '';
     const entries = shopEntries(current, activeTab);
     const kindIcon = { tools: 'tool', studio: 'studio', outfit: 'outfit' }[activeTab] ?? 'tool';
+    if (activeTab === 'studio' && onStudio) panel.append(button('app-btn app-shop-studio', t('ui.shop.seeStudio'), () => onStudio(), shell.signal));
     if (entries.length === 0) panel.append(el('p', 'app-empty', t('ui.shop.empty')));
     for (const item of entries) panel.append(itemCard(item, kindIcon));
     panel.scrollTop = keep;

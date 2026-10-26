@@ -11,9 +11,10 @@ import {
   milestoneStripsToPlay, buy, canBuy, grantItem, finishScrub, needsScrub, masteryLevel,
 } from './economy.js';
 import {
-  SHOP_ITEMS, SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL,
+  SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL,
 } from '../data/economy-data.js';
 import { pickRequest } from './requests.js';
+import { STUDIO_LAYERS, studioTier, studioLayersShown, studioOutfit } from './studio.js';
 import { faceBumpHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
@@ -107,18 +108,21 @@ function intOrNull(v) {
 
 /**
  * Reads the testing flags from the page address (?test, ?chapter=N, ?customer=M, ?money=, ?rep=, ?seed=, ?name=, ?demo,
- * ?squeeze = the two-finger squeeze switch on, T1.7).
+ * ?squeeze = the two-finger squeeze switch on, T1.7; ?layers=lamp,plant or ?layers=all = these studio upgrades
+ * owned and scrubbed, T5.1a, so the studio tiers and layers can be looked at).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
- *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean}} the flags
+ *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null}} the flags
  */
 export function parseFlags(search) {
   const p = new URLSearchParams(search ?? '');
   const seed = intOrNull(p.get('seed'));
+  const lay = p.get('layers');
   return {
     test: p.has('test'), demo: p.has('demo'), chapter: intOrNull(p.get('chapter')), customer: intOrNull(p.get('customer')),
     money: intOrNull(p.get('money')), rep: intOrNull(p.get('rep')), seed: seed !== null && seed > 0 ? seed : null,
     name: p.has('name') ? sanitizeName(p.get('name')) : null, squeeze: p.has('squeeze'),
+    layers: lay === null ? null : lay === 'all' ? [...STUDIO_LAYERS] : studioLayersShown(lay.split(',')),
   };
 }
 
@@ -147,6 +151,10 @@ export function applyTestFlags(save, flags, now = Date.now()) {
   if (flags.money !== null) s.money = Math.max(0, flags.money);
   if (flags.rep !== null) s.reputation = Math.max(0, flags.rep);
   if (flags.squeeze) s.settings = { ...s.settings, squeeze: true }; // ?squeeze: the two-finger squeeze on (T1.7)
+  if (flags.layers) { // ?layers=: these studio upgrades bought and scrubbed (T5.1a), so the shop does not offer them again
+    s.studioLayers = [...flags.layers];
+    s.items = { ...s.items, ...Object.fromEntries(flags.layers.map((id) => [id, { needsScrub: false }])) };
+  }
   return normalizeSave(s, now);
 }
 
@@ -257,13 +265,30 @@ export function masteryTables(save) {
 
 /**
  * The studio room behind the face (0 dingy, 1 better, 2 spa, SPEC D11): follows how many studio upgrades are
- * bought AND scrubbed. First guess until T5.1 draws the real layers: 0 or 1 upgrade = 0, 2 or 3 = 1, 4 or more = 2.
+ * bought AND scrubbed: 0 or 1 upgrade = 0, 2 or 3 = 1, 4 or more = 2 (game/studio.js studioTier).
  * @param {object} save the save
  * @returns {number} 0, 1 or 2
  */
 export function backdropTier(save) {
-  const studio = (save.studioLayers ?? []).filter((id) => SHOP_ITEMS[id]?.kind === 'studio').length;
-  return studio >= 4 ? 2 : studio >= 2 ? 1 : 0;
+  return studioTier(save.studioLayers);
+}
+
+/**
+ * The studio upgrades to draw in the room (bought AND scrubbed), in draw order (game/studio.js studioLayersShown).
+ * @param {object} save the save
+ * @returns {string[]} layer ids
+ */
+export function backdropLayers(save) {
+  return studioLayersShown(save.studioLayers);
+}
+
+/**
+ * What the studio view screen shows (T5.1c): the studio tier, the owned upgrades in draw order and her outfit.
+ * @param {object} save the save
+ * @returns {{tier: number, layers: string[], outfit: string}} the studio view's data
+ */
+export function studioViewArgs(save) {
+  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: studioOutfit(save.items) };
 }
 
 /**
@@ -302,7 +327,8 @@ export function roundArgs(save, step, forcedSeed = null) {
   return {
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
     seed, holdFactors, roughReductions, unlockedTools,
-    request: pickRequest(spec, holds, seed + 101, step.n), room: backdropRoom(step.chapter), tier: backdropTier(save), career: true,
+    request: pickRequest(spec, holds, seed + 101, step.n), room: backdropRoom(step.chapter), tier: backdropTier(save),
+    layers: backdropLayers(save), career: true,
     decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
   };
 }
@@ -326,7 +352,8 @@ export function skipPenaltyNow(save) {
 export function freeArgs(save, forcedSeed = null) {
   const { holdFactors, roughReductions } = masteryTables(save);
   return {
-    unlockedTools: [...economyFromSave(save).unlockedTools], room: 'studio', tier: backdropTier(save), holdFactors, roughReductions,
+    unlockedTools: [...economyFromSave(save).unlockedTools], room: 'studio', tier: backdropTier(save),
+    layers: backdropLayers(save), holdFactors, roughReductions,
     ...(Number.isFinite(forcedSeed) && forcedSeed > 0 ? { seed: forcedSeed } : {}),
   };
 }
