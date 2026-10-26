@@ -572,3 +572,134 @@ export function faceMood(cleared, total, healed = false) {
   if (f < 0.8) return 'meh';
   return 'happy';
 }
+
+// ---- Zoom and pan (T1.4, SPEC D9: the whole face is the default view; zoom is an optional extra) ----
+// A view is {z, x, y}: z = zoom (1 = the whole scene), x, y = the scene point at the top left corner of the canvas.
+// Every pointer goes through screenToScene and every drawing through the same view, so hits stay right at any zoom.
+
+/** The largest zoom (the smallest is 1, the whole face). */
+export const ZOOM_MAX = 3;
+/** How much one press of + or - (or one key press) zooms. */
+export const ZOOM_STEP = 1.4;
+
+/** The view that shows the whole scene (zoom 1). @returns {{z: number, x: number, y: number}} the view */
+export function fullView() {
+  return { z: 1, x: 0, y: 0 };
+}
+
+/**
+ * Turn a point on the canvas (CSS px from its top left) into scene px.
+ * @param {{z: number, x: number, y: number}} view the view
+ * @param {number} sx screen x
+ * @param {number} sy screen y
+ * @returns {{x: number, y: number}} the scene point
+ */
+export function screenToScene(view, sx, sy) {
+  return { x: view.x + sx / view.z, y: view.y + sy / view.z };
+}
+
+/**
+ * Turn a scene point into canvas CSS px (the opposite of screenToScene).
+ * @param {{z: number, x: number, y: number}} view the view
+ * @param {number} x scene x
+ * @param {number} y scene y
+ * @returns {{x: number, y: number}} the screen point
+ */
+export function sceneToScreen(view, x, y) {
+  return { x: (x - view.x) * view.z, y: (y - view.y) * view.z };
+}
+
+/**
+ * Keep a view sensible: zoom between 1 and ZOOM_MAX, never showing anything outside the scene, and (when a face is
+ * given) the middle of the view stays over the face's oval, so panning can never lose the face.
+ * @param {{z: number, x: number, y: number}} view the wished view
+ * @param {number} w scene width
+ * @param {number} h scene height
+ * @param {{cx: number, cy: number, rx: number, ry: number}|null} [face] the face oval
+ * @returns {{z: number, x: number, y: number}} the allowed view
+ */
+export function clampView(view, w, h, face = null) {
+  const z = clamp(Number.isFinite(view.z) ? view.z : 1, 1, ZOOM_MAX);
+  const vw = w / z;
+  const vh = h / z;
+  let mx = (Number.isFinite(view.x) ? view.x : 0) + vw / 2; // the middle of the view, in scene px
+  let my = (Number.isFinite(view.y) ? view.y : 0) + vh / 2;
+  if (face) {
+    mx = clamp(mx, face.cx - face.rx, face.cx + face.rx);
+    my = clamp(my, face.cy - face.ry, face.cy + face.ry);
+  }
+  return { z, x: clamp(mx - vw / 2, 0, w - vw), y: clamp(my - vh / 2, 0, h - vh) };
+}
+
+/**
+ * Zoom by a factor round a point on the screen (that point stays under the finger, mouse or button centre).
+ * @param {{z: number, x: number, y: number}} view the view now
+ * @param {number} factor more than 1 = closer
+ * @param {number} sx screen x of the fixed point
+ * @param {number} sy screen y of the fixed point
+ * @param {number} w scene width
+ * @param {number} h scene height
+ * @param {object|null} [face] the face oval (see clampView)
+ * @returns {{z: number, x: number, y: number}} the new view
+ */
+export function zoomAt(view, factor, sx, sy, w, h, face = null) {
+  const z = clamp(view.z * factor, 1, ZOOM_MAX);
+  const at = screenToScene(view, sx, sy);
+  return clampView({ z, x: at.x - sx / z, y: at.y - sy / z }, w, h, face);
+}
+
+/**
+ * Slide the view by a distance on the screen (dragging right shows more of the left side).
+ * @param {{z: number, x: number, y: number}} view the view now
+ * @param {number} dx screen px moved right
+ * @param {number} dy screen px moved down
+ * @param {number} w scene width
+ * @param {number} h scene height
+ * @param {object|null} [face] the face oval (see clampView)
+ * @returns {{z: number, x: number, y: number}} the new view
+ */
+export function panView(view, dx, dy, w, h, face = null) {
+  return clampView({ z: view.z, x: view.x - dx / view.z, y: view.y - dy / view.z }, w, h, face);
+}
+
+/**
+ * Two-finger pinch: the view when the fingers started at a0, b0 (screen px) and are now at a1, b1. The zoom follows
+ * the spread of the fingers, and the scene point that was between them stays between them (so it also pans).
+ * @param {{z: number, x: number, y: number}} start the view when the pinch began
+ * @param {{x: number, y: number}} a0 first finger at the start
+ * @param {{x: number, y: number}} b0 second finger at the start
+ * @param {{x: number, y: number}} a1 first finger now
+ * @param {{x: number, y: number}} b1 second finger now
+ * @param {number} w scene width
+ * @param {number} h scene height
+ * @param {object|null} [face] the face oval (see clampView)
+ * @returns {{z: number, x: number, y: number}} the new view
+ */
+export function pinchView(start, a0, b0, a1, b1, w, h, face = null) {
+  const d0 = Math.max(1, Math.hypot(b0.x - a0.x, b0.y - a0.y));
+  const d1 = Math.max(1, Math.hypot(b1.x - a1.x, b1.y - a1.y));
+  const z = clamp(start.z * (d1 / d0), 1, ZOOM_MAX);
+  const at = screenToScene(start, (a0.x + b0.x) / 2, (a0.y + b0.y) / 2);
+  const mx = (a1.x + b1.x) / 2;
+  const my = (a1.y + b1.y) / 2;
+  return clampView({ z, x: at.x - mx / z, y: at.y - my / z }, w, h, face);
+}
+
+/**
+ * Keep the zoom when the scene changes size (window resized, phone turned): the same spot of the face stays in the
+ * middle of the view, moved with the face map (see faceMap), then the view is checked again for the new size.
+ * @param {{z: number, x: number, y: number}} view the view before
+ * @param {number} oldW old scene width
+ * @param {number} oldH old scene height
+ * @param {{s: number, tx: number, ty: number}|null} move how scene points moved (null = they did not)
+ * @param {number} w new scene width
+ * @param {number} h new scene height
+ * @param {object|null} [face] the new face oval
+ * @returns {{z: number, x: number, y: number}} the new view
+ */
+export function refitView(view, oldW, oldH, move, w, h, face = null) {
+  const m = move ?? { s: 1, tx: 0, ty: 0 };
+  const cx = (view.x + oldW / view.z / 2) * m.s + m.tx;
+  const cy = (view.y + oldH / view.z / 2) * m.s + m.ty;
+  return clampView({ z: view.z, x: cx - w / view.z / 2, y: cy - h / view.z / 2 }, w, h, face);
+}

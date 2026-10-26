@@ -21,12 +21,20 @@ export const HAIR = { black: '#2a211d', brown: '#6e4528', blonde: '#e2b553', gin
 export const CHARACTERS = {
   heroine: { skin: 'light', hair: 'bun', hairColor: 'brown', outfit: 'everyday', build: 'slim', lashes: true, nose: 'button', eyeColor: '#4d8a5a' },
   husband: { skin: 'tan', hair: 'tuft', hairColor: 'black', beard: true, outfit: 'hoodie', build: 'stocky', nose: 'round', eyeColor: '#5d4030' },
+  // Support group (strip 3 on). size = height compared with the heroine (multiplies scale).
+  greta: { skin: 'fair', hair: 'topknot', hairColor: '#f4f1ea', glasses: '#8e5bd0', outfit: 'cardigan', build: 'round', lashes: true, nose: 'round', eyeColor: '#5b7ce6', size: 0.92 },
+  nils: { skin: 'olive', hair: 'bald', hairColor: 'ginger', beard: true, outfit: 'flannel', build: 'lanky', nose: 'round', eyeColor: '#4d8a5a', size: 1.16 },
+  penny: { skin: 'deep', hair: 'bob', hairColor: 'pink', outfit: 'sunny', build: 'slim', lashes: true, nose: 'button', eyeColor: '#5d4030', size: 0.84 },
+  // The hygiene inspector (strip 5 on): neat combover, tiny moustache, drab suit and tie; holds a clipboard or magnifier.
+  inspector: { skin: 'brown', hair: 'combover', hairColor: 'grey', moustache: true, outfit: 'suit', build: 'lanky', nose: 'round', eyeColor: '#5d4030', size: 1.04 },
 };
 
 /** Body shapes: half widths of shoulders and hips, belly bulge, head size. */
 const BUILDS = {
   slim: { shoulder: 80, hip: 74, belly: 4, head: 1 },
   stocky: { shoulder: 100, hip: 94, belly: 26, head: 1.04 },
+  round: { shoulder: 90, hip: 100, belly: 34, head: 1 },
+  lanky: { shoulder: 84, hip: 68, belly: 0, head: 0.95 },
 };
 
 /** Clothes. top/pants/shoes colours; sleeve long or short; extras: apron, hood, dots, stripes, armor, vneck. */
@@ -38,6 +46,10 @@ export const OUTFITS = {
   hoodie: { top: '#6a7be6', pants: '#7d8597', shoes: '#e8e4dc', sleeve: 'long', hood: true },
   stripes: { top: '#9fd3c7', pants: '#9fd3c7', shoes: '#6a7be6', sleeve: 'long', stripes: '#ffffff' },
   armor: { top: '#c9d3de', pants: '#c9d3de', shoes: '#9aa6b4', sleeve: 'long', armor: true },
+  cardigan: { top: '#9b7fd1', pants: '#6e5a8a', shoes: '#c9473f', sleeve: 'long', vneck: true, dots: '#b9a6f0' },
+  flannel: { top: '#c9473f', pants: '#4a5c9a', shoes: '#6e4528', sleeve: 'long', stripes: '#9e2f2a' },
+  sunny: { top: '#ffd25a', pants: '#3fae8c', shoes: '#e66a8f', sleeve: 'short', dots: '#ffffff' },
+  suit: { top: '#8c8a66', pants: '#64634a', shoes: '#3a2f28', sleeve: 'long', tie: '#e8505b' },
 };
 
 /** Faces. eyes: open wide side half arc closed sad squint; brows: flat up high worried angry sly; mouth: smile grin
@@ -73,7 +85,7 @@ export const POSES = {
 };
 
 /** Things a figure can hold in the right hand. */
-export const HOLDS = ['remote', 'torch', 'phone', 'snack'];
+export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves'];
 
 let gid = 0; // counter for unique gradient ids
 
@@ -243,6 +255,68 @@ function extras(e, r) {
   return g;
 }
 
+/** More hair styles: back(fill, col) draws behind the head, front(fill, col) over it; each returns SVG nodes. */
+const HAIRDOS = {
+  topknot: {
+    /** Greta: a tidy cap of hair and a big round bun on top. @param {string} fill @param {string} col @returns {SVGElement[]} */
+    back: (fill, col) => [
+      el('path', { d: 'M-110 0 C-128 -140 128 -140 110 0 C112 30 104 50 96 56 L-96 56 C-104 50 -112 30 -110 0Z', fill, ...ink() }),
+      el('circle', { cx: 0, cy: -150, r: 60, fill, ...ink() }),
+      line('M-30 -170 Q0 -192 30 -170 M-36 -146 Q0 -124 36 -146', 4, { stroke: tint(col, -0.25), opacity: 0.7 }),
+    ],
+    /** Greta's front: hair swept back with a middle parting. @param {string} fill @param {string} col @returns {SVGElement[]} */
+    front: (fill, col) => [
+      el('path', { d: 'M-106 -10 C-112 -100 -40 -128 0 -124 C40 -128 112 -100 106 -10 C96 -60 50 -82 4 -70 C-46 -82 -96 -60 -106 -10Z', fill, ...ink() }),
+      line('M0 -122 L2 -74 M-70 -88 Q-40 -104 -14 -100 M70 -88 Q40 -104 16 -100', 4, { stroke: tint(col, -0.25), opacity: 0.7 }),
+    ],
+  },
+  bob: {
+    /** Penny: a round bob down to the chin. @param {string} fill @param {string} col @returns {SVGElement[]} */
+    back: (fill) => [el('path', { d: 'M-122 -10 C-140 -170 140 -170 122 -10 C126 40 128 76 112 92 L-112 92 C-128 76 -126 40 -122 -10Z', fill, ...ink() })],
+    /** Penny's front: a straight blunt fringe and side pieces. @param {string} fill @param {string} col @returns {SVGElement[]} */
+    front: (fill, col) => [
+      el('path', { d: 'M-112 -8 C-116 -110 -50 -138 0 -136 C50 -138 116 -110 112 -8 L104 -52 Q0 -40 -104 -52Z', fill, ...ink() }),
+      el('path', { d: 'M-112 -30 C-118 20 -116 70 -106 92 L-80 92 C-90 60 -92 10 -90 -30Z M112 -30 C118 20 116 70 106 92 L80 92 C90 60 92 10 90 -30Z', fill, ...ink(5) }),
+      line('M-60 -110 Q-10 -124 40 -114', 4, { stroke: tint(col, 0.35), opacity: 0.8 }),
+    ],
+  },
+  combover: {
+    /** The inspector: short neat sides behind the ears. @param {string} fill @returns {SVGElement[]} */
+    back: (fill) => [el('path', { d: 'M-112 -10 C-122 -60 -100 -96 -76 -100 L-80 40 L-108 40Z M112 -10 C122 -60 100 -96 76 -100 L80 40 L108 40Z', fill, ...ink(5) })],
+    /** The inspector's front: a few strands combed over a shiny top, with a hard side parting. @param {string} fill @param {string} col @returns {SVGElement[]} */
+    front: (fill, col) => [
+      line('M-40 -96 Q-10 -110 20 -106', 7, { stroke: '#ffffff', opacity: 0.5 }),
+      el('path', { d: 'M-108 -6 C-116 -50 -104 -84 -64 -100 C-20 -118 50 -116 96 -86 C70 -92 30 -96 -10 -88 C-50 -80 -80 -60 -86 -4Z', fill, ...ink(5) }),
+      line('M-60 -94 Q0 -110 70 -92 M-70 -78 Q-10 -96 60 -84', 3.5, { stroke: tint(col, -0.25), opacity: 0.7 }),
+    ],
+  },
+  bald: {
+    /** Nils: nothing behind the head. @returns {SVGElement[]} */
+    back: () => [],
+    /** Nils's front: a shiny top and two tufts over the ears. @param {string} fill @returns {SVGElement[]} */
+    front: (fill) => [
+      line('M-50 -88 Q-20 -104 14 -100', 7, { stroke: '#ffffff', opacity: 0.55 }),
+      el('path', { d: 'M-108 -4 C-118 -40 -104 -70 -80 -76 C-92 -50 -90 -24 -84 0Z M108 -4 C118 -40 104 -70 80 -76 C92 -50 90 -24 84 0Z', fill, ...ink(5) }),
+    ],
+  },
+};
+
+/**
+ * Round glasses over the eyes (big, cartoon, see-through).
+ * @param {string} colour frame colour
+ * @returns {SVGElement} the glasses
+ */
+function glasses(colour) {
+  const g = el('g');
+  for (const s of [-1, 1]) {
+    g.appendChild(el('circle', { cx: s * 40, cy: 0, r: 34, fill: '#dff3ff', opacity: 0.35 }));
+    g.appendChild(el('circle', { cx: s * 40, cy: 0, r: 34, fill: 'none', stroke: colour, 'stroke-width': 7 }));
+    g.appendChild(line(`M${s * 74} -4 L${s * 102} -10`, 6, { stroke: colour }));
+  }
+  g.appendChild(line('M-8 -4 Q0 -12 8 -4', 6, { stroke: colour }));
+  return g;
+}
+
 /**
  * The hair behind the head (drawn before the face).
  * @param {object} c the character
@@ -251,6 +325,7 @@ function extras(e, r) {
  * @returns {SVGElement|null} back hair
  */
 function hairBack(c, col, parent) {
+  if (HAIRDOS[c.hair]) return el('g', {}, HAIRDOS[c.hair].back(shading(parent, col, 0.18, 0.2), col));
   if (c.hair !== 'bun') return null;
   const fill = shading(parent, col, 0.18, 0.2);
   return el('g', {}, [
@@ -275,7 +350,9 @@ function hairFront(c, col, parent) {
     g.appendChild(el('path', { d: 'M-106 -18 C-108 -104 -30 -134 30 -124 C86 -114 112 -70 106 -12 C92 -54 58 -76 18 -72 C-14 -58 -60 -40 -106 -18Z', fill, ...ink() }));
     g.appendChild(line('M-60 -98 Q-20 -112 26 -106', 4, { stroke: tint(col, 0.35), opacity: 0.8 }));
     g.appendChild(el('path', { d: 'M-106 -18 C-116 24 -112 64 -98 92 C-96 60 -94 20 -84 -6Z', fill, ...ink(5) }));
-  } else {
+  } else if (HAIRDOS[c.hair]) {
+    for (const n of HAIRDOS[c.hair].front(fill, col)) g.appendChild(n);
+  } else if (c.hair !== 'none') {
     g.appendChild(el('path', { d: 'M-104 -14 C-110 -96 -52 -130 0 -128 C58 -130 112 -96 104 -14 C94 -58 60 -82 10 -80 C-36 -84 -84 -64 -104 -14Z', fill, ...ink() }));
     g.appendChild(el('path', { d: 'M-8 -126 C-14 -170 26 -184 38 -160 C20 -166 8 -152 10 -128Z', fill, ...ink(5) }));
     g.appendChild(line('M-40 -110 Q0 -122 40 -112', 4, { stroke: tint(col, 0.3), opacity: 0.8 }));
@@ -308,12 +385,15 @@ function head(c, e) {
   for (const s of [-1, 1]) g.appendChild(el('ellipse', { cx: s * 60, cy: 36, rx: 22, ry: 14, fill: '#f06e7e', opacity: e.blush ? 0.5 : 0.22 }));
   const o = { look: c.look ?? 0, eyeColor: c.eyeColor, lashes: c.lashes, skinFill };
   for (const s of [-1, 1]) g.appendChild(eye(e.eyes, s * 38, 0, s, o));
+  if (c.glasses) g.appendChild(glasses(c.glasses));
   g.appendChild(c.nose === 'round'
     ? el('ellipse', { cx: 0, cy: 28, rx: 15, ry: 12, fill: tint(skin, -0.06), ...ink(4.5) })
     : line('M-6 24 Q2 34 8 26', 5));
   if (!armor) g.appendChild(hairFront(c, col, g));
   else if (c.beard) g.appendChild(hairFront({ ...c, hair: 'none' }, col, g).lastChild);
   g.appendChild(mouth(e.mouth, 62));
+  // A tiny clipped moustache under the nose (the inspector).
+  if (c.moustache) g.appendChild(el('path', { d: 'M-26 50 Q-24 38 -4 40 L0 44 L4 40 Q24 38 26 50 Q0 56 -26 50Z', fill: col, ...ink(4) }));
   // Brows go over the fringe, as in most cartoons, so raised brows always show.
   for (const s of [-1, 1]) g.appendChild(brow(e.brows, s * 38, -38, s, col));
   if (armor) g.appendChild(helmet(c));
@@ -332,6 +412,11 @@ function helmet(c) {
   const down = c.visor === 'down';
   g.appendChild(el('path', { d: 'M-128 70 C-140 -60 -90 -150 0 -152 C90 -150 140 -60 128 70 L104 70 C108 -20 70 -96 0 -98 C-70 -96 -108 -20 -104 70Z', fill: steel, ...ink() }));
   g.appendChild(el('path', { d: 'M-128 70 L-128 132 L-80 150 L-90 80Z M128 70 L128 132 L80 150 L90 80Z', fill: steel, ...ink() }));
+  // c.plumes: extra plumes as the armor gets fancier (running gag), fanned out behind the first one.
+  const fancy = ['#ffd25a', '#6a7be6', '#3fae8c', '#f27eb2'];
+  for (let i = 0; i < (c.plumes ?? 0); i += 1) {
+    g.appendChild(el('path', { d: 'M0 -152 C-30 -210 40 -250 90 -232 C50 -220 30 -190 24 -150Z', fill: fancy[i % 4], ...ink(5), transform: `rotate(${(i % 2 ? 1 : -1) * (28 + 22 * Math.floor(i / 2)) - 10} 6 -150)` }));
+  }
   g.appendChild(el('path', { d: 'M0 -152 C-30 -210 40 -250 90 -232 C50 -220 30 -190 24 -150Z', fill: '#e8505b', ...ink(5) }));
   g.appendChild(line('M0 -150 L0 -98', 5));
   if (down) {
@@ -343,6 +428,21 @@ function helmet(c) {
     g.appendChild(el('path', { d: 'M-110 -86 C-80 -150 80 -150 110 -86 L100 -66 C70 -112 -70 -112 -100 -66Z', fill: steel, ...ink(5) }));
   }
   for (const [x, y] of [[-112, 30], [112, 30], [-90, -110], [90, -110]]) g.appendChild(el('circle', { cx: x, cy: y, r: 5, fill: '#8a96a6' }));
+  if (c.cozy) {
+    // A knitted hat pulled over the helmet (Greta's gift): ribbed band, knit rows and a pompom.
+    g.appendChild(el('path', { d: 'M-122 -40 C-130 -150 -70 -196 0 -196 C70 -196 130 -150 122 -40Z', fill: c.cozy, ...ink() }));
+    for (const y of [-80, -120, -160]) g.appendChild(line(`M${-110 + (y + 40) * -0.25} ${y} Q0 ${y - 16} ${110 + (y + 40) * 0.25} ${y}`, 4, { stroke: tint(c.cozy, -0.2) }));
+    g.appendChild(el('rect', { x: -130, y: -60, width: 260, height: 40, rx: 18, fill: tint(c.cozy, 0.3), ...ink(5) }));
+    for (let x = -110; x <= 110; x += 22) g.appendChild(line(`M${x} -54 l0 28`, 3.5, { stroke: tint(c.cozy, -0.15) }));
+    g.appendChild(el('circle', { cx: 0, cy: -214, r: 34, fill: tint(c.cozy, 0.45), ...ink(5) }));
+  }
+  if (c.nightcap) {
+    // A long floppy night-cap over the helmet (bedtime armor, strip 4): stripes, drooping tip and a pompom.
+    g.appendChild(el('path', { d: 'M-108 -100 C-96 -214 60 -258 150 -204 C204 -170 226 -110 230 -36 L200 -40 C190 -110 156 -158 104 -148 L108 -100Z', fill: c.nightcap, ...ink() }));
+    for (const [x, y, x2, y2] of [[-60, -178, 40, -214], [96, -214, 130, -150], [168, -170, 214, -120]]) g.appendChild(line(`M${x} ${y} Q${(x + x2) / 2 + 10} ${(y + y2) / 2 - 16} ${x2} ${y2}`, 12, { stroke: '#ffffff', opacity: 0.75 }));
+    g.appendChild(el('rect', { x: -124, y: -122, width: 248, height: 40, rx: 18, fill: '#ffffff', ...ink(5) }));
+    g.appendChild(el('circle', { cx: 216, cy: -24, r: 32, fill: '#ffffff', ...ink(5) }));
+  }
   return g;
 }
 
@@ -384,6 +484,12 @@ function torso(c, b, out, sy, hy, parent) {
     inside.appendChild(el('rect', { x: -18, y: hy - 42, width: 36, height: 30, rx: 4, fill: '#ffd25a', ...ink(4) }));
   }
   if (out.vneck) inside.appendChild(el('path', { d: `M-34 ${sy - 2} L0 ${sy + 54} L34 ${sy - 2}`, fill: tint(out.top, -0.15), ...ink(5) }));
+  if (out.tie) {
+    // A suit: white shirt in a deep V, a tie, and jacket lapels.
+    inside.appendChild(el('path', { d: `M-44 ${sy - 2} L0 ${sy + 120} L44 ${sy - 2}Z`, fill: '#fbf8f0', ...ink(5) }));
+    inside.appendChild(el('path', { d: `M-12 ${sy + 4} L12 ${sy + 4} L8 ${sy + 22} L16 ${sy + 104} L0 ${sy + 124} L-16 ${sy + 104} L-8 ${sy + 22}Z`, fill: out.tie, ...ink(4) }));
+    for (const s of [-1, 1]) inside.appendChild(el('path', { d: `M${s * 44} ${sy - 2} L${s * 4} ${sy + 126} L${s * 30} ${sy + 60} L${s * 66} ${sy + 40}Z`, fill: tint(out.top, -0.1), ...ink(4.5) }));
+  }
   if (out.hood) g.appendChild(el('path', { d: `M${-sw + 20} ${sy + 6} Q0 ${sy + 50} ${sw - 20} ${sy + 6} Q${sw - 10} ${sy - 40} 0 ${sy - 30} Q${-sw + 10} ${sy - 40} ${-sw + 20} ${sy + 6}Z`, fill: tint(out.top, -0.1), ...ink(5) }));
   return g;
 }
@@ -492,12 +598,13 @@ function legs(kind, hy, b, out) {
 
 /**
  * Something small held in the right hand.
- * @param {string} what remote, torch, phone or snack
+ * @param {string} what remote, torch, phone, snack or tweezers
  * @param {number[]} at the hand
+ * @param {number} [k] size (the layer's holdScale, default 1; the torch ignores it)
  * @returns {SVGElement|null} the thing
  */
-function heldThing(what, at) {
-  const g = el('g', { transform: `translate(${at[0]} ${at[1]})` });
+function heldThing(what, at, k = 1) {
+  const g = el('g', { transform: `translate(${at[0]} ${at[1]}) scale(${k})` });
   if (what === 'remote') {
     g.appendChild(el('rect', { x: -14, y: -62, width: 28, height: 78, rx: 9, fill: '#3a3f4a', ...ink(4.5) }));
     g.appendChild(el('circle', { cx: 0, cy: -46, r: 6, fill: '#e8505b' }));
@@ -506,10 +613,53 @@ function heldThing(what, at) {
     g.appendChild(el('rect', { x: -16, y: -63, width: 32, height: 58, rx: 4, fill: '#8fe3ff' }));
   } else if (what === 'torch') {
     return el('g', { transform: `translate(${at[0]} ${at[1]})` }, [torchShape(true)]);
+  } else if (what === 'tweezers') {
+    // Steel tweezers standing up out of the fist, joined at the bottom, tips at the top (holdScale 3 = crowbar size).
+    for (const s of [-1, 1]) g.appendChild(el('path', { d: `M${s * 4} 34 L${s * 24} -122 L${s * 10} -126 L${s * -2} 30Z`, fill: '#d7dee7', ...ink(4) }));
+    g.appendChild(el('circle', { cx: 0, cy: 34, r: 9, fill: '#8a96a6', ...ink(3.5) }));
+    g.appendChild(line('M-14 -40 L-20 -100', 3, { stroke: '#ffffff', opacity: 0.8 }));
+  } else if (what === 'clipboard') {
+    // A clipboard held up by its bottom edge: brown board, paper with scribble lines and a ticked box, metal clip.
+    g.appendChild(el('rect', { x: -60, y: -176, width: 120, height: 170, rx: 10, fill: '#b07a4a', ...ink(4.5) }));
+    g.appendChild(el('rect', { x: -48, y: -158, width: 96, height: 140, rx: 3, fill: '#fffaf2', ...ink(3) }));
+    for (const y of [-126, -104, -82, -60]) g.appendChild(line(`M-34 ${y} L${y % 44 ? 30 : 20} ${y}`, 3.5, { opacity: 0.5 }));
+    g.appendChild(el('rect', { x: -36, y: -46, width: 16, height: 16, fill: 'none', ...ink(3) }));
+    g.appendChild(line('M-34 -40 l6 8 l14 -18', 3.5, { stroke: '#e8505b' }));
+    g.appendChild(el('rect', { x: -26, y: -186, width: 52, height: 24, rx: 6, fill: '#c9d3de', ...ink(4) }));
+  } else if (what === 'magnifier') {
+    // A magnifying glass: wooden handle down into the fist, a big ring with shiny glass on top.
+    g.appendChild(el('rect', { x: -10, y: -70, width: 20, height: 90, rx: 9, fill: '#8a5a32', ...ink(4.5) }));
+    g.appendChild(el('circle', { cx: 0, cy: -124, r: 58, fill: '#dff3ff', opacity: 0.55 }));
+    g.appendChild(el('circle', { cx: 0, cy: -124, r: 58, fill: 'none', stroke: '#c9a24a', 'stroke-width': 14 }));
+    g.appendChild(el('circle', { cx: 0, cy: -124, r: 66, fill: 'none', ...ink(4) }));
+    g.appendChild(el('circle', { cx: 0, cy: -124, r: 50, fill: 'none', ...ink(3) }));
+    g.appendChild(line('M-28 -146 Q-18 -164 4 -168', 6, { stroke: '#ffffff', opacity: 0.9 }));
+  } else if (what === 'gloves') {
+    g.appendChild(el('g', { transform: 'translate(0 18) scale(0.85)' }, [gloveBox()]));
   } else if (what === 'snack') {
     g.appendChild(el('path', { d: 'M-30 -70 L30 -70 L24 10 L-24 10Z', fill: '#f3a33a', ...ink(4.5) }));
     for (const [x, y] of [[-14, -78], [4, -84], [18, -76]]) g.appendChild(el('circle', { cx: x, cy: y, r: 11, fill: '#fff4c8', ...ink(3.5) }));
   } else return null;
+  return g;
+}
+
+/**
+ * A box of rubber gloves (the inspector's gift): blue and white card box, a glove picture on the front and a puffy
+ * glove popping out of the slot on top. Bottom middle at 0,0, about 190 units tall.
+ * @returns {SVGElement} the box
+ */
+function gloveBox() {
+  const g = el('g');
+  const blue = '#6fc3ef';
+  // The glove sticking out of the top: palm and four fingers, slightly puffed with air.
+  for (const [a, len] of [[-34, 54], [-12, 66], [10, 62], [32, 50]]) g.appendChild(el('rect', { x: -12, y: -len, width: 24, height: len, rx: 12, fill: blue, ...ink(4), transform: `translate(${a * 1.4 + 4} -150) rotate(${a * 0.6})` }));
+  g.appendChild(el('ellipse', { cx: 6, cy: -142, rx: 58, ry: 28, fill: blue, ...ink(4.5) }));
+  g.appendChild(el('rect', { x: -86, y: -140, width: 172, height: 140, rx: 8, fill: '#ffffff', ...ink(5) }));
+  g.appendChild(el('rect', { x: -86, y: -60, width: 172, height: 60, rx: 6, fill: tint(blue, -0.15), ...ink(4) }));
+  g.appendChild(el('rect', { x: -40, y: -152, width: 92, height: 18, rx: 9, fill: '#2b2f3a', ...ink(3) }));
+  // Glove picture on the front (no words: words go in bubbles) and a plus sign.
+  g.appendChild(el('path', { d: 'M-50 -72 L-50 -106 Q-50 -114 -44 -114 Q-38 -114 -38 -106 L-38 -120 Q-38 -128 -32 -128 Q-26 -128 -26 -120 L-26 -122 Q-26 -130 -20 -130 Q-14 -130 -14 -122 L-14 -114 Q-14 -120 -8 -120 Q-2 -120 -2 -112 L-2 -86 Q-2 -72 -16 -72Z', fill: blue, ...ink(3.5) }));
+  g.appendChild(el('path', { d: 'M38 -118 l0 44 M16 -96 l44 0', stroke: '#e8505b', 'stroke-width': 14, 'stroke-linecap': 'round' }));
   return g;
 }
 
@@ -544,7 +694,7 @@ export function drawCharacter(who, l) {
   const pose = POSES[c.pose] ?? POSES.stand;
   const out = OUTFITS[c.outfit] ?? OUTFITS.everyday;
   const b = BUILDS[c.build] ?? BUILDS.slim;
-  const s = c.scale ?? 1;
+  const s = (c.scale ?? 1) * (c.size ?? 1);
   const fx = c.flip ? -1 : 1;
   const body = el('g');
   const down = pose.down ?? 0;
@@ -567,7 +717,7 @@ export function drawCharacter(who, l) {
     pose.arms.forEach(([elb, hand], i) => {
       const side = i ? 1 : -1;
       const dy = [elb[1] + down, hand[1] + down];
-      const held = i === 1 && c.hold ? heldThing(c.hold, [hand[0], dy[1]]) : null;
+      const held = i === 1 && c.hold ? heldThing(c.hold, [hand[0], dy[1]], c.holdScale) : null;
       const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side, hold: !!held };
       body.appendChild(arm(shoulders[i], [elb[0], dy[0]], [hand[0], dy[1]], out, skinFill, o));
       if (held) {
@@ -577,6 +727,13 @@ export function drawCharacter(who, l) {
         body.appendChild(el('g', { transform: `translate(${hand[0]} ${dy[1]}) rotate(${turn}) scale(0.9)` }, [closedHand(out.armor ? '#aeb9c6' : skinFill, { side })]));
       }
     });
+  }
+  if (c.silhouette) {
+    // A flat dark shape of the figure (a big triumphant moment against rays): flood colour cut to the figure's outline.
+    const fid = `cf${gid += 1}`;
+    body.appendChild(el('defs', {}, [el('filter', { id: fid }, [
+      el('feFlood', { 'flood-color': c.silhouette === true ? INK : c.silhouette }), el('feComposite', { in2: 'SourceAlpha', operator: 'in' })])]));
+    body.setAttribute('filter', `url(#${fid})`);
   }
   const node = el('g', { transform: `translate(${c.x ?? 0} ${c.y ?? 0}) scale(${fx * s} ${s}) translate(0 ${shift})` }, [body]);
   const my = headY + h.mouthY * b.head + shift;
@@ -741,7 +898,132 @@ export const ROOMS = {
     wall: ['#2a2b55', '#3d3c72'], stripes: '#33336a', skirting: '#4b4a86', floor: '#3a2f4f', boards: '#2c2340',
     sky: ['#10153a', '#2a3470'], moon: true, stars: true, curtains: '#7b6ad8', picture: false, plant: false, lamp: false,
   },
+  // Kitchen (breakfast, strip 2): sunny yellow wall, pale tiled floor, green curtains, the plant on the floor.
+  kitchen: {
+    wall: ['#fff2c9', '#ffe2a0'], stripes: '#fbe7b4', skirting: '#ffffff', floor: '#e6d2bc', boards: '#cbb197',
+    sky: ['#ffd9a8', '#dff4ff'], cloud: true, curtains: '#6fbf4c', picture: false, plant: true, lamp: false,
+  },
+  // Community hall (support group): pale green paint, grey lino, a notice board, the plant in the corner.
+  hall: {
+    wall: ['#e2eed3', '#cfe2bf'], stripes: '#d6e7c6', skirting: '#f4f8ee', floor: '#b9c3cf', boards: '#a2adbb',
+    sky: ['#8fd3ff', '#dff4ff'], cloud: true, curtains: '#f2c14e', picture: false, plant: true, lamp: false, board: true,
+  },
+  // Her first studio, tier 0 (strip 5 on), matching the game's dingy room (pop/backdrop.js): greenish grey paint with
+  // stains and peeling bits, grimy tiles, a sagging ceiling with a leak, a bare flickering bulb, a door, the "Clean!"
+  // sign (a tick and sparkles; the word goes in a bubble) and a cheap lamp. Options: leakX, bulbX, signX, signTilt,
+  // doorX, doorOpen, leak/bulb/sign/door false to hide one.
+  studio: {
+    wall: ['#8e9b83', '#7b8872'], stripes: '#86937c', skirting: '#5f6a56', floor: '#4f5648', boards: '#3c4237',
+    sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: true, lamp: true,
+    shabby: true, leak: true, bulb: true, sign: true, door: true,
+  },
 };
+
+/**
+ * The dingy studio's wall (tier 0): grimy tiles low down, water stains, peeling paint, cracks, a door and a sagging
+ * ceiling patch with a drop hanging from it. Drawn into the room before the window.
+ * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
+ * @returns {void}
+ */
+function shabbyWall(g, r, w, F) {
+  const k = Math.min(F / 600, w / 1000);
+  const t = 52 * k; // tile size
+  const top = F - 22 - t * 4;
+  g.appendChild(el('rect', { x: 0, y: top, width: w, height: F - 22 - top, fill: '#b4bba1' }));
+  for (let y = top; y < F - 22; y += t) {
+    for (let x = Math.round((y - top) / t) % 2 ? -t / 2 : 0; x < w; x += t) {
+      const n = (Math.round(x / t) * 7 + Math.round(y / t) * 3) % 11;
+      if (n === 4) g.appendChild(el('rect', { x, y, width: t, height: t, fill: '#5d6650' })); // a missing tile
+      else if (n % 3 === 0) g.appendChild(el('rect', { x: x + 2, y: y + 2, width: t - 4, height: t - 4, fill: '#a3ab8f' }));
+      if (n === 7) g.appendChild(line(`M${x + t * 0.2} ${y + 2} l${t * 0.25} ${t * 0.4} l${-t * 0.1} ${t * 0.3} l${t * 0.2} ${t * 0.3}`, 3, { stroke: '#3f463a' }));
+    }
+  }
+  for (let y = top; y <= F - 22; y += t) g.appendChild(line(`M0 ${y} L${w} ${y}`, 3, { stroke: '#6c7560' }));
+  g.appendChild(el('rect', { x: 0, y: top - 8, width: w, height: 10, fill: '#9aa287', ...ink(3) }));
+  // Olive-brown water stains (never anything like blood), peeling flakes and cracks.
+  const sid = `cst${gid += 1}`;
+  g.appendChild(el('defs', {}, [el('radialGradient', { id: sid }, [el('stop', { offset: 0, 'stop-color': '#786834', 'stop-opacity': 0.12 }), el('stop', { offset: 0.8, 'stop-color': '#786834', 'stop-opacity': 0.3 }), el('stop', { offset: 1, 'stop-color': '#786834', 'stop-opacity': 0 })])]));
+  for (const [fx, fy, rr] of [[0.12, 0.3, 90], [0.46, 0.55, 70], [0.86, 0.38, 110], [0.64, 0.18, 60]]) g.appendChild(el('ellipse', { cx: w * fx, cy: F * fy, rx: rr * k, ry: rr * k * 0.8, fill: `url(#${sid})` }));
+  for (const [fx, fy, s] of [[0.3, 0.22, 1], [0.56, 0.36, 0.8], [0.93, 0.6, 0.9], [0.06, 0.62, 0.7]]) {
+    const x = w * fx;
+    const y = F * fy;
+    const q = 40 * k * s;
+    g.appendChild(el('path', { d: `M${x} ${y} l${q} ${-q * 0.3} l${q * 0.4} ${q * 0.7} l${-q * 0.6} ${q * 0.5} l${-q * 0.7} ${-q * 0.2}Z`, fill: '#b8b29a', ...ink(3) }));
+    g.appendChild(el('path', { d: `M${x + q * 1.4} ${y + q * 0.4} q${q * 0.4} ${-q * 0.3} ${q * 0.2} ${-q * 0.8}`, fill: '#d6d0b4', ...ink(3) }));
+  }
+  for (const [fx, fy, len] of [[0.97, 0, 0.4], [0.03, 0.3, 0.3], [0.4, 0.04, 0.2]]) {
+    const x = w * fx;
+    const y = F * fy;
+    const d = F * len;
+    g.appendChild(line(`M${x} ${y} l${-d * 0.1} ${d * 0.3} l${d * 0.12} ${d * 0.2} l${-d * 0.08} ${d * 0.25} l${d * 0.1} ${d * 0.25}`, 3.5, { stroke: '#3f463a' }));
+  }
+  if (r.door) {
+    // A tired wooden door, open (dark doorway, the door leaf swung in) or shut (scuffed, with a knob).
+    const dh = F * 0.84;
+    const dw = Math.min(dh * 0.48, 300 * k);
+    const dx = w * (r.doorX ?? 0.12) - dw / 2;
+    const dy = F - dh;
+    g.appendChild(el('rect', { x: dx - 14 * k, y: dy - 14 * k, width: dw + 28 * k, height: dh + 14 * k, fill: '#7a6a50', ...ink(5) }));
+    g.appendChild(el('rect', { x: dx, y: dy, width: dw, height: dh, fill: r.doorOpen ? '#3a3f36' : '#9a7a52', ...ink(5) }));
+    if (r.doorOpen) {
+      g.appendChild(el('path', { d: `M${dx} ${dy} L${dx + dw * 0.28} ${dy + dh * 0.06} L${dx + dw * 0.28} ${F - dh * 0.03} L${dx} ${F}Z`, fill: '#9a7a52', ...ink(5) }));
+      g.appendChild(el('path', { d: `M${dx + dw * 0.28} ${F} L${dx + dw * 1.3} ${F + 60 * k} L${dx + dw * 1.6} ${F + 60 * k} L${dx + dw} ${F}Z`, fill: '#e8dfb0', opacity: 0.35 }));
+    } else {
+      for (const fy of [0.12, 0.56]) g.appendChild(el('rect', { x: dx + dw * 0.16, y: dy + dh * fy, width: dw * 0.68, height: dh * 0.32, rx: 6, fill: 'none', ...ink(3.5), opacity: 0.6 }));
+      g.appendChild(el('circle', { cx: dx + dw * 0.84, cy: dy + dh * 0.55, r: 10 * k, fill: '#c9a24a', ...ink(3) }));
+    }
+  }
+  if (r.leak) {
+    // The sagging ceiling: a damp bulge with stain rings, and a fat drop hanging under it.
+    const lx = w * (r.leakX ?? 0.5);
+    const s = 150 * k;
+    g.appendChild(el('path', { d: `M${lx - s * 1.4} 0 Q${lx - s * 0.8} ${s * 0.1} ${lx - s * 0.5} ${s * 0.32} Q${lx} ${s * 0.6} ${lx + s * 0.5} ${s * 0.32} Q${lx + s * 0.8} ${s * 0.1} ${lx + s * 1.4} 0Z`, fill: '#a39e7c', ...ink(5) }));
+    g.appendChild(el('ellipse', { cx: lx, cy: s * 0.22, rx: s * 0.6, ry: s * 0.14, fill: '#786834', opacity: 0.35 }));
+    g.appendChild(line(`M${lx - s * 0.9} ${s * 0.14} Q${lx} ${s * 0.4} ${lx + s * 0.9} ${s * 0.14}`, 3, { stroke: '#786834', opacity: 0.6 }));
+    g.appendChild(el('path', { d: `M${lx} ${s * 0.44} C${lx + 14 * k} ${s * 0.44 + 22 * k} ${lx + 14 * k} ${s * 0.44 + 38 * k} ${lx} ${s * 0.44 + 38 * k} C${lx - 14 * k} ${s * 0.44 + 38 * k} ${lx - 14 * k} ${s * 0.44 + 22 * k} ${lx} ${s * 0.44}Z`, fill: '#9ad8ff', ...ink(3.5) }));
+  }
+}
+
+/**
+ * The dingy studio's things in front of the wall: the bare bulb on its cord (with flicker marks) and the "Clean!"
+ * sign hanging crooked from a nail (a tick and sparkles, plus a stain that says otherwise).
+ * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
+ * @returns {void}
+ */
+function shabbyFront(g, r, w, F) {
+  const k = Math.min(F / 600, w / 1000);
+  if (r.sign) {
+    const sx = w * (r.signX ?? 0.72);
+    const sy = F * 0.12;
+    const sw = 250 * k;
+    const sh = 130 * k;
+    const sg = el('g', { transform: `rotate(${r.signTilt ?? -7} ${sx} ${sy})` });
+    sg.appendChild(line(`M${sx} ${sy} L${sx - sw * 0.4} ${sy + 40 * k} M${sx} ${sy} L${sx + sw * 0.4} ${sy + 40 * k}`, 3.5));
+    sg.appendChild(el('rect', { x: sx - sw / 2, y: sy + 40 * k, width: sw, height: sh, rx: 10 * k, fill: '#f6f1de', ...ink(5) }));
+    sg.appendChild(el('ellipse', { cx: sx + sw * 0.3, cy: sy + 40 * k + sh * 0.72, rx: 30 * k, ry: 18 * k, fill: '#786834', opacity: 0.35 }));
+    sg.appendChild(line(`M${sx - sw * 0.28} ${sy + 40 * k + sh * 0.5} l${sw * 0.12} ${sh * 0.24} l${sw * 0.26} ${-sh * 0.46}`, 14 * k, { stroke: '#3fae8c' }));
+    for (const [fx, fy, q] of [[0.26, 0.3, 22], [0.36, 0.7, 14], [-0.38, 0.28, 12]]) {
+      const cx = sx + sw * fx;
+      const cy = sy + 40 * k + sh * fy;
+      const z = q * k;
+      g.appendChild(el('path', { d: `M${cx} ${cy - z} Q${cx + z * 0.2} ${cy - z * 0.2} ${cx + z} ${cy} Q${cx + z * 0.2} ${cy + z * 0.2} ${cx} ${cy + z} Q${cx - z * 0.2} ${cy + z * 0.2} ${cx - z} ${cy} Q${cx - z * 0.2} ${cy - z * 0.2} ${cx} ${cy - z}Z`, fill: '#ffe27a', ...ink(2.5), transform: `rotate(${r.signTilt ?? -7} ${sx} ${sy})` }));
+    }
+    sg.appendChild(el('circle', { cx: sx, cy: sy, r: 7 * k, fill: '#8a96a6', ...ink(3) }));
+    g.appendChild(sg);
+  }
+  if (r.bulb) {
+    // A bare bulb on a cord from the ceiling, a weak yellow glow and little flicker marks.
+    const bx = w * (r.bulbX ?? 0.32);
+    const by = F * 0.2;
+    const gl = `cbg${gid += 1}`;
+    g.appendChild(el('defs', {}, [el('radialGradient', { id: gl }, [el('stop', { offset: 0, 'stop-color': '#ffe496', 'stop-opacity': 0.55 }), el('stop', { offset: 1, 'stop-color': '#ffe496', 'stop-opacity': 0 })])]));
+    g.appendChild(el('circle', { cx: bx, cy: by, r: 170 * k, fill: `url(#${gl})` }));
+    g.appendChild(line(`M${bx} 0 L${bx} ${by - 24 * k}`, 4));
+    g.appendChild(el('rect', { x: bx - 11 * k, y: by - 34 * k, width: 22 * k, height: 18 * k, fill: '#8d9389', ...ink(3.5) }));
+    g.appendChild(el('ellipse', { cx: bx, cy: by, rx: 20 * k, ry: 24 * k, fill: '#fff2bf', ...ink(4) }));
+    for (const s of [-1, 1]) g.appendChild(line(`M${bx + s * 34 * k} ${by - 10 * k} l${s * 14 * k} ${-6 * k} l${-s * 4 * k} ${12 * k} l${s * 14 * k} ${-6 * k}`, 3.5, { stroke: '#e8b830' }));
+  }
+}
 
 /**
  * A room filling the panel: wall with soft stripes, floor boards, a window with curtains (sky, cloud or moon and
@@ -768,6 +1050,7 @@ function room(l) {
   for (const f of [0.18, 0.42, 0.72]) g.appendChild(el('path', { d: `M0 ${F + (h - F) * f} L${w} ${F + (h - F) * f}`, stroke: r.boards, 'stroke-width': 4 }));
   for (let x = 120; x < w; x += 260) g.appendChild(el('path', { d: `M${x} ${F + (h - F) * 0.18} l0 ${(h - F) * 0.24} M${x + 130} ${F + (h - F) * 0.42} l0 ${(h - F) * 0.3}`, stroke: r.boards, 'stroke-width': 4 }));
   g.appendChild(el('rect', { y: F - 22, width: w, height: 24, fill: r.skirting, ...ink(4) }));
+  if (r.shabby) shabbyWall(g, r, w, F);
   // The window.
   const ww = Math.min(w * 0.26, 360);
   const wh = F * 0.5;
@@ -783,6 +1066,12 @@ function room(l) {
     const cx = wx + ww * sx;
     const cy = wy + wh * sy;
     g.appendChild(el('path', { d: `M${cx} ${cy - 9} L${cx + 2.5} ${cy - 2.5} L${cx + 9} ${cy} L${cx + 2.5} ${cy + 2.5} L${cx} ${cy + 9} L${cx - 2.5} ${cy + 2.5} L${cx - 9} ${cy} L${cx - 2.5} ${cy - 2.5}Z`, fill: '#fff6c8' }));
+  }
+  if (l.outside) {
+    // Someone or something seen through the window (art layers in panel units), cut to the glass.
+    const oid = `co${gid += 1}`;
+    g.appendChild(el('defs', {}, [el('clipPath', { id: oid }, [el('rect', { x: wx, y: wy, width: ww, height: wh })])]));
+    g.appendChild(el('g', { 'clip-path': `url(#${oid})` }, l.outside.map((o) => ARTS[o.art](o).node)));
   }
   g.appendChild(el('path', { d: `M${wx + ww / 2} ${wy} l0 ${wh} M${wx} ${wy + wh * 0.5} l${ww} 0`, stroke: '#fff8ee', 'stroke-width': 12 }));
   g.appendChild(el('rect', { x: wx, y: wy, width: ww, height: wh, fill: 'none', stroke: '#fff8ee', 'stroke-width': 14 }));
@@ -813,7 +1102,37 @@ function room(l) {
       g.appendChild(el('ellipse', { cx: 0, cy: -len / 2, rx: 24, ry: len / 2, fill: a % 20 ? '#3fae8c' : '#59b85f', ...ink(4), transform: `translate(${px} ${F - 80}) rotate(${a})` }));
     }
     g.appendChild(el('path', { d: `M${px - 55} ${F - 90} L${px + 55} ${F - 90} L${px + 42} ${F + 20} L${px - 42} ${F + 20}Z`, fill: '#e8735a', ...ink(5) }));
+    if (l.plantEyes) {
+      // Running gag: the plant watches. Eyes on the pot: 'sad' (droopy lids), 'wide' (amazed) or 'smug' (half shut, smirk).
+      const k = l.plantEyes;
+      for (const s of [-1, 1]) {
+        g.appendChild(el('ellipse', { cx: px + s * 18, cy: F - 46, rx: 13, ry: k === 'wide' ? 18 : 14, fill: '#ffffff', ...ink(3.5) }));
+        g.appendChild(el('circle', { cx: px + s * 18, cy: F - (k === 'sad' ? 40 : 44), r: k === 'wide' ? 5 : 6.5, fill: INK }));
+        if (k !== 'wide') g.appendChild(el('path', { d: `M${px + s * 18 - 15} ${F - 50 + (k === 'sad' ? s * -4 : 0)} L${px + s * 18 + 15} ${F - 50 + (k === 'sad' ? s * 4 : 0)} L${px + s * 18 + 15} ${F - 62} L${px + s * 18 - 15} ${F - 62}Z`, fill: '#e8735a', ...ink(3.5) }));
+      }
+      if (k === 'smug') g.appendChild(line(`M${px - 14} ${F - 14} Q${px + 4} ${F - 4} ${px + 18} ${F - 20}`, 4));
+      if (k === 'wide') g.appendChild(el('ellipse', { cx: px, cy: F - 12, rx: 8, ry: 10, fill: INK }));
+    }
+    if (l.plantScarf) {
+      // Running gag: Greta has knitted the plant a scarf (striped, with a dangling end).
+      g.appendChild(el('path', { d: `M${px - 30} ${F - 150} Q${px} ${F - 130} ${px + 34} ${F - 152} L${px + 36} ${F - 120} Q${px} ${F - 98} ${px - 32} ${F - 118}Z`, fill: l.plantScarf, ...ink(4) }));
+      g.appendChild(el('path', { d: `M${px + 18} ${F - 120} L${px + 46} ${F - 50} L${px + 70} ${F - 60} L${px + 38} ${F - 126}Z`, fill: l.plantScarf, ...ink(4) }));
+      g.appendChild(line(`M${px - 10} ${F - 140} l0 30 M${px + 12} ${F - 142} l0 30 M${px + 36} ${F - 90} l20 -8`, 5, { stroke: '#ffffff', opacity: 0.8 }));
+    }
   }
+  if (r.board) {
+    // A cork notice board with pinned papers and doodles (no words: words go in bubbles).
+    const bx = w * (l.boardX ?? 0.26) - 130;
+    const by = F * 0.18;
+    g.appendChild(el('rect', { x: bx, y: by, width: 260, height: 180, rx: 6, fill: '#d9a86c', ...ink(6) }));
+    for (const [x, y, c, rot] of [[20, 18, '#fff8ee', -4], [110, 26, '#ffe27a', 5], [180, 90, '#bfe4fb', -6], [36, 100, '#ffd8e6', 3]]) {
+      g.appendChild(el('rect', { x: bx + x, y: by + y, width: 64, height: 62, fill: c, ...ink(3), transform: `rotate(${rot} ${bx + x + 32} ${by + y + 31})` }));
+      g.appendChild(el('circle', { cx: bx + x + 32, cy: by + y + 6, r: 6, fill: '#e8505b', ...ink(2) }));
+    }
+    g.appendChild(el('path', { d: `M${bx + 68} ${by + 126} c-10 -14 -30 0 0 18 c30 -18 10 -32 0 -18Z`, fill: '#e8505b' }));
+    g.appendChild(el('circle', { cx: bx + 142, cy: by + 58, r: 12, fill: '#f0a43a' }));
+  }
+  if (r.shabby) shabbyFront(g, r, w, F);
   if (r.lamp) {
     const lx = w * (l.lampX ?? 0.94);
     const gl = `cl${gid += 1}`;
@@ -848,8 +1167,106 @@ function rays(l) {
   return { node: g };
 }
 
+/**
+ * A folding chair seen from the front (metal frame, coloured seat and back). The seat is 125 units above the floor
+ * at scale 1, as figures sit; put it before a sitter (same x, y, scale) so the sitter covers the seat.
+ * @param {object} l layer: x, y (floor, middle), scale, color (seat and back)
+ * @returns {{node: SVGElement}} the chair
+ */
+function chair(l) {
+  const s = l.scale ?? 1;
+  const col = l.color ?? '#f0a43a';
+  const metal = '#8fa3b8';
+  const g = el('g');
+  for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx * 96 - 9, y: -440, width: 18, height: 440, rx: 8, fill: metal, ...ink(4) }));
+  g.appendChild(el('rect', { x: -112, y: -440, width: 224, height: 110, rx: 22, fill: col, ...ink(5) }));
+  g.appendChild(line('M-80 -404 Q0 -416 80 -404', 4, { stroke: '#ffffff', opacity: 0.5 }));
+  g.appendChild(line('M-80 -110 L80 0 M80 -110 L-80 0', 14, { stroke: INK }));
+  g.appendChild(line('M-80 -110 L80 0 M80 -110 L-80 0', 7, { stroke: metal }));
+  g.appendChild(el('rect', { x: -118, y: -138, width: 236, height: 30, rx: 12, fill: col, ...ink(5) }));
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${(l.flip ? -1 : 1) * s} ${s})` }, [g]) };
+}
+
+/**
+ * A big community-hall coffee urn on a little table, with a tap, a red light and a stack of paper cups.
+ * @param {object} l layer: x, y (floor, middle of the table), scale, steam (default true), table (default true)
+ * @returns {{node: SVGElement}} the urn
+ */
+function urn(l) {
+  const s = l.scale ?? 1;
+  const g = el('g');
+  const top = l.table === false ? 0 : -300;
+  if (l.table !== false) {
+    for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx * 150 - 10, y: top, width: 20, height: -top, fill: '#8a6a3a', ...ink(4) }));
+    g.appendChild(el('rect', { x: -190, y: top - 24, width: 380, height: 30, rx: 8, fill: '#c98f6b', ...ink(5) }));
+    g.appendChild(el('path', { d: `M-180 ${top + 6} L180 ${top + 6} L170 ${top + 60} L-170 ${top + 60}Z`, fill: '#ffffff', ...ink(4) }));
+    for (let x = -160; x < 170; x += 40) g.appendChild(el('rect', { x, y: top + 10, width: 20, height: 46, fill: '#e8505b', opacity: 0.35 }));
+  }
+  const b = top - 24;
+  const steel = shading(g, '#c9d3de', 0.35, 0.3);
+  g.appendChild(el('rect', { x: -100, y: b - 250, width: 140, height: 250, rx: 22, fill: steel, ...ink() }));
+  g.appendChild(el('path', { d: `M-96 ${b - 246} Q-30 ${b - 300} 36 ${b - 246}Z`, fill: steel, ...ink(5) }));
+  g.appendChild(el('circle', { cx: -30, cy: b - 286, r: 12, fill: INK }));
+  for (const sx of [-1, 1]) g.appendChild(el('path', { d: `M${-30 + sx * 70} ${b - 190} q${sx * 34} 0 ${sx * 34} 40 q0 40 ${-sx * 34} 40`, fill: 'none', ...ink(8) }));
+  g.appendChild(line(`M-80 ${b - 200} L-80 ${b - 60}`, 6, { stroke: '#ffffff', opacity: 0.6 }));
+  g.appendChild(el('rect', { x: -48, y: b - 64, width: 36, height: 22, rx: 6, fill: '#2b2f3a', ...ink(4) }));
+  g.appendChild(el('rect', { x: -38, y: b - 44, width: 16, height: 20, fill: '#2b2f3a', ...ink(4) }));
+  g.appendChild(el('circle', { cx: 10, cy: b - 140, r: 10, fill: '#ff4d5a', ...ink(3) }));
+  // Paper cups, stacked.
+  for (let i = 0; i < 4; i += 1) g.appendChild(el('path', { d: `M90 ${b - i * 16} L140 ${b - i * 16} L136 ${b - 30 - i * 16} L94 ${b - 30 - i * 16}Z`, fill: i % 2 ? '#fff8ee' : '#f3e6d4', ...ink(4) }));
+  if (l.steam !== false) for (const dx of [-50, -10]) g.appendChild(line(`M${dx} ${b - 300} q-16 -30 0 -60 q16 -30 0 -60`, 6, { stroke: '#ffffff', opacity: 0.8 }));
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${s})` }, [g]) };
+}
+
+/**
+ * A dented tin bucket catching the leak (strip 5 on): handle, a little water inside and ripple rings.
+ * @param {object} l layer: x, y (floor, middle), scale, ripple (default true)
+ * @returns {{node: SVGElement}} the bucket
+ */
+function bucket(l) {
+  const s = l.scale ?? 1;
+  const g = el('g');
+  const tin = shading(g, '#5f7f86', 0.25, 0.25);
+  g.appendChild(el('path', { d: 'M-96 -150 Q0 -260 96 -150', fill: 'none', ...ink(6) }));
+  g.appendChild(el('path', { d: 'M-90 -150 L90 -150 L72 0 L-72 0Z', fill: tin, ...ink() }));
+  g.appendChild(el('ellipse', { cx: 0, cy: -150, rx: 90, ry: 22, fill: '#3e555a', ...ink(5) }));
+  g.appendChild(el('ellipse', { cx: 0, cy: -146, rx: 74, ry: 14, fill: '#9ad8ff' }));
+  if (l.ripple !== false) for (const rr of [16, 34, 54]) g.appendChild(el('ellipse', { cx: 0, cy: -146, rx: rr, ry: rr * 0.22, fill: 'none', stroke: '#ffffff', 'stroke-width': 3, opacity: 0.85 }));
+  for (const y of [-110, -40]) g.appendChild(line(`M${-86 + (y + 150) * 0.12} ${y} L${86 - (y + 150) * 0.12} ${y}`, 4, { opacity: 0.4 }));
+  g.appendChild(el('path', { d: 'M30 -100 q14 10 4 26', fill: 'none', ...ink(4) })); // a dent
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${s})` }, [g]) };
+}
+
+/**
+ * A falling water drop (the leak) with motion lines above it; splash: true adds a small cartoon splash crown instead.
+ * @param {object} l layer: x, y (middle of the drop), r size (default 20), splash
+ * @returns {{node: SVGElement}} the drop
+ */
+function drip(l) {
+  const r = l.r ?? 20;
+  const g = el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0})` });
+  if (l.splash) {
+    for (const a of [-60, -30, 0, 30, 60]) g.appendChild(el('path', { d: `M0 0 L${-r * 0.3} ${-r * 1.6} Q0 ${-r * 2} ${r * 0.3} ${-r * 1.6}Z`, fill: '#9ad8ff', ...ink(3), transform: `rotate(${a})` }));
+    g.appendChild(el('ellipse', { cx: 0, cy: 0, rx: r * 1.4, ry: r * 0.4, fill: '#9ad8ff', ...ink(3) }));
+    return { node: g };
+  }
+  g.appendChild(el('path', { d: `M0 ${-r * 1.4} C${r * 0.8} ${-r * 0.2} ${r} ${r * 0.9} 0 ${r * 0.9} C${-r} ${r * 0.9} ${-r * 0.8} ${-r * 0.2} 0 ${-r * 1.4}Z`, fill: '#9ad8ff', ...ink(4) }));
+  g.appendChild(el('ellipse', { cx: -r * 0.3, cy: r * 0.1, rx: r * 0.18, ry: r * 0.3, fill: '#ffffff', opacity: 0.8 }));
+  for (const dx of [-0.5, 0.5]) g.appendChild(line(`M${dx * r} ${-r * 2} l0 ${-r * 1.2}`, 3.5, { opacity: 0.5 }));
+  return { node: g };
+}
+
+/**
+ * A box of rubber gloves on its own (the inspector's gift; "Gloves. Always gloves.").
+ * @param {object} l layer: x, y (bottom middle), scale, rotate
+ * @returns {{node: SVGElement}} the box
+ */
+function gloves(l) {
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) rotate(${l.rotate ?? 0}) scale(${l.scale ?? 1})` }, [gloveBox()]) };
+}
+
 /** Props, rooms and effects by name. */
-export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays };
+export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves };
 
 /** Every art piece a strip can name with `art:` (characters and props). Each takes the layer and returns { node, mouth? }. */
 export const ARTS = {
@@ -872,5 +1289,6 @@ export function checkArtLayer(l) {
   if (l.skin !== undefined && !(l.skin in SKIN)) errs.push(`unknown skin tone "${l.skin}"`);
   if (l.hairColor !== undefined && !(l.hairColor in HAIR)) errs.push(`unknown hair colour "${l.hairColor}"`);
   if (l.art === 'room' && !(l.kind in ROOMS)) errs.push(`unknown room "${l.kind}"`);
+  if (l.art === 'room' && l.outside) for (const o of l.outside) errs.push(...checkArtLayer(o).map((e) => `outside the window: ${e}`));
   return errs;
 }

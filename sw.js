@@ -30,6 +30,11 @@ const PRECACHE = [
   './js/data/comics/placeholder-strip.js',
   './js/data/comics/test-strip.js',
   './js/data/comics/strip-0.js',
+  './js/data/comics/strip-1.js',
+  './js/data/comics/strip-2.js',
+  './js/data/comics/strip-3.js',
+  './js/data/comics/strip-4.js',
+  './js/data/comics/strip-5.js',
   './js/pop/art.js',
   './js/pop/backdrop.js',
   './js/pop/engine.js',
@@ -42,7 +47,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache.

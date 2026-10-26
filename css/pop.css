@@ -146,3 +146,24 @@
   .pop-done { left: auto; right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); max-width: 26%; padding: 12px; }
   .pop-done__text { font-size: 1.05rem; }
 }
+
+/* Zoom buttons (T1.4): +, - and "whole face", 44 px round buttons in a column over the room. Portrait and desktop:
+   the top right of the stage (under the header, above the tool bar). Phone sideways: the left side, half way down,
+   between the title card and the hint card (the tools and the header buttons are on the right). Two fingers on the
+   face zoom too, so the canvas keeps touch-action: none. */
+.pop-zoom {
+  position: absolute; z-index: 2; top: 10px; right: max(10px, env(safe-area-inset-right)); display: grid; gap: 6px;
+}
+.pop-zoom[hidden] { display: none; }
+.pop-zoom__btn {
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 0; background: rgba(16, 42, 40, 0.78);
+  touch-action: manipulation;
+}
+.pop-zoom__btn:hover { background: rgba(40, 72, 68, 0.9); }
+.pop-zoom__btn svg { width: 22px; height: 22px; }
+.pop-zoom__btn:disabled { opacity: 0.4; cursor: default; }
+.pop-zoom__btn:disabled:hover { background: rgba(16, 42, 40, 0.78); }
+.pop-zoom--on .pop-zoom__reset { background: #5eead4; color: #062b2b; border-color: #fff; } /* lit while zoomed: the way back */
+@media (orientation: landscape) and (max-height: 600px) {
+  .pop-zoom { top: 50%; right: auto; left: calc(10px + env(safe-area-inset-left)); transform: translateY(-50%); }
+}

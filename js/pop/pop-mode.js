@@ -13,9 +13,12 @@
 // the cheeks. In a Story/Career round (career: true; the demo is free play unless the page has ?career) a full meter
 // is a fail (SPEC D15): the customer storms off and the player picks "Try again" (same customer, fresh face, no pay)
 // or "Next customer" (a reputation hit, a hook only until reputation exists). Free play never fails.
+// Zoom (T1.4): the whole face is always the start (SPEC D9). Optional zoom 1x to 3x with two fingers, the +, - and
+// "whole face" buttons, the mouse wheel, or the keys + - 0 and arrows (engine.js has the gesture rule). The room
+// behind zooms along. Every new customer starts at the whole face again.
 // Keyboard: Tab to the face, Enter or Space squeezes the next bump, peels or wipes. All text comes from t().
 // Nothing here is sent anywhere.
-import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn } from './logic.js';
+import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
 import { drawFace, randomFaceSpec } from './face.js';
@@ -174,7 +177,17 @@ export function createPopMode({
     button('pop-btn pop-btn--main', t('pop.fail.again'), () => newFace(true, true)),
     button('pop-btn', t('pop.fail.next'), () => nextAfterFail()),
   );
+  // Zoom buttons (T1.4, SPEC D9): the whole face is always the start; +, - and "whole face" are an optional extra
+  // for small bumps. They float over the room beside the face (pop.css). Two fingers, the wheel and keys do the same.
+  const zoomBox = el('div', 'pop-zoom');
+  zoomBox.setAttribute('role', 'toolbar');
+  zoomBox.setAttribute('aria-label', t('pop.zoom.group'));
+  const zoomIn = zoomButton('in', '<path d="M12 5v14M5 12h14"/>', () => current?.scene?.zoomBy(ZOOM_STEP));
+  const zoomOut = zoomButton('out', '<path d="M5 12h14"/>', () => current?.scene?.zoomBy(1 / ZOOM_STEP));
+  const zoomReset = zoomButton('reset', '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>', () => current?.scene?.resetView());
+  zoomBox.append(zoomIn, zoomOut, zoomReset);
   root.append(head, stage, bar, foot, done, fail);
+  root.addEventListener('keydown', onZoomKey);
   root.addEventListener('pointerdown', () => sound.unlock(), true);
 
   /** The seed for the next face. @returns {number} seed */
@@ -198,6 +211,55 @@ export function createPopMode({
       + (isOn ? '<circle cx="18" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/>'
         : '<path d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>') + '</svg>';
     return b;
+  }
+
+  /**
+   * One round zoom button with a drawn icon; its name (for screen readers and the mouse tip) comes from the strings.
+   * @param {string} kind in, out or reset
+   * @param {string} paths the SVG lines of the icon
+   * @param {() => void} onClick what it does
+   * @returns {HTMLButtonElement} the button
+   */
+  function zoomButton(kind, paths, onClick) {
+    const b = button(`pop-btn pop-zoom__btn pop-zoom__${kind}`, '', onClick);
+    const label = t(`pop.zoom.${kind}`);
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${paths}</g></svg>`;
+    return b;
+  }
+
+  /**
+   * The zoom view changed: zoom the studio room behind the same way (so the face and room move together) and grey
+   * out the buttons that cannot do more.
+   * @param {{z: number, x: number, y: number}} v the view (logic.js)
+   * @returns {void}
+   */
+  function showView(v) {
+    backdrop.style.transformOrigin = '0 0';
+    backdrop.style.transform = v.z > 1 ? `scale(${v.z}) translate(${-v.x}px, ${-v.y}px)` : '';
+    zoomIn.disabled = v.z >= ZOOM_MAX - 1e-6;
+    zoomOut.disabled = v.z <= 1 + 1e-6;
+    zoomReset.disabled = zoomOut.disabled;
+    zoomBox.classList.toggle('pop-zoom--on', v.z > 1 + 1e-6);
+  }
+
+  /**
+   * Zoom keys anywhere in the scene: + and - zoom, 0 shows the whole face, arrow keys slide the view while zoomed.
+   * @param {KeyboardEvent} e the key
+   * @returns {void}
+   */
+  function onZoomKey(e) {
+    const scene = current?.scene;
+    if (!scene || e.ctrlKey || e.metaKey || e.altKey) return;
+    const step = 40; // screen px per arrow press
+    const pans = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] };
+    if (e.key === '+' || e.key === '=') scene.zoomBy(ZOOM_STEP);
+    else if (e.key === '-' || e.key === '_') scene.zoomBy(1 / ZOOM_STEP);
+    else if (e.key === '0') scene.resetView();
+    else if (pans[e.key] && scene.view().z > 1) scene.panBy(...pans[e.key]);
+    else return;
+    e.preventDefault();
   }
 
   /**
@@ -263,6 +325,7 @@ export function createPopMode({
     c.canvas.classList.add('pop-canvas--storm');
     foot.hidden = true;
     bar.hidden = true;
+    zoomBox.hidden = true;
     c.failTimer = setTimeout(() => {
       if (current !== c) return;
       sound.play('splat'); // the door slams
@@ -294,8 +357,9 @@ export function createPopMode({
     drawCount();
     const bubble = el('p', 'pop-ow', t(at.type === 'decoy' ? 'pop.owDecoy' : 'pop.ow')); // a mole is not a bump
     bubble.setAttribute('aria-hidden', 'true'); // the counter line says it for screen readers
-    bubble.style.left = `${at.x}px`;
-    bubble.style.top = `${at.y}px`;
+    const sp = c.scene?.toScreen(at.x, at.y) ?? at; // where the bump is on screen (zoomed or not)
+    bubble.style.left = `${sp.x}px`;
+    bubble.style.top = `${sp.y}px`;
     stage.append(bubble);
     setTimeout(() => bubble.remove(), 900);
     clearTimeout(c.winceTimer);
@@ -410,7 +474,9 @@ export function createPopMode({
     fail.hidden = true;
     showIrritation(0);
     newBtn.disabled = false;
-    stage.replaceChildren(backdrop);
+    stage.replaceChildren(backdrop, zoomBox);
+    zoomBox.hidden = false;
+    showView({ z: 1, x: 0, y: 0 }); // every new customer starts with the whole face (SPEC D9)
     paintBackdrop();
     done.hidden = true;
     foot.hidden = false;
@@ -441,6 +507,7 @@ export function createPopMode({
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       onOw: (at) => { if (current === c) showOw(c, at); },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },
+      onView: (v) => { if (current === c) showView(v); },
       onIrritation: (lv) => {
         if (current !== c) return;
         showIrritation(lv);

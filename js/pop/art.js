@@ -4,8 +4,14 @@
 // is drawn in face.js. engine.js moves all of it.
 import { rng } from './logic.js';
 
-const GOO = { body: '#f6eecb', edge: '#cdb57a', hi: 'rgba(255,255,255,0.8)' };
-const GOLD_GOO = { body: '#ffe27a', edge: '#d9a520', hi: 'rgba(255,255,240,0.9)' };
+// Goo colours and feel per kind (see gooLook). Bright, saturated, cartoon goo colours; never pale, never blood.
+// width/speed/sag/reach/drip are factors on the strand's thickness, squirt speed, droop, length and lens drips.
+const GOO_LOOK = {
+  white: { body: '#fffef6', shade: '#e3e0cf', edge: '#9e9a86', hi: '#ffffff', width: 0.8, speed: 1.35, sag: 0.55, reach: 1.15, drip: 0.8, sparkle: false },
+  cream: { body: '#fbe39a', shade: '#e8bf5a', edge: '#9c7224', hi: '#fffbe8', width: 1.3, speed: 0.75, sag: 1.6, reach: 0.9, drip: 1.3, sparkle: false },
+  gold: { body: '#ffd84a', shade: '#f2a81c', edge: '#9e5f08', hi: '#fffbe0', width: 1, speed: 1, sag: 1, reach: 1, drip: 1, sparkle: true },
+  horn: { body: '#eaf0a6', shade: '#c4cf5c', edge: '#6f7f24', hi: '#fbffe8', width: 0.9, speed: 0.85, sag: 1.2, reach: 0.7, drip: 0.7, sparkle: false },
+};
 
 /**
  * A new canvas of a size in CSS pixels, sharp on phones (dpr = device pixels per CSS pixel).
@@ -393,118 +399,256 @@ export function drawDecoy(ctx, d) {
 }
 
 /**
- * A worm of glossy goo (like toothpaste out of a tube): outline, body and a shiny streak.
+ * The goo of one kind of bump: its colours and how it moves (T1.6). Every kind looks different:
+ * white = milky white, thin and quick; cream = thick yellow custard that sags and drips; gold = glitter goo;
+ * horn = a small dab of pale green-yellow. Unknown kinds (and the blackhead plug) use white.
+ * @param {string|undefined} goo the goo kind from data/bumps.js ('white', 'cream', 'gold', 'horn')
+ * @returns {{body: string, shade: string, edge: string, hi: string, width: number, speed: number, sag: number,
+ *   reach: number, drip: number, sparkle: boolean}} colours plus feel factors (1 = the old default)
+ */
+export function gooLook(goo) {
+  return GOO_LOOK[goo] ?? GOO_LOOK.white;
+}
+
+/** Which goo kind an item carries (older items only had a gold flag). @param {{goo?: string, gold?: boolean}} s item @returns {object} look */
+const lookOf = (s) => gooLook(s.goo ?? (s.gold ? 'gold' : 'white'));
+
+/**
+ * Keep a list of live goo items under a cap by dropping the oldest ones (so a pop-pop-pop chain never piles up).
+ * @param {any[]} list the list (changed in place; oldest first)
+ * @param {number} max the most items to keep
+ * @returns {number} how many were dropped
+ */
+export function capList(list, max) {
+  const extra = list.length - max;
+  if (extra <= 0) return 0;
+  list.splice(0, extra);
+  return extra;
+}
+
+/**
+ * The drips of a lens splat at an age: each slides down at its own speed and slows to a stop.
+ * Pure, so tests can check it. The splat's `drips` (count) and `size` (scale) are the "amount" knobs:
+ * a normal big pimple uses about 3 drips at size 1; a later super zit can ask for many drips at a huge size.
+ * @param {{r: number, seed: number, drips?: number, size?: number}} s the splat (r = radius in px)
+ * @param {number} age seconds since it hit the lens
+ * @returns {{x: number, w: number, len: number}[]} for each drip: offset from the middle, width, length below the middle
+ */
+export function splatDrips(s, age) {
+  const rand = rng((s.seed ^ 0x5bd1e995) >>> 0);
+  const n = Math.max(0, Math.round(s.drips ?? 3));
+  const r = s.r * (s.size ?? 1);
+  const out = [];
+  for (let i = 0; i < n; i += 1) {
+    const x = ((i + 0.5) / n - 0.5) * r * 1.3 + (rand() - 0.5) * r * 0.25;
+    const w = r * (0.16 + rand() * 0.12);
+    const speed = 0.5 + rand() * 0.9; // in radii per second at the start
+    const far = r * (0.9 + rand() * 1.4); // where it stops
+    const t = Math.max(0, age - rand() * 0.25);
+    const len = r * 0.55 + far * (1 - Math.exp(-t * speed * r / far));
+    out.push({ x, w, len: Math.min(len, r * 0.55 + far) });
+  }
+  return out;
+}
+
+/**
+ * A worm of glossy goo (like toothpaste out of a tube): soft shadow, darker rim, body, a round squelchy head that
+ * stretches while it comes out, and a shiny streak. Colour and look per goo kind (gooLook).
  * @param {CanvasRenderingContext2D} ctx the context
- * @param {{pts: {x: number, y: number}[], w: number, gold?: boolean, tip?: boolean}} s the strand (tip = dark blackhead tip)
+ * @param {{pts: {x: number, y: number}[], w: number, goo?: string, gold?: boolean, tip?: boolean, len?: number, max?: number}} s
+ *   the strand (tip = dark blackhead tip; len/max = how far it has come out)
  * @returns {void}
  */
 export function drawStrand(ctx, s) {
   const pts = s.pts;
   if (!pts.length) return;
-  const c = s.gold ? GOLD_GOO : GOO;
-  /** Trace the strand's line, shifted a little. @param {number} dx shift x @param {number} dy shift y @returns {void} */
-  const trace = (dx, dy) => {
+  const c = lookOf(s);
+  /** Trace part of the strand's line, shifted a little. @param {number} dx shift x @param {number} dy shift y @param {number} from first point @returns {void} */
+  const trace = (dx, dy, from = 0) => {
     ctx.beginPath();
-    ctx.moveTo(pts[0].x + dx, pts[0].y + dy);
-    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i].x + dx, pts[i].y + dy);
-    if (pts.length === 1) ctx.lineTo(pts[0].x + dx + 0.01, pts[0].y + dy);
+    ctx.moveTo(pts[from].x + dx, pts[from].y + dy);
+    for (let i = from + 3; i < pts.length; i += 3) ctx.lineTo(pts[i].x + dx, pts[i].y + dy); // every third point is plenty
+    const e = pts[pts.length - 1];
+    ctx.lineTo(e.x + dx + 0.01, e.y + dy);
   };
+  const e = pts[pts.length - 1];
+  const b = pts[Math.max(0, pts.length - 4)];
+  const ang = Math.atan2(e.y - b.y, e.x - b.x);
+  const grow = s.max ? Math.max(0, 1 - (s.len ?? s.max) / s.max) : 0; // 1 just out, 0 when done
+  const hr = s.w * 0.62; // the head is a little fatter than the worm
+  /** The round head at the end, stretched along the worm while it squirts out. @param {number} growBy extra radius @returns {void} */
+  const head = (growBy) => { ctx.beginPath(); ctx.ellipse(e.x, e.y, hr * (1 + grow * 0.45) + growBy, hr * (1 - grow * 0.2) + growBy, ang, 0, Math.PI * 2); };
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(110,70,40,0.18)'; // soft shadow on the skin
+  ctx.strokeStyle = 'rgba(110,60,30,0.2)'; // soft shadow on the skin
   ctx.lineWidth = s.w + 2;
-  trace(s.w * 0.25, s.w * 0.35); ctx.stroke();
+  trace(s.w * 0.25, s.w * 0.4); ctx.stroke();
   ctx.strokeStyle = c.edge;
-  ctx.lineWidth = s.w + 1.2;
+  ctx.lineWidth = s.w + 1.6;
   trace(0, 0); ctx.stroke();
-  ctx.strokeStyle = c.body;
+  ctx.fillStyle = c.edge; head(0.8); ctx.fill();
+  ctx.strokeStyle = c.shade; // the darker underside gives it roundness
   ctx.lineWidth = s.w;
   trace(0, 0); ctx.stroke();
+  ctx.fillStyle = c.shade; head(0); ctx.fill();
+  ctx.strokeStyle = c.body;
+  ctx.lineWidth = s.w * 0.62;
+  trace(-s.w * 0.1, -s.w * 0.14); ctx.stroke();
+  ctx.fillStyle = c.body;
+  ctx.beginPath(); ctx.ellipse(e.x - hr * 0.12, e.y - hr * 0.15, hr * 0.78 * (1 + grow * 0.4), hr * 0.72, ang, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = c.hi;
-  ctx.lineWidth = Math.max(0.8, s.w * 0.26);
-  trace(-s.w * 0.16, -s.w * 0.2); ctx.stroke();
+  ctx.lineWidth = Math.max(0.8, s.w * 0.2);
+  if (pts.length > 6) { trace(-s.w * 0.2, -s.w * 0.24, 3); ctx.stroke(); }
+  ctx.fillStyle = c.hi;
+  ctx.beginPath(); ctx.arc(e.x - hr * 0.35, e.y - hr * 0.4, Math.max(0.7, hr * 0.24), 0, Math.PI * 2); ctx.fill();
   if (s.tip) { // the dark tip of a blackhead plug
-    const e = pts[pts.length - 1];
     ctx.fillStyle = '#3a2a22';
     ctx.beginPath(); ctx.arc(e.x, e.y, s.w * 0.55, 0, Math.PI * 2); ctx.fill();
   }
-  if (s.gold) for (let i = 2; i < pts.length; i += 4) drawTwinkle(ctx, pts[i].x + s.w * 0.4, pts[i].y - s.w * 0.4, s.w * 0.5, 0.8);
+  if (c.sparkle) for (let i = 2; i < pts.length; i += 6) drawTwinkle(ctx, pts[i].x + s.w * 0.4, pts[i].y - s.w * 0.4, s.w * 0.5, 0.85);
 }
 
 /**
- * A drop of goo: flying (lifted off the skin, with its shadow below) or landed (a glossy blob).
+ * A drop of goo. Flying: lifted off the skin with its shadow below, stretched along its flight. Landed: a glossy blob
+ * that squashes flat when it hits, then wobbles round, with a tiny smear behind it where it slid.
  * @param {CanvasRenderingContext2D} ctx the context
- * @param {{x: number, y: number, r: number, z?: number, gold?: boolean}} d the drop (z = height above the skin)
+ * @param {{x: number, y: number, r: number, z?: number, vx?: number, vy?: number, vz?: number, goo?: string, gold?: boolean,
+ *   age?: number, sa?: number}} d the drop (z = height above the skin; age = seconds since it landed; sa = slide angle)
  * @returns {void}
  */
 export function drawDrop(ctx, d) {
   const z = d.z ?? 0;
-  const c = d.gold ? GOLD_GOO : GOO;
+  const c = lookOf(d);
   const r = d.r * (1 + z / 160);
-  if (z > 0.5) {
-    ctx.fillStyle = 'rgba(110,60,40,0.14)';
+  if (z > 0.5) { // flying: shadow on the skin, body stretched along the way it moves
+    ctx.fillStyle = 'rgba(110,60,30,0.16)';
     ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    const y = d.y - z * 0.6;
+    const vx = d.vx ?? 0;
+    const vy = (d.vy ?? 0) - (d.vz ?? 0) * 0.6;
+    const sp = Math.hypot(vx, vy);
+    const st = Math.min(0.7, sp / 400); // stretch
+    const a = Math.atan2(vy, vx);
+    ctx.fillStyle = c.edge;
+    ctx.beginPath(); ctx.ellipse(d.x, y, r * (1 + st) + 0.7, r * (1 - st * 0.4) + 0.7, a, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = c.body;
+    ctx.beginPath(); ctx.ellipse(d.x, y, r * (1 + st), r * (1 - st * 0.4), a, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = c.hi;
+    ctx.beginPath(); ctx.arc(d.x - r * 0.3, y - r * 0.32, r * 0.28, 0, Math.PI * 2); ctx.fill();
+    return;
   }
-  const y = d.y - z * 0.6;
+  // Landed: squash flat on impact, bounce back with a small wobble (age), then stay put.
+  const age = d.age ?? 1;
+  const k = age < 0.35 ? Math.exp(-age * 9) * Math.cos(age * 30) : 0;
+  const rx = r * (1 + 0.45 * k);
+  const ry = r * 0.86 * (1 - 0.4 * k);
+  if (d.sa !== undefined && r > 1.4) { // a tiny smear where it slid on the skin
+    const tx = d.x - Math.cos(d.sa) * r * 1.1;
+    const ty = d.y - Math.sin(d.sa) * r * 1.1;
+    ctx.strokeStyle = c.shade;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = r * 1.2;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(d.x, d.y); ctx.stroke();
+  }
   ctx.fillStyle = c.edge;
-  ctx.beginPath(); ctx.ellipse(d.x, y, r + 0.6, r * 0.86 + 0.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(d.x, d.y, rx + 0.7, ry + 0.7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = c.shade;
+  ctx.beginPath(); ctx.ellipse(d.x, d.y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = c.body;
-  ctx.beginPath(); ctx.ellipse(d.x, y, r, r * 0.86, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(d.x - rx * 0.12, d.y - ry * 0.16, rx * 0.74, ry * 0.68, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = c.hi;
-  ctx.beginPath(); ctx.ellipse(d.x - r * 0.35, y - r * 0.32, r * 0.3, r * 0.2, -0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(d.x - rx * 0.36, d.y - ry * 0.36, rx * 0.28, ry * 0.2, -0.5, 0, Math.PI * 2); ctx.fill();
+  if (c.sparkle && d.r > 2.4) drawTwinkle(ctx, d.x + rx * 0.5, d.y - ry * 0.6, rx * 0.8, 0.8);
 }
 
 /**
- * A big splat of goo on the "camera lens" (front of the picture), for the big pimples.
- * @param {CanvasRenderingContext2D} ctx the context
- * @param {{x: number, y: number, r: number, drip: number, a: number, seed: number, gold?: boolean}} s the splat
+ * A juicy cartoon splat of goo on the "camera lens" (the glass in front of the picture), drawn in screen space:
+ * a lumpy blob with a few flecks around it, a darker rim, glossy highlights like goo on glass, and drips that
+ * slide down and slow to a stop. It fades softly at the end (s.a). Colour per goo kind.
+ * Amount knobs (for a later super zit): s.size scales the whole splat, s.drips is how many drips run down.
+ * Normal big pimples use size 1 and about 3 drips; a super zit can call it full-screen with many drips.
+ * @param {CanvasRenderingContext2D} ctx the context (screen transform)
+ * @param {{x: number, y: number, r: number, a: number, seed: number, age?: number, born?: number, goo?: string,
+ *   gold?: boolean, size?: number, drips?: number}} s the splat (age = seconds on the lens)
+ * @param {number} [now] the time, used for the age when s.age is not set
  * @returns {void}
  */
-export function drawSplat(ctx, s) {
+export function drawSplat(ctx, s, now) {
   const rand = rng(s.seed);
-  const c = s.gold ? GOLD_GOO : GOO;
+  const c = lookOf(s);
+  const age = s.age ?? Math.max(0, (now ?? 0) - (s.born ?? 0));
+  const r = s.r * (s.size ?? 1);
+  const hit = Math.min(1, age / 0.12); // it slaps on: a quick grow with a little overshoot
+  const k = hit < 1 ? 0.6 + hit * 0.55 : 1 + Math.exp(-age * 12) * 0.12;
+  const rr = r * k;
   ctx.save();
-  ctx.globalAlpha = s.a * 0.8;
-  ctx.fillStyle = c.body;
-  ctx.strokeStyle = c.edge;
-  ctx.lineWidth = 1.2;
-  // A soft, round-edged blob: points around the middle joined by smooth curves.
-  const n = 9;
+  ctx.globalAlpha = Math.max(0, Math.min(1, s.a)) * 0.95;
+  // The blob outline: lumpy points joined by smooth curves; flecks and drips join the same path.
+  const n = 11;
   const pts = [];
   for (let i = 0; i < n; i += 1) {
     const a = (i / n) * Math.PI * 2;
-    const rr = s.r * (0.72 + rand() * 0.4);
-    pts.push([s.x + Math.cos(a) * rr, s.y + Math.sin(a) * rr * 0.9]);
+    const q = rr * (0.74 + rand() * 0.38);
+    pts.push([s.x + Math.cos(a) * q, s.y + Math.sin(a) * q * 0.88]);
   }
-  ctx.beginPath();
-  for (let i = 0; i <= n; i += 1) {
-    const p0 = pts[i % n];
-    const p1 = pts[(i + 1) % n];
-    const mx = (p0[0] + p1[0]) / 2;
-    const my = (p0[1] + p1[1]) / 2;
-    if (i === 0) ctx.moveTo(mx, my); else ctx.quadraticCurveTo(p0[0], p0[1], mx, my);
-  }
-  ctx.closePath();
-  // Drips running down the lens.
-  const drips = [];
-  for (let i = 0; i < 2; i += 1) {
-    const dx = s.x + (rand() - 0.5) * s.r;
-    const len = s.drip * (0.6 + rand() * 0.6);
-    const w = s.r * (0.2 + rand() * 0.1);
-    drips.push([dx, len, w]);
-  }
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  for (const [dx, len, w] of drips) {
-    ctx.rect(dx - w / 2, s.y, w, len);
-    ctx.moveTo(dx + w * 0.75, s.y + len);
-    ctx.arc(dx, s.y + len, w * 0.75, 0, Math.PI * 2);
-  }
-  ctx.fill();
+  /** Trace the whole splat (blob, flecks, drips), grown by g px. @param {number} g grow @returns {void} */
+  const shape = (g) => {
+    ctx.beginPath();
+    for (let i = 0; i <= n; i += 1) {
+      const p0 = pts[i % n];
+      const p1 = pts[(i + 1) % n];
+      const ex = (p0[0] - s.x) / rr * g;
+      const ey = (p0[1] - s.y) / rr * g;
+      const mx = (p0[0] + p1[0]) / 2 + ex;
+      const my = (p0[1] + p1[1]) / 2 + ey;
+      if (i === 0) ctx.moveTo(mx, my); else ctx.quadraticCurveTo(p0[0] + ex, p0[1] + ey, mx, my);
+    }
+    ctx.closePath();
+    const fr = rng(s.seed + 7);
+    for (let i = 0; i < 4; i += 1) { // flecks flung around the blob
+      const a = fr() * Math.PI * 2;
+      const d = rr * (1.15 + fr() * 0.45);
+      const fx = s.x + Math.cos(a) * d;
+      const fy = s.y + Math.sin(a) * d * 0.88;
+      const f = rr * (0.07 + fr() * 0.09) + g * 0.45; // a thin rim, so flecks read as drops, not rings
+      ctx.moveTo(fx + f, fy);
+      ctx.arc(fx, fy, f, 0, Math.PI * 2);
+    }
+    for (const dr of drips) { // each drip: a column that narrows a little, with a round bead at the end
+      const x = s.x + dr.x * k;
+      const top = s.y + rr * 0.3;
+      const end = s.y + dr.len * k;
+      const hw = dr.w / 2 + g;
+      ctx.moveTo(x + hw, top); // same turning way as the blob, so the fill has no holes
+      ctx.lineTo(x + hw * 0.8, end);
+      ctx.lineTo(x - hw * 0.8, end);
+      ctx.lineTo(x - hw, top);
+      ctx.closePath();
+      ctx.moveTo(x + hw * 1.15, end);
+      ctx.arc(x, end, hw * 1.15, 0, Math.PI * 2);
+    }
+  };
+  const drips = splatDrips(s, age);
+  const g = ctx.createRadialGradient(s.x - rr * 0.3, s.y - rr * 0.35, rr * 0.1, s.x, s.y, rr * 1.6);
+  g.addColorStop(0, c.body);
+  g.addColorStop(0.55, c.body);
+  g.addColorStop(1, c.shade);
+  ctx.fillStyle = c.edge; // the darker rim
+  shape(Math.max(1.2, rr * 0.06)); ctx.fill();
+  ctx.fillStyle = g;
+  shape(0); ctx.fill();
+  // Glossy highlights like light on wet glass: a big curved shine, a small dot, and a glint on each drip bead.
   ctx.fillStyle = c.hi;
-  ctx.beginPath(); ctx.ellipse(s.x - s.r * 0.35, s.y - s.r * 0.3, s.r * 0.3, s.r * 0.15, -0.5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(s.x + s.r * 0.25, s.y + s.r * 0.2, s.r * 0.07, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(s.x - rr * 0.32, s.y - rr * 0.34, rr * 0.34, rr * 0.13, -0.6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(s.x + rr * 0.05, s.y - rr * 0.52, rr * 0.06, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(s.x + rr * 0.38, s.y + rr * 0.22, rr * 0.08, 0, Math.PI * 2); ctx.fill();
+  for (const dr of drips) {
+    const hw = dr.w / 2;
+    const x = s.x + dr.x * k;
+    const end = s.y + dr.len * k;
+    ctx.beginPath(); ctx.arc(x - hw * 0.35, end - hw * 0.35, hw * 0.3, 0, Math.PI * 2); ctx.fill();
+  }
+  if (c.sparkle) for (let i = 0; i < 3; i += 1) drawTwinkle(ctx, s.x + (rand() - 0.5) * rr * 1.2, s.y + (rand() - 0.5) * rr, rr * 0.25, 0.9);
   ctx.restore();
 }
 

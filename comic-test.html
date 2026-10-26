@@ -37,9 +37,14 @@ import { validateStrip } from './js/game/comic-logic.js';
 import { STRIP as placeholder } from './js/data/comics/placeholder-strip.js';
 import { STRIP as testStrip } from './js/data/comics/test-strip.js';
 import { STRIP as strip0 } from './js/data/comics/strip-0.js';
+import { STRIP as strip1 } from './js/data/comics/strip-1.js';
+import { STRIP as strip2 } from './js/data/comics/strip-2.js';
+import { STRIP as strip3 } from './js/data/comics/strip-3.js';
+import { STRIP as strip4 } from './js/data/comics/strip-4.js';
+import { STRIP as strip5 } from './js/data/comics/strip-5.js';
 import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer } from './js/game/comic-art.js';
 
-const STRIPS = [strip0, testStrip, placeholder]; // add new strips here to see them in the chooser
+const STRIPS = [strip0, strip1, strip2, strip3, strip4, strip5, testStrip, placeholder]; // add new strips here to see them in the chooser
 const params = new URLSearchParams(location.search);
 
 /**
@@ -100,6 +105,10 @@ function showKit() {
   tile(p, 'bed + torch', 1100, 760, [{ art: 'bed', x: 550, y: 740 }, { art: 'husband', x: 334, y: 550, pose: 'lie', expr: 'sleepy' }, { art: 'heroine', x: 766, y: 550, pose: 'lie', expr: 'sneaky', look: 1, scale: 0.95 }, { art: 'blanket', x: 550, y: 740, torch: 'right' }]);
   tile(p, 'armor (stand)', 600, 820, [{ art: 'armor', x: 300, y: 800 }]);
   tile(p, 'husband in armor, visor up', 600, 820, [{ art: 'husband', x: 300, y: 790, outfit: 'armor', expr: 'proud', pose: 'hips' }]);
+  tile(p, 'hall + chairs + urn + support group', 1600, 900, [{ art: 'room', kind: 'hall', w: 1600, h: 900, floorY: 620, windowX: 0.6, plantX: 0.05, plantScarf: '#e8505b', outside: [{ art: 'husband', x: 960, y: 520, scale: 0.5, pose: 'bust', outfit: 'armor', visor: 'down', plumes: 3 }] },
+    { art: 'urn', x: 1420, y: 700, scale: 0.9 },
+    ...[[260, 'nils', 'neutral'], [560, 'greta', 'happy'], [860, 'heroine', 'shocked'], [1160, 'penny', 'happy']].flatMap(([x, art, expr]) => [{ art: 'chair', x, y: 860, scale: 0.85 }, { art, x, y: 860, scale: 0.85, pose: 'sit', expr }])]);
+  tile(p, 'armor: plumes 4 + knitted cozy', 600, 820, [{ art: 'husband', x: 300, y: 790, outfit: 'armor', visor: 'down', plumes: 4, cozy: '#f27eb2', expr: 'proud', pose: 'hips' }]);
   tile(p, 'burst + sparkles + torch', 700, 600, [{ art: 'burst', x: 260, y: 260 }, { art: 'sparkles', x: 520, y: 180 }, { art: 'torch', x: 520, y: 520 }]);
 }
 

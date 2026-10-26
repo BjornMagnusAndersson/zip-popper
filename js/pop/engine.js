@@ -13,6 +13,7 @@
 // cloth held on the face fills a warm meter (bumps pop faster for a while), the patch sticks on popped spots. The wrong
 // tool on a bump is an "Ow": no pressure, no pop, ouch lines, and onOw tells the controller (wince, counter).
 import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius } from './logic.js';
+import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
@@ -22,6 +23,7 @@ import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
   drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
+  gooLook, capList,
 } from './art.js';
 
 const GRID = 8; // mesh cells across the squeezed area
@@ -98,6 +100,7 @@ function affine(s, d) {
  *   tool?: string, face?: {cx: number, cy: number, rx: number, ry: number}, tools?: string[],
  *   onOw?: (o: {x: number, y: number, type: string, tool: string}) => void, onWarm?: (warmth: number) => void,
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
+ *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
@@ -180,14 +183,51 @@ export function createPopScene(canvas, o) {
     raf = requestAnimationFrame(frame);
   }
 
+  // Zoom and pan (T1.4). The view {z, x, y} (logic.js) says which part of the scene the canvas shows; it starts at
+  // the whole face and a new face (a new scene) starts there again. All input goes through screenToScene and all
+  // drawing (goo too) through viewMatrix, so bumps, decoys, the strip and every tool stay right at any zoom.
+  let view = fullView();
+  const touches = new Map(); // pointerId -> {x, y}: every finger on the canvas now, in screen px
+  let pinch = null; // {a, b, a0, b0, start}: two fingers zooming and panning
+  let pending = null; // {ev, timer}: a first finger waiting PINCH_WAIT_MS to see whether a second one follows
+  let mousePan = null; // {id, x, y}: a mouse dragging the zoomed view from a spot where the press did nothing
+
   /**
-   * Turn a pointer event into scene coordinates.
+   * Turn a pointer event into screen px on the canvas (CSS px from its top left, before the view).
+   * @param {PointerEvent} e the event
+   * @returns {{x: number, y: number}} the point
+   */
+  function screenPt(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) * w) / (r.width || w), y: ((e.clientY - r.top) * h) / (r.height || h) };
+  }
+
+  /**
+   * Turn a pointer event into scene coordinates (through the zoom view).
    * @param {PointerEvent} e the event
    * @returns {{x: number, y: number}} the point
    */
   function local(e) {
-    const r = canvas.getBoundingClientRect();
-    return { x: ((e.clientX - r.left) * w) / (r.width || w), y: ((e.clientY - r.top) * h) / (r.height || h) };
+    const s = screenPt(e);
+    return screenToScene(view, s.x, s.y);
+  }
+
+  /** The drawing transform for the view: scene px to device px. @returns {number[]} [a, b, c, d, e, f] for setTransform */
+  function viewMatrix() {
+    const k = dpr * view.z;
+    return [k, 0, 0, k, -view.x * k, -view.y * k];
+  }
+
+  /**
+   * Use a new view (already checked by logic.js), tell the page and redraw.
+   * @param {{z: number, x: number, y: number}} next the view
+   * @returns {void}
+   */
+  function setView(next) {
+    if (next.z === view.z && next.x === view.x && next.y === view.y) return;
+    view = next;
+    try { o.onView?.({ ...view }); } catch { /* the page's own problem */ }
+    kick();
   }
 
   /**
@@ -264,7 +304,8 @@ export function createPopScene(canvas, o) {
       }
       ctx.closePath();
       ctx.clip();
-      ctx.setTransform(m[0] * dpr, m[1] * dpr, m[2] * dpr, m[3] * dpr, m[4] * dpr, m[5] * dpr);
+      ctx.setTransform(...viewMatrix()); // the zoom view (T1.4), then the triangle's own copy transform
+      ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5]);
       const sx = Math.max(0, Math.floor(Math.min(A[0], B[0], C[0]) * dpr) - 2);
       const sy = Math.max(0, Math.floor(Math.min(A[1], B[1], C[1]) * dpr) - 2);
       const ex = Math.min(texture.width, Math.ceil(Math.max(A[0], B[0], C[0]) * dpr) + 2);
@@ -347,6 +388,12 @@ export function createPopScene(canvas, o) {
     return best;
   }
 
+  // Caps on live goo so a pop-pop-pop chain never drops frames (T1.6): the oldest go first.
+  const MAX_STRANDS = 12; // goo worms (one face makes about 10)
+  const MAX_DROPS = 40; // drops in the air
+  const MAX_BLOBS = 80; // landed drops
+  const MAX_SPLATS = 6; // splats on the lens (a super zit may raise this for its own splash)
+
   /**
    * Squirt the goo out of a pimple that just popped.
    * @param {object} p the pimple
@@ -354,28 +401,55 @@ export function createPopScene(canvas, o) {
    */
   function squirt(p) {
     const info = bumpInfo(p.type);
-    const gold = info?.goo === 'gold';
-    const count = p.type === 'big' ? 2 : 1;
+    const goo = info?.goo === 'gold' || info?.goo === 'cream' || info?.goo === 'horn' ? info.goo : 'white';
+    const gold = goo === 'gold';
+    const look = gooLook(goo);
+    const big = p.type === 'big';
+    const count = big ? 2 : 1;
     for (let i = 0; i < count; i += 1) {
       const ang = -Math.PI / 2 + (rand() - 0.5) * 2.6;
-      const max = p.r * (p.type === 'big' ? 2.6 + rand() * 1.8 : 2 + rand() * 1.4);
+      const max = p.r * look.reach * (big ? 2.6 + rand() * 1.8 : 2 + rand() * 1.4);
       strands.push({
-        x: p.x, y: p.y, ang, curl: (rand() - 0.5) * 0.05 / scale, sag: 0.006 + rand() * 0.008, len: 0, max,
-        speed: max / (p.type === 'big' ? 0.55 : 0.35), w: p.r * (p.type === 'big' ? 0.3 : 0.42), gold, pts: [],
+        x: p.x, y: p.y, ang, curl: (rand() - 0.5) * 0.05 / scale, sag: (0.006 + rand() * 0.008) * look.sag, len: 0, max,
+        speed: (max / (big ? 0.55 : 0.35)) * look.speed, w: p.r * (big ? 0.3 : 0.42) * look.width, gold, goo, pts: [],
       });
     }
+    capList(strands, MAX_STRANDS);
     const n = info?.drops ?? 4;
     for (let i = 0; i < n; i += 1) {
       const a = rand() * Math.PI * 2;
-      const v = (30 + rand() * 110) * scale;
-      drops.push({ x: p.x, y: p.y, z: 0.1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 120 + rand() * 160, r: (1.2 + rand() * (p.type === 'big' ? 3 : 2)) * scale, gold });
+      const v = (30 + rand() * 110) * scale * look.speed;
+      drops.push({ x: p.x, y: p.y, z: 0.1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: (120 + rand() * 160) / Math.sqrt(look.width), r: (1.2 + rand() * (big ? 3 : 2)) * scale * Math.sqrt(look.width), gold, goo });
     }
-    if (p.type === 'big' && !reduced) {
-      const k = 2 + Math.round(rand());
-      for (let i = 0; i < k; i += 1) {
-        splats.push({ x: Math.max(30, Math.min(w - 30, p.x + (rand() - 0.5) * w * 0.7)), y: Math.max(30, Math.min(h * 0.7, p.y + (rand() - 0.6) * h * 0.6)), r: (14 + rand() * 12) * scale, drip: 0, a: 1, born: time + i * 0.06, seed: Math.round(rand() * 1e6) });
-      }
+    capList(drops, MAX_DROPS);
+    if (big && !reduced) {
+      const at = sceneToScreen(view, p.x, p.y); // the lens is in front of the zoom: splats live in screen px
+      splashLens(at.x, at.y, goo, 1);
     }
+  }
+
+  /**
+   * Splash goo onto the "lens" (screen space, in front of the zoom), around a screen point.
+   * @param {number} x screen x (CSS px of the canvas)
+   * @param {number} y screen y
+   * @param {string} goo the goo kind (colour)
+   * @param {number} power the amount: 1 = a normal big pimple (2 or 3 splats, about 3 drips each). A later super zit
+   *   can call this with a big power (say 4 to 8) for a whole-screen splash with many long drips.
+   * @returns {void}
+   */
+  function splashLens(x, y, goo, power = 1) {
+    const look = gooLook(goo);
+    const k = Math.round((2 + rand()) * Math.max(1, power));
+    const spread = Math.min(1, 0.7 * power);
+    for (let i = 0; i < k; i += 1) {
+      splats.push({
+        x: Math.max(30, Math.min(w - 30, x + (rand() - 0.5) * w * spread)),
+        y: Math.max(30, Math.min(h * 0.7, y + (rand() - 0.6) * h * 0.6 * spread)),
+        r: (14 + rand() * 12) * scale, size: Math.sqrt(power), drips: Math.round((2 + rand() * 2) * look.drip * power),
+        drip: 0, a: 1, born: time + i * 0.06, seed: Math.round(rand() * 1e6), goo, gold: goo === 'gold',
+      });
+    }
+    capList(splats, Math.max(MAX_SPLATS, k));
   }
 
   /**
@@ -531,6 +605,8 @@ export function createPopScene(canvas, o) {
     for (const pa of patches) mv(pa);
     for (const d of decoys) mv(d);
     if (face) Object.assign(face, { cx: face.cx * s + tx, cy: face.cy * s + ty, rx: face.rx * s, ry: face.ry * s });
+    setView(refitView(view, oldW, oldH, m, w, h, face)); // keep the zoom on the same spot of the face (T1.4)
+    if (pinch) pinch = null; // a pinch across a turn starts over
     if (warmHold) mv(warmHold, []);
     for (const st of strands) {
       mv(st, ['len', 'max', 'speed', 'w']);
@@ -695,14 +771,24 @@ export function createPopScene(canvas, o) {
       d.y += d.vy * dt;
       d.vz -= 700 * dt;
       d.z += d.vz * dt;
-      if (d.z <= 0) { drops.splice(i, 1); blobs.push({ x: d.x, y: d.y, r: d.r, gold: d.gold }); }
+      if (d.z <= 0) { // it lands: squash, then a short slide that leaves a tiny smear (sa = the slide's direction)
+        drops.splice(i, 1);
+        blobs.push({ x: d.x, y: d.y, r: d.r, gold: d.gold, goo: d.goo, age: 0, sa: Math.atan2(d.vy, d.vx) });
+        capList(blobs, MAX_BLOBS);
+      }
+    }
+    for (const b of blobs) { // the landing squash settles in a third of a second
+      if (b.age === undefined || b.age >= 0.4) continue;
+      b.age = reduced ? 1 : b.age + dt;
+      busy = true;
     }
     for (let i = splats.length - 1; i >= 0; i -= 1) {
       const s = splats[i];
       busy = true;
       const age = time - s.born;
-      s.drip = Math.min(s.r * 1.6, Math.max(0, age) * s.r * 0.6);
-      if (age > 2.4) s.a = Math.max(0, 1 - (age - 2.4) / 0.8);
+      s.age = Math.max(0, age);
+      s.drip = Math.min(s.r * 1.6, s.age * s.r * 0.6); // kept for resize(); the drips themselves come from splatDrips()
+      if (age > 2.6) s.a = Math.max(0, 1 - (age - 2.6) / 0.9); // a soft fade out
       if (s.a <= 0) splats.splice(i, 1);
     }
     for (let i = tweezers.length - 1; i >= 0; i -= 1) {
@@ -776,8 +862,9 @@ export function createPopScene(canvas, o) {
 
   /** Draw the whole scene once. @returns {void} */
   function render() {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(...viewMatrix()); // everything below is drawn in scene px through the zoom view (T1.4)
     ctx.drawImage(texture, 0, 0, w, h);
     const sx = sweepX();
     const fadeAll = reduced && cream ? Math.max(0, 1 - Math.max(0, cream.t - 0.5) / 0.6) : 1;
@@ -893,7 +980,11 @@ export function createPopScene(canvas, o) {
         ctx.fillRect(0, 0, w, h);
       }
     }
-    for (const s of splats) if (time >= s.born) drawSplat(ctx, s);
+    if (splats.length) { // the lens is in front of the zoom: splats are drawn in screen px
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const s of splats) if (time >= s.born) drawSplat(ctx, s);
+      ctx.setTransform(...viewMatrix());
+    }
     wobbleScreen();
   }
 
@@ -1082,12 +1173,16 @@ export function createPopScene(canvas, o) {
     return true;
   }
 
-  /** Finger or mouse down: use the tool in hand while popping, or start wiping. @param {PointerEvent} e event @returns {void} */
-  function onDown(e) {
-    if (e.button > 0 || halted) return;
+  /**
+   * A press with one finger or the mouse: use the tool in hand while popping, or start wiping.
+   * @param {PointerEvent|object} e the event (or a stored copy of a finger's down event)
+   * @returns {boolean} true when the press was used
+   */
+  function press(e) {
+    if (e.button > 0 || halted) return false;
     const pt = local(e);
     if (step === 'pop') {
-      if (!pressPop(e, pt)) return;
+      if (!pressPop(e, pt)) return false;
     } else if (step === 'wipe' && toolInfo(tool)?.use === 'patch' && patchAt(pt)) {
       // a patch went on a popped spot; no wiping with this press
     } else if (step === 'wipe' && wipe && !wipe.fade) {
@@ -1095,14 +1190,124 @@ export function createPopScene(canvas, o) {
       wipe.auto = null;
       wipe.last = null;
       wipeAt(pt.x, pt.y);
-    } else return;
+    } else return false;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch { /* fine without */ }
     kick();
+    return true;
+  }
+
+  // The gesture rule (T1.4): ONE finger never pans or zooms. It always uses the tool in hand (squeeze, pull, peel,
+  // wipe...), so popping can never move the view by accident. Pinching and panning need TWO fingers on the face: the
+  // fingers' spread sets the zoom and moving them both slides the view. To tell a pinch from a press, a first finger
+  // waits PINCH_WAIT_MS (a blink) before it presses; a second finger in that time makes it a pinch with no press at
+  // all. A second finger that comes later lets go of whatever the first was doing (no pop) and pinches. Lifting one
+  // finger ends the pinch; the other then does nothing until it is lifted. A mouse (no second finger) drags the view
+  // from a spot where the press did nothing, only when zoomed in; the wheel zooms. Double-tap is never used (it would
+  // fight quick popping taps). Buttons and keys (pop-mode.js) do the same through zoomBy, panBy and resetView.
+  const PINCH_WAIT_MS = 60;
+
+  /** Let go of everything a finger was doing, because a pinch takes over (nothing pops). @returns {void} */
+  function letGo() {
+    hold = null;
+    peel = null;
+    warmHold = null;
+    if (wipe) { wipe.id = null; wipe.last = null; }
+  }
+
+  /** The waiting first finger presses now (no second finger came, or it was lifted or moved on). @returns {void} */
+  function firePending() {
+    const p = pending;
+    if (!p) return;
+    pending = null;
+    clearTimeout(p.timer);
+    press(p.ev);
+  }
+
+  /** Two fingers are down: start pinching with the first two (a waiting press is dropped). @returns {void} */
+  function startPinch() {
+    if (pending) { clearTimeout(pending.timer); pending = null; }
+    letGo();
+    const [a, b] = [...touches.keys()];
+    pinch = { a, b, a0: touches.get(a), b0: touches.get(b), start: { ...view } };
+    kick();
+  }
+
+  /** Finger, pen or mouse down: a first finger waits a blink (see the gesture rule), others press now. @param {PointerEvent} e event @returns {void} */
+  function onDown(e) {
+    if (e.pointerType === 'touch') {
+      if (e.isPrimary) { touches.clear(); pinch = null; } // a new first finger: forget fingers whose "up" got lost
+      touches.set(e.pointerId, screenPt(e));
+      e.preventDefault();
+      if (touches.size >= 2) { if (!pinch) startPinch(); return; }
+      if (e.button > 0 || halted) return;
+      const ev = { pointerId: e.pointerId, button: 0, clientX: e.clientX, clientY: e.clientY, preventDefault() {} };
+      pending = { ev, timer: setTimeout(firePending, PINCH_WAIT_MS) };
+      return;
+    }
+    if (press(e) || halted || e.pointerType !== 'mouse' || e.button !== 0 || view.z <= 1) return;
+    const s = screenPt(e); // a mouse press on empty skin or room while zoomed in: drag the view
+    mousePan = { id: e.pointerId, x: s.x, y: s.y };
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* fine without */ }
+  }
+
+  /**
+   * Zoom and pan moves (a pinch, a mouse drag). Returns true when the move was used for that.
+   * @param {PointerEvent} e event
+   * @returns {boolean} true = handled here
+   */
+  function viewMove(e) {
+    if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
+      touches.set(e.pointerId, screenPt(e));
+      if (pinch) {
+        const a1 = touches.get(pinch.a);
+        const b1 = touches.get(pinch.b);
+        if (a1 && b1) setView(pinchView(pinch.start, pinch.a0, pinch.b0, a1, b1, w, h, face));
+        return true;
+      }
+      if (pending && pending.ev.pointerId === e.pointerId) return true; // still waiting to press
+    }
+    if (mousePan && e.pointerId === mousePan.id) {
+      const s = screenPt(e);
+      setView(panView(view, s.x - mousePan.x, s.y - mousePan.y, w, h, face));
+      mousePan.x = s.x;
+      mousePan.y = s.y;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Zoom and pan ends: a pinch finger or the dragging mouse lifted, or a waiting finger lifted (it presses now, so a
+   * quick tap still squeezes). Returns true when the up was used here.
+   * @param {PointerEvent} e event
+   * @returns {boolean} true = handled here
+   */
+  function viewUp(e) {
+    if (e.pointerType === 'touch') {
+      touches.delete(e.pointerId);
+      if (pinch && (e.pointerId === pinch.a || e.pointerId === pinch.b)) { pinch = null; return true; }
+      if (pending && pending.ev.pointerId === e.pointerId) {
+        if (e.type === 'pointercancel') { clearTimeout(pending.timer); pending = null; return true; }
+        firePending();
+      }
+    }
+    if (mousePan && e.pointerId === mousePan.id) { mousePan = null; return true; }
+    return false;
+  }
+
+  /** Mouse wheel (or a trackpad pinch): zoom round the mouse. @param {WheelEvent} e event @returns {void} */
+  function onWheel(e) {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? h : 1;
+    const s = screenPt(e);
+    setView(zoomAt(view, Math.exp(-e.deltaY * unit * 0.002), s.x, s.y, w, h, face));
   }
 
   /** Finger moves: peel the strip further, move the warm cloth, or move the pad. @param {PointerEvent} e event @returns {void} */
   function onMove(e) {
+    if (viewMove(e)) return;
     if (warmHold && e.pointerId === warmHold.id) {
       const pt = local(e);
       if (onFace(face, pt.x, pt.y)) { warmHold.x = pt.x; warmHold.y = pt.y; } else warmHold = null; // slid off the face
@@ -1120,6 +1325,7 @@ export function createPopScene(canvas, o) {
 
   /** Finger up: let go of the pimple (a quick tap still gives a little pressure). @param {PointerEvent} e event @returns {void} */
   function onUp(e) {
+    if (viewUp(e)) return;
     if (hold && e.pointerId === hold.id) {
       if (time - hold.since < 0.2 && !hold.p.popped) hold.p.pressure = Math.min(1, hold.p.pressure + 0.2);
       if (hold.p.pressure >= 1) pop(hold.p);
@@ -1157,7 +1363,9 @@ export function createPopScene(canvas, o) {
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onUp);
-  // Debug and smoke-test hook: where the pimples still are (scene coordinates = CSS pixels of the canvas).
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.popView = () => ({ ...view }); // for browser checks: the zoom view now (T1.4)
+  // Debug and smoke-test hook: where the pimples still are (scene coordinates; on screen see popView and sceneToScreen).
   canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type }));
   canvas.popDecoys = () => decoys.map((d) => ({ x: d.x, y: d.y, r: d.r, kind: d.kind })); // for browser checks, like popTargets
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
@@ -1231,6 +1439,35 @@ export function createPopScene(canvas, o) {
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
+      canvas.removeEventListener('wheel', onWheel);
+      if (pending) clearTimeout(pending.timer);
+      pending = null;
     },
+    /** The zoom view now (T1.4): z = zoom, x, y = the scene point at the top left. @returns {{z: number, x: number, y: number}} view */
+    view: () => ({ ...view }),
+    /**
+     * Zoom in or out round a point on the canvas (the buttons and keys use the middle).
+     * @param {number} factor more than 1 = closer
+     * @param {number} [sx] screen x (CSS px on the canvas), the middle when left out
+     * @param {number} [sy] screen y
+     * @returns {void}
+     */
+    zoomBy(factor, sx = w / 2, sy = h / 2) { setView(zoomAt(view, factor, sx, sy, w, h, face)); },
+    /**
+     * Slide the zoomed view (arrow keys).
+     * @param {number} dx screen px (positive = see more of the left side)
+     * @param {number} dy screen px (positive = see more of the top)
+     * @returns {void}
+     */
+    panBy(dx, dy) { setView(panView(view, dx, dy, w, h, face)); },
+    /** Back to the whole face. @returns {void} */
+    resetView() { setView(clampView({ z: 1, x: 0, y: 0 }, w, h, face)); },
+    /**
+     * Where a scene point is on the canvas now (for bubbles over a bump).
+     * @param {number} x scene x
+     * @param {number} y scene y
+     * @returns {{x: number, y: number}} CSS px on the canvas
+     */
+    toScreen: (x, y) => sceneToScreen(view, x, y),
   };
 }
