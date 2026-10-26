@@ -177,10 +177,21 @@ function bubblePad(kind, em) {
  * @param {number[]|null} target where the tail points
  * @param {number} em font size
  * @param {number} u units per CSS pixel (for outline width and shadow offset)
+ * @param {number} [stop] how far before the target the tail should end (the speaker's head size), same units as box
  * @returns {SVGElement} the bubble group (hidden until revealed)
  */
-function bubbleGroup(kind, box, target, em, u) {
-  const shapes = bubbleShapes(kind, box, target, em);
+function bubbleGroup(kind, box, target, em, u, stop = 0) {
+  let aim = target;
+  if (target && stop > 0) {
+    // Pull the tail's end back towards the bubble, to the edge of the speaker's head (but keep a real tail).
+    const cx = box.x + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const d = Math.hypot(target[0] - cx, target[1] - cy) || 1;
+    const room = d - Math.min(box.w, box.h) / 2;
+    const back = Math.min(stop, room * 0.55);
+    aim = [target[0] - ((target[0] - cx) / d) * back, target[1] - ((target[1] - cy) / d) * back];
+  }
+  const shapes = bubbleShapes(kind, box, aim, em);
   const g = svgEl('g', { class: 'comic-bub' });
   const shadow = svgEl('g', { fill: 'rgba(42,33,29,0.22)', transform: `translate(${4 * u} ${5 * u})` });
   const outline = svgEl('g', {
@@ -275,6 +286,7 @@ export function playComic(strip, opts = {}) {
     const camG = svgEl('g', { class: 'comic-cam' });
     camG.appendChild(drawBackground(p.scene?.bg, L));
     const mouths = {};
+    const reaches = {}; // head size per speaker, so tails stop at the head instead of crossing the face
     for (const l of p.scene?.layers ?? []) {
       let node;
       let mouth;
@@ -282,6 +294,7 @@ export function playComic(strip, opts = {}) {
         const r = arts[l.art](l, { svgEl, INK });
         node = r?.node ?? r;
         mouth = r?.mouth;
+        if (l.id) reaches[l.id] = r?.reach ?? 0;
       } else {
         node = drawShape(l);
       }
@@ -298,6 +311,8 @@ export function playComic(strip, opts = {}) {
       const raw = b.kind === 'caption' || b.to === undefined ? null : (typeof b.to === 'string' ? mouths[b.to] : b.to);
       return raw ? camPoint(raw, cam.to) : null;
     };
+    /** How far short of the mouth a tail stops (most of the speaker's head size, after the camera zoom). @param {object} b bubble @returns {number} drawing units */
+    const stopOf = (b) => (typeof b.to === 'string' ? (reaches[b.to] ?? 0) * 0.8 * cam.to.s : 0);
     /** A text box for a bubble, at its font size and widest width. @param {object} b bubble @param {number} maxW widest (px) @returns {HTMLElement} the box */
     const textBox = (b, maxW) => {
       const div = htmlEl('div', `comic-text comic-text--${b.kind}`, fillName(t(b.key), name));
@@ -349,7 +364,7 @@ export function playComic(strip, opts = {}) {
         const r = it.div.getBoundingClientRect();
         const aim = aimOf(it.b);
         const target = aim ? [ar.left - sr.left + aim[0] * k, ar.top - sr.top + aim[1] * k] : null;
-        it.g = bubbleGroup(it.b.kind, { x: r.left - sr.left, y: r.top - sr.top, w: r.width, h: r.height }, target, fontPx, 1);
+        it.g = bubbleGroup(it.b.kind, { x: r.left - sr.left, y: r.top - sr.top, w: r.width, h: r.height }, target, fontPx, 1, stopOf(it.b) * k);
         balloons.appendChild(it.g);
       }
     } else {
@@ -369,7 +384,7 @@ export function playComic(strip, opts = {}) {
         placed.push({ x: bx.x - pad, y: bx.y - pad, w: bx.w + pad * 2, h: bx.h + pad * 2 });
         div.style.left = `${bx.x * scale}px`;
         div.style.top = `${bx.y * scale}px`;
-        const g = bubbleGroup(b.kind, bx, aimOf(b), em, 1 / scale);
+        const g = bubbleGroup(b.kind, bx, aimOf(b), em, 1 / scale, stopOf(b));
         balloons.appendChild(g);
         return { b, j, g, div, text: div.textContent };
       });

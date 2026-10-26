@@ -15,7 +15,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          living(1600, 900, { floor: 640, windowX: 0.62, pictureX: 0.2 }),
+          living(1600, 900, { floorY: 640, windowX: 0.62, pictureX: 0.2 }),
           { art: 'sofa', x: 1060, y: 840, w: 760 },
           { id: 'him', art: 'husband', x: 1000, y: 840, pose: 'sit', expr: 'neutral', hold: 'remote', look: -1 },
           { id: 'her', art: 'heroine', x: 420, y: 870, pose: 'pop', expr: 'bliss' },
@@ -23,15 +23,15 @@ export const STRIP = {
       },
       camera: { move: 'pushIn', focus: [1000, 420], amount: 0.06, ms: 4000 },
       bubbles: [
-        { kind: 'caption', key: 'comic.test.p1.cap', at: [520, 62], w: 900 },
-        { kind: 'say', key: 'comic.test.p1.her', at: [720, 220], to: 'her', w: 440 },
+        { kind: 'caption', key: 'comic.test.p1.cap', at: [420, 62], w: 720 },
+        { kind: 'say', key: 'comic.test.p1.her', at: [720, 250], to: 'her', w: 360 },
         { kind: 'say', key: 'comic.test.p1.him', at: [1300, 200], to: 'him' },
       ],
     },
     {
       // 2. Close-up: her sneaky look.
       layout: 'small',
-      scene: { layers: [living(800, 600, { floor: 520, windowX: 0.85, picture: false, plant: false, lamp: false }),
+      scene: { layers: [living(800, 600, { floorY: 520, windowX: 0.85, picture: false, plant: false, lamp: false }),
         { id: 'her', art: 'heroine', x: 290, y: 640, scale: 1.25, pose: 'bust', expr: 'sneaky', look: 1 }] },
       camera: { move: 'pushIn', focus: [290, 300], amount: 0.1, ms: 2500 },
       bubbles: [{ kind: 'whisper', key: 'comic.test.p2.her', at: [600, 120], to: 'her', w: 330 }],
@@ -39,7 +39,7 @@ export const STRIP = {
     {
       // 3. Close-up: he knows that look. A fast dramatic zoom.
       layout: 'small',
-      scene: { layers: [living(800, 600, { floor: 520, windowX: 0.18, picture: false, plant: false, lamp: false }),
+      scene: { layers: [living(800, 600, { floorY: 520, windowX: 0.18, picture: false, plant: false, lamp: false }),
         { id: 'him', art: 'husband', x: 530, y: 640, scale: 1.25, pose: 'bust', expr: 'shocked', flip: true }] },
       camera: { move: 'pushIn', focus: [530, 300], amount: 0.16, ms: 700 },
       bubbles: [{ kind: 'shout', key: 'comic.test.p3.him', at: [220, 130], to: 'him', w: 300 }],
@@ -77,7 +77,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          living(1600, 900, { floor: 640, windowX: 0.62, pictureX: 0.2 }),
+          living(1600, 900, { floorY: 640, windowX: 0.62, pictureX: 0.2 }),
           { art: 'sofa', x: 1180, y: 840, w: 700 },
           { id: 'her', art: 'heroine', x: 420, y: 880, pose: 'stand', expr: 'shocked', look: 1 },
           { id: 'him', art: 'husband', x: 1040, y: 880, pose: 'point', expr: 'grumpy', flip: true },
@@ -93,12 +93,12 @@ export const STRIP = {
       // 7. The Great Popping Ban.
       layout: 'tall',
       scene: { layers: [{ art: 'rays', w: 900, h: 1200, x: 450, y: 520, colors: ['#d6e6ff', '#b8d2ff'] },
-        { id: 'him', art: 'husband', x: 450, y: 1170, scale: 1.3, pose: 'hips', expr: 'proud' }] },
+        { id: 'him', art: 'husband', x: 450, y: 1190, scale: 1.05, pose: 'hips', expr: 'proud' }] },
       camera: { move: 'pullOut', focus: [450, 500], amount: 0.15, ms: 2500 },
       sound: 'cheer',
       bubbles: [
         { kind: 'caption', key: 'comic.test.p7.cap', at: [450, 60], w: 780 },
-        { kind: 'shout', key: 'comic.test.p7.him', at: [450, 240], to: 'him', w: 560 },
+        { kind: 'shout', key: 'comic.test.p7.him', at: [450, 290], to: 'him', w: 700 },
       ],
     },
     {
@@ -106,7 +106,7 @@ export const STRIP = {
       layout: 'tall',
       scene: {
         layers: [
-          { art: 'room', kind: 'bedroom', w: 900, h: 1200, floor: 760, windowX: 0.5 },
+          { art: 'room', kind: 'bedroom', w: 900, h: 1200, floorY: 760, windowX: 0.5 },
           { art: 'bed', x: 450, y: 1190, w: 820 },
           { art: 'husband', x: 253, y: 980, pose: 'lie', expr: 'sleepy' },
           { art: 'heroine', x: 647, y: 980, pose: 'lie', expr: 'sneaky' },
@@ -116,7 +116,7 @@ export const STRIP = {
       camera: { move: 'pushIn', focus: [647, 700], amount: 0.08, ms: 3500 },
       bubbles: [
         { kind: 'caption', key: 'comic.test.p8.cap', at: [450, 56], w: 600 },
-        { kind: 'whisper', key: 'comic.test.p8.her', at: [600, 560], to: [660, 680], w: 400, sound: 'pop_small' },
+        { kind: 'whisper', key: 'comic.test.p8.her', at: [560, 430], to: [680, 690], w: 420, sound: 'pop_small' },
         { kind: 'caption', key: 'comic.test.p8.end', at: [450, 1140], w: 780 },
       ],
     },

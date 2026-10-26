@@ -541,7 +541,7 @@ export function drawCharacter(who, l) {
   }
   const node = el('g', { transform: `translate(${c.x ?? 0} ${c.y ?? 0}) scale(${fx * s} ${s}) translate(0 ${shift})` }, [body]);
   const my = headY + h.mouthY * b.head + shift;
-  return { node, mouth: [(c.x ?? 0), (c.y ?? 0) + my * s] };
+  return { node, mouth: [(c.x ?? 0), (c.y ?? 0) + my * s], reach: 105 * b.head * s };
 }
 
 /**
@@ -707,7 +707,7 @@ export const ROOMS = {
 /**
  * A room filling the panel: wall with soft stripes, floor boards, a window with curtains (sky, cloud or moon and
  * stars), and optionally a picture, a plant and a floor lamp.
- * @param {object} l layer: kind (a key of ROOMS), w and h (the panel size), floor (height of the floor line),
+ * @param {object} l layer: kind (a key of ROOMS), w and h (the panel size), floorY (height of the floor line),
  *   windowX (0..1 across), and any ROOMS field to switch an item on or off
  * @returns {{node: SVGElement}} the room
  */
@@ -715,7 +715,7 @@ function room(l) {
   const r = { ...(ROOMS[l.kind] ?? ROOMS.living), ...l };
   const w = l.w ?? 1600;
   const h = l.h ?? 900;
-  const F = l.floor ?? h * 0.74;
+  const F = l.floorY ?? h * 0.74;
   const g = el('g');
   const wid = `cw${gid += 1}`;
   const sid = `cs${gid += 1}`;
