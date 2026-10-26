@@ -72,10 +72,10 @@ export const BUMPS = {
 export const DECOYS = {
   counts: [0.2, 0.35, 0.3, 0.15],
   kinds: {
-    mole: { weight: 3, radius: [4.5, 6] }, // a small dark raised dot
-    beauty: { weight: 2, radius: [2.6, 3.4] }, // a tiny dark dot
-    freckles: { weight: 3, radius: [9, 12], dots: [3, 5] }, // 3 to 5 tiny dots
-    suspicious: { weight: 1, radius: [9, 11] }, // bigger, brown and flat: looks a bit like a bump, but is not one
+    mole: { weight: 3, radius: [6.5, 8.5] }, // a small dark raised dot
+    beauty: { weight: 2, radius: [4, 5] }, // a tiny dark dot
+    freckles: { weight: 3, radius: [14, 18], dots: [3, 5] }, // 3 to 5 tiny dots
+    suspicious: { weight: 1, radius: [12, 15] }, // bigger, brown and flat: looks a bit like a bump, but is not one
   },
 };
 

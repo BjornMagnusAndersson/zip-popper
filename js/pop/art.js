@@ -367,7 +367,7 @@ export function drawDecoy(ctx, d) {
   if (d.kind === 'freckles') {
     ctx.fillStyle = 'rgba(122,70,38,0.72)';
     for (const f of d.dots ?? []) {
-      ctx.beginPath(); ctx.arc(x + f.u * r, y + f.v * r, Math.max(1.3, f.s * r), 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + f.u * r, y + f.v * r, Math.max(2, f.s * r * 1.3), 0, Math.PI * 2); ctx.fill();
     }
   } else if (d.kind === 'beauty') {
     ctx.fillStyle = 'rgba(42,24,18,0.9)';
