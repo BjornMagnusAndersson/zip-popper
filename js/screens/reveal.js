@@ -33,7 +33,10 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
   const { canvas, ctx } = makeCanvas(w, h, dpr);
   // The face is laid out on the stage size the round had, so the bumps and moles sit exactly where they were.
   const face = faceGeometry(look.w, look.h, look.spec);
-  const lay = layoutFace({ seed: look.seed, face, count: look.count, strip: look.strip, allowed: look.kinds, decoys: look.decoys });
+  const lay = layoutFace({
+    seed: look.seed, face, count: look.count, strip: look.strip, allowed: look.kinds, decoys: look.decoys,
+    mix: look.mix ?? null, grown: look.grown ?? 0, // a boss face's own bumps (T8.4)
+  });
   // The part of the stage that holds the head, hair, sparkles and some shoulders, scaled to fill the picture.
   const x0 = face.cx - face.rx * 1.5;
   const x1 = face.cx + face.rx * 1.5;

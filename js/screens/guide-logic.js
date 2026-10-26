@@ -7,9 +7,12 @@
 // the tool. Unmet cards stay locked with a "?" (no spoilers).
 // Customers (T8.3): one more card per customer twist (fidgety, ticklish, sensitive skin, in a hurry) in its own
 // group, open once she has met a customer with it (save field seenTwists; old saves load []).
+// Events (T8.4): one more card per boss or event customer in an "Events" group, open once she has had one (save field
+// seenBosses; old saves load []).
 
 import { BUMPS } from '../data/bumps.js';
 import { TWISTS, TWIST_IDS } from '../data/twists.js';
+import { BOSS_IDS, describeBoss } from '../data/bosses.js';
 
 /**
  * Every card in the guide, in the order it shows. kind: 'bump' (a bump id in data/bumps.js), 'tool' (a tool you own,
@@ -156,6 +159,49 @@ export function twistCards({ seenTwists = [] } = {}) {
     id, kind: 'twist', open: seen.has(id), nameKey: TWISTS[id].nameKey, lineKey: TWISTS[id].lineKey, tipKey: TWISTS[id].tipKey,
     tools: { first: [], then: [] },
   }));
+}
+
+/**
+ * A clean list of boss and event ids (unknown ids and repeats dropped), in data/bosses.js order (T8.4).
+ * @param {unknown} list a list from a save
+ * @returns {string[]} event ids
+ */
+export function cleanBosses(list) {
+  const have = new Set(Array.isArray(list) ? list.filter((x) => typeof x === 'string') : []);
+  return BOSS_IDS.filter((id) => have.has(id));
+}
+
+/**
+ * Adds boss and event ids to the save's seenBosses list (T8.4; once each).
+ * @param {object} save the save
+ * @param {string[]} ids events just met
+ * @returns {object} the new save (the same object when nothing new was added)
+ */
+export function addSeenBosses(save, ids) {
+  const before = cleanBosses(save?.seenBosses);
+  const after = cleanBosses([...before, ...(Array.isArray(ids) ? ids : [])]);
+  return after.length === before.length ? save : { ...save, seenBosses: after };
+}
+
+/** The picture each Events card borrows from the bump and tool cards (screens/guide.js drawPicture). */
+export const BOSS_PICTURES = { hairday: 'hair', nosestrip: 'noseStrip', golden: 'gold', horn: 'horn' };
+
+/**
+ * The guide's "Events" cards (T8.4): one per boss or event, open once she has had that customer (save.seenBosses).
+ * Texts: boss.<id>.name, .line and .tip; pic = the picture id to draw (BOSS_PICTURES).
+ * @param {{seenBosses?: string[]}} [o] the events met
+ * @returns {{id: string, kind: 'event', pic: string, open: boolean, nameKey: string, lineKey: string, tipKey: string,
+ *   tools: {first: string[], then: string[]}}[]} one card per event, in data/bosses.js order
+ */
+export function bossCards({ seenBosses = [] } = {}) {
+  const seen = new Set(cleanBosses(seenBosses));
+  return BOSS_IDS.map((id) => {
+    const d = describeBoss(id);
+    return {
+      id, kind: 'event', pic: BOSS_PICTURES[id], open: seen.has(id), nameKey: d.nameKey, lineKey: d.lineKey, tipKey: d.tipKey,
+      tools: { first: [], then: [] },
+    };
+  });
 }
 
 /**

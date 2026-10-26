@@ -96,13 +96,14 @@ export function faceBumpHolds(o = {}) {
  * The bumps of a customer's face, laid out as the pop scene will (same seed, kinds and count) at a nominal size. The
  * nose strip is left off: it moves bumps a little but never changes their kinds, so the hold times stay the same.
  * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[]|null,
- *   decoys?: boolean, seed: number}} o as for faceBumpHolds
+ *   decoys?: boolean, seed: number, boss?: object|null}} o as for faceBumpHolds (boss = a boss spec's boss field, T8.4)
  * @returns {object[]} the bumps (logic.js layoutFace pimples)
  */
-function roundPimples({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed } = {}) {
-  const setup = roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools: roundTools(unlockedTools), decoys });
+function roundPimples({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, boss = null } = {}) {
+  const setup = roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools: roundTools(unlockedTools), decoys, boss });
   const face = faceGeometry(360, 480, setup.spec);
-  return layoutFace({ seed, face, count: setup.count, strip: false, allowed: setup.allowed, decoys: setup.decoys }).pimples;
+  // A boss face (T8.4) brings its own bump mix and grown horns.
+  return layoutFace({ seed, face, count: setup.count, strip: false, allowed: setup.allowed, decoys: setup.decoys, mix: setup.mix, grown: setup.grown }).pimples;
 }
 
 /**
@@ -167,19 +168,44 @@ export function allowedKinds(allowedTypes) {
  * clock leaves no time for a bonus) and the face seed's coin toss says so (stripChance: about 2 in 5). The strip is
  * optional: the round goes on to the wipe without peeling it (logic.js popStepOver); peeling it pays a bonus.
  * Decoys follow the existing layout rules unless switched off.
+ * A boss or event customer (T8.4, data/bosses.js bossSpec `boss`) brings its own bump mix (exactly those bumps; the
+ * setup then has `mix`, and the count is its sum), may have the nose strip always on (stripAlways, not over a clown
+ * nose) and grown Evil Horns (the setup's `grown` = their size factor). Those two fields are only there for a boss.
  * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[]|null,
- *   decoys?: boolean, seed?: number, request?: {type: string}|null}} o the customer (customerSpec customer), bump
- *   count, allowed kinds, owned tools, decoys allowed, the face seed (no seed = no strip) and the request
- * @returns {{spec: object, count: number, allowed: string[], strip: boolean, decoys: boolean}} the layout setup
+ *   decoys?: boolean, seed?: number, request?: {type: string}|null, boss?: {mix?: Object<string, number>,
+ *   stripAlways?: boolean, grownHorns?: number}|null}} o the customer (customerSpec customer), bump
+ *   count, allowed kinds, owned tools, decoys allowed, the face seed (no seed = no strip), the request and the boss
+ * @returns {{spec: object, count: number, allowed: string[], strip: boolean, decoys: boolean,
+ *   mix?: Object<string, number>, grown?: number}} the layout setup
  */
-export function roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, request = null } = {}) {
+export function roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, request = null, boss = null } = {}) {
   const spec = customer?.face && typeof customer.face === 'object' ? customer.face : {};
-  const count = Number.isFinite(bumpCount) ? clamp(Math.round(bumpCount), ROUND_BUMPS_MIN, ROUND_BUMPS_MAX) : FACE_BUMPS;
-  const allowed = allowedKinds(allowedTypes);
+  const mix = bossMixOf(boss);
+  const mixCount = mix ? Object.values(mix).reduce((a, n) => a + n, 0) : 0;
+  const count = mix ? clamp(mixCount, ROUND_BUMPS_MIN, ROUND_BUMPS_MAX)
+    : Number.isFinite(bumpCount) ? clamp(Math.round(bumpCount), ROUND_BUMPS_MIN, ROUND_BUMPS_MAX) : FACE_BUMPS;
+  const allowed = allowedKinds(mix ? Object.keys(mix) : allowedTypes);
   const clownNose = (spec.accessories ?? []).includes('clown-nose');
-  const strip = roundTools(unlockedTools).includes('noseStrip') && allowed.includes('blackhead') && !clownNose
-    && request?.type !== 'hurry' && stripChance(seed);
-  return { spec, count, allowed, strip, decoys: decoys !== false };
+  const strip = boss?.stripAlways === true ? !clownNose
+    : roundTools(unlockedTools).includes('noseStrip') && allowed.includes('blackhead') && !clownNose
+      && request?.type !== 'hurry' && stripChance(seed);
+  const out = { spec, count, allowed, strip, decoys: decoys !== false };
+  if (mix) out.mix = mix;
+  if (Number.isFinite(boss?.grownHorns) && boss.grownHorns > 0) out.grown = boss.grownHorns;
+  return out;
+}
+
+/**
+ * A boss's bump mix, cleaned: built kinds with a whole count above 0 only (T8.4).
+ * @param {{mix?: Object<string, number>}|null|undefined} boss the spec's boss field
+ * @returns {Object<string, number>|null} kind -> how many, or null for no usable mix
+ */
+function bossMixOf(boss) {
+  const raw = boss?.mix && typeof boss.mix === 'object' ? boss.mix : null;
+  if (!raw) return null;
+  const out = {};
+  for (const [k, n] of Object.entries(raw)) if (isImplemented(k) && Number.isFinite(n) && n >= 1) out[k] = Math.floor(n);
+  return Object.keys(out).length ? out : null;
 }
 
 /**

@@ -1,5 +1,5 @@
 // The main menu (T3.1a): Continue (shows the current chapter's title), Keep working (T5.4, only after the ending),
-// Free play, Comics, Field guide (T6.5, when the game passes onGuide), Face album (T8.2, when the game passes onAlbum),
+// Daily challenge (T8.5, with Keep working), Free play, Comics, Field guide (T6.5, when the game passes onGuide), Face album (T8.2, when the game passes onAlbum),
 // Shop, Your studio (T5.1c), Settings, About.
 // State comes in, every tap goes out through a callback. update({playerName, chapterTitleKey}) refreshes the greeting
 // and the Continue line when the save changes.
@@ -18,12 +18,15 @@ import { mascotArt } from './mascot.js';
  *   title; the on... callbacks report which button was tapped; showShop = false leaves the Shop button out (the
  *   shop opens with the career chapter); showStudio = true adds the "Your studio" button (the studio view, T5.1c;
  *   the game shows it where the shop is open); showKeepWorking = true adds "Keep working" under Continue (T5.4, after
- *   the ending), with keepWorkingPercent (its pay) on its second line; onKeepWorking = its tap
+ *   the ending), with keepWorkingPercent (its pay) on its second line; onKeepWorking = its tap; showDaily = true adds
+ *   "Daily challenge" under it (T8.5), dailySub = its second line as {key, vars} (today's goal and the streak, or
+ *   "Done today"), onDaily = its tap
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void, dispose: () => void}} the screen
  */
 export function createMenuScreen({
   t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
   showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60, onAlbum,
+  showDaily = false, dailySub = null, onDaily,
 }) {
   const shell = screenShell('menu', { label: t('ui.menu.title'), reducedMotion });
   const body = el('div', 'app-body app-menu');
@@ -49,6 +52,14 @@ export function createMenuScreen({
     work.addEventListener('click', () => onKeepWorking?.(), { signal: shell.signal });
     list.append(work);
   }
+  if (showDaily) { // the daily challenge (T8.5): after the ending, under Keep working; dailySub = today's goal and streak
+    const day = el('button', 'app-menubtn app-menubtn--work app-menubtn--daily');
+    day.type = 'button';
+    day.append(el('span', 'app-menubtn__label', t('ui.menu.daily')));
+    if (dailySub?.key) day.append(el('span', 'app-menubtn__sub', t(dailySub.key, dailySub.vars ?? {})));
+    day.addEventListener('click', () => onDaily?.(), { signal: shell.signal });
+    list.append(day);
+  }
 
   /** Add one menu button. @param {string} key label string key @param {(() => void)|undefined} fn tap callback @returns {void} */
   const add = (key, fn) => {
@@ -66,6 +77,7 @@ export function createMenuScreen({
   add('ui.menu.settings', onSettings);
   add('ui.menu.about', onAbout);
   if (list.children.length > 9) list.classList.add('app-menu__list--long'); // ten buttons (T8.2): a little tighter, so they fit
+  if (list.children.length > 10) list.classList.add('app-menu__list--longer'); // eleven (T8.5, css/daily.css): tighter still
   /** Show the greeting and the Continue line for the current data. @param {{playerName?: string, chapterTitleKey?: string}} data new data @returns {void} */
   function render(data) {
     hello.textContent = data.playerName ? t('ui.menu.hello', { name: data.playerName }) : t('ui.menu.helloNoName');

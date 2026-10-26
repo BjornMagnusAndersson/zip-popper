@@ -351,6 +351,49 @@ function typesFor(zones, rand, allowed = null) {
   return types;
 }
 
+/** Where the kinds of a fixed bump mix like to sit (T8.4) when data/bumps.js gives them no spawn zones. */
+const MIX_ZONES = { blackhead: ['nose', 'forehead', 'chin', 'cheekL', 'cheekR'], big: ['cheekL', 'cheekR'] };
+/** The order a fixed mix is placed in: the kinds that are pickiest about their spot first. */
+const MIX_ORDER = ['horn', 'big', 'hair', 'blackhead', 'gold', 'red', 'whitehead'];
+/** The most bumps a fixed mix may put on one face. */
+const ROUND_MIX_MAX = 12;
+
+/**
+ * A fixed bump mix (kind -> how many) as one list of kinds, in MIX_ORDER, built kinds only, at most ROUND_MIX_MAX.
+ * @param {Object<string, number>|null|undefined} mix the mix
+ * @returns {string[]|null} the kinds (one entry per bump), or null when there is no usable mix
+ */
+function mixList(mix) {
+  if (!mix || typeof mix !== 'object') return null;
+  const kinds = [...MIX_ORDER, ...Object.keys(mix).filter((k) => !MIX_ORDER.includes(k))];
+  const out = [];
+  for (const k of kinds) {
+    const n = Number.isFinite(mix[k]) ? Math.max(0, Math.floor(mix[k])) : 0;
+    if (isImplemented(k)) for (let i = 0; i < n; i += 1) out.push(k);
+  }
+  return out.length ? out.slice(0, ROUND_MIX_MAX) : null;
+}
+
+/**
+ * Which kind each bump is on a face with a fixed mix (T8.4 boss and event faces): every kind of the list once per
+ * entry, each in a zone it likes when one is still free (data/bumps.js spawn zones, MIX_ZONES), else anywhere.
+ * @param {string[]} zones the zone name of each bump (as many as the list)
+ * @param {() => number} rand random numbers
+ * @param {string[]} want the kinds (mixList), pickiest first
+ * @returns {string[]} the kind of each bump
+ */
+function typesFromMix(zones, rand, want) {
+  const types = zones.map(() => null);
+  for (const type of want) {
+    const liked = bumpInfo(type)?.spawn?.zones ?? MIX_ZONES[type] ?? null;
+    const free = zones.map((z, i) => i).filter((i) => types[i] === null);
+    const good = liked ? free.filter((i) => liked.includes(zones[i])) : free;
+    const pool = good.length ? good : free;
+    if (pool.length) types[pool[Math.floor(rand() * pool.length)]] = type;
+  }
+  return types.map((x) => x ?? 'whitehead');
+}
+
 /**
  * How big a growing bump (data/bumps.js `grow`, e.g. the Evil Horn) is after it has been on screen a while: it starts
  * at r0, grows quickly at first and then slower, and stops at rMax.
@@ -372,24 +415,30 @@ export function grownRadius(r0, rMax, seconds, age) {
  * @param {{seed: number, face: object, count?: number, strip?: boolean, allowed?: string[]|null, decoys?: boolean}} o
  *   the random seed, the face geometry from faceGeometry(), how many bumps, whether there is a blackhead strip on the
  *   nose, the bump kinds that may be placed (a customer round, T3.1b; null = every built kind) and whether the face
- *   may have decoys (moles, freckles; default yes)
+ *   may have decoys (moles, freckles; default yes). A boss or event face (T8.4) may also give mix = kind -> how many
+ *   (exactly these bumps, typesFromMix; then count is the sum) and grown = Evil Horns start fully grown and this many
+ *   times their usual size (0 or left out = as usual). Without them the random numbers are drawn as before.
  * @returns {{pimples: {id: string, type: string, x: number, y: number, r: number, axis: number, hold: number,
  *   zone: string}[], strip: object|null}} the layout in scene px
  */
-export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allowed = null, decoys = true }) {
+export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allowed = null, decoys = true, mix = null, grown = 0 }) {
   const rand = rng(seed);
   const box = strip ? noseStrip(face, seed) : null;
   const templeSide = rand() < 0.5 ? -1 : 1;
   const zones = [];
   const list = face.zones?.length ? face.zones : ZONES; // a story character brings his own zone order (T2.4)
-  for (let i = 0; i < count; i += 1) {
+  const want = mixList(mix);
+  const n = want ? want.length : count;
+  for (let i = 0; i < n; i += 1) {
     const z = list[i % list.length];
     zones.push(z.name === 'temple' ? { ...z, u: [z.u[0] * templeSide, z.u[1] * templeSide].sort((a, b) => a - b) } : z);
   }
-  const types = typesFor(zones.map((z) => z.name), rand, Array.isArray(allowed) ? allowed : null);
+  const types = want ? typesFromMix(zones.map((z) => z.name), rand, want) : typesFor(zones.map((z) => z.name), rand, Array.isArray(allowed) ? allowed : null);
+  const hornScale = Number.isFinite(grown) && grown > 0 ? grown : 0;
   const items = zones.map((zone, i) => {
     const [a, b] = bumpInfo(types[i]).radius;
-    return { i, zone, type: types[i], r: Math.max(MIN_BUMP_R, (a + rand() * (b - a)) * face.unit) };
+    const scale = hornScale && types[i] === 'horn' ? hornScale : 1; // a boss's Evil Horns are bigger (T8.4)
+    return { i, zone, type: types[i], r: Math.max(MIN_BUMP_R, (a + rand() * (b - a)) * face.unit * scale) };
   });
   // The biggest first, so they get the roomiest places.
   const order = [...items].sort((p, q) => q.r - p.r);
@@ -437,7 +486,8 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allo
     const grow = bumpInfo(p.type).grow;
     if (grow) { // a growing bump starts small; the spot was chosen for its full size (rMax), so it never grows into another
       b.rMax = p.r;
-      b.r0 = Math.min(p.r, Math.max(MIN_BUMP_R, p.r * grow.from));
+      // A boss's grown horns (T8.4) start at their full size.
+      b.r0 = hornScale && p.type === 'horn' ? p.r : Math.min(p.r, Math.max(MIN_BUMP_R, p.r * grow.from));
       b.r = b.r0;
       b.growFor = grow.seconds;
     }

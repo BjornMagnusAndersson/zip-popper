@@ -1,0 +1,33 @@
+/* The daily challenge (T8.5): the menu button (gold, like Keep working), an eleven-button menu that still fits a phone,
+   the goal chip in the pop scene's header, and the "done today" screen. Colours come from app.css (:root). */
+
+/* ---------- Menu ---------- */
+.app-menubtn--daily { background-color: #ffcf5c; }
+.app-menu__list--longer { gap: 7px; }
+.app-menu__list--longer .app-menubtn { min-height: 44px; padding-block: 3px; font-size: 1.1rem; }
+.app-menu__list--longer .app-menubtn--main { min-height: 62px; font-size: 1.4rem; }
+.app-menu__list--longer .app-menubtn__sub { font-size: 0.82rem; }
+@media (orientation: portrait) and (max-height: 820px) {
+  .app-menu:has(.app-menu__list--longer) { gap: 8px; padding-top: 10px; }
+  .app-menu:has(.app-menu__list--longer) .app-menu__art { width: 64px; }
+  .app-menu:has(.app-menu__list--longer) .app-menu__hello { font-size: 1.45rem; }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .app-menu__list--longer { gap: 7px; }
+  .app-menu__list--longer .app-menubtn { min-height: 42px; font-size: 1rem; }
+  .app-menu__list--longer .app-menubtn--main { min-height: 56px; font-size: 1.2rem; }
+  .app-menu__list--longer > .app-menubtn:last-child:nth-child(even) { grid-column: auto; }
+}
+
+/* ---------- Pop scene header chip ---------- */
+.pop-goal {
+  display: inline-block; max-width: 100%; margin: 2px 0 0; padding: 0 8px; border-radius: 999px; border: 2px solid #2a211d;
+  background: #ffe08a; color: #2a211d; font-size: 0.72rem; font-weight: 800; line-height: 1.45;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: top;
+}
+.pop-goal--missed { background: #eadbd0; color: #6b564c; text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* ---------- "Done today" screen ---------- */
+.app-daily__streak { font-size: 1.6rem; font-weight: 900; padding: 4px 18px; border-radius: 999px; border: 3px solid var(--ink); background: var(--yellow); }
+.app-daily__best { font-weight: 800; }
+.app-daily__next { font-weight: 700; padding: 6px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.6); }

@@ -13,7 +13,9 @@
 // Testing flags (page address): ?test (a throwaway in-memory save; nothing is written to the phone), with ?test also
 // ?chapter=N&customer=M (jump: customer M is next), ?money=500, ?rep=40, ?name=Maja, ?layers=lamp,plant or
 // ?layers=all (studio upgrades owned, T5.1a), ?album=demo (12 faces in the Face album, T8.2), ?twist=fidgety|ticklish|
-// sensitive|hurry (every customer gets that twist, T8.3); ?seed=N (every face uses that
+// sensitive|hurry (every customer gets that twist, T8.3), ?boss=hairday|nosestrip|golden|horn (every customer is that
+// boss or event and its tools are owned, T8.4), ?daily=YYYY-MM-DD (the daily challenge's date, T8.5) and
+// ?dailystreak=N (a streak of N days up to the day before); ?seed=N (every face uses that
 // seed, also without ?test); ?demo is handled by index.html (the old pop demo).
 
 import { t } from '../core/strings.js';
@@ -46,12 +48,21 @@ import { createScrubScreen } from '../screens/scrub.js';
 import { createEndScreen } from '../screens/end.js';
 import { createStudioScreen } from '../screens/studio.js';
 import { createGuideScreen } from '../screens/guide.js';
-import { guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists } from '../screens/guide-logic.js';
+import { guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists, bossCards, addSeenBosses } from '../screens/guide-logic.js';
 import { createReveal } from '../screens/reveal.js';
 import { createAlbumScreen } from '../screens/album.js';
 import { faceSetup, recordFace, revealOn } from '../screens/album-logic.js';
 import { describeTwist } from '../data/twists.js';
+import { describeBoss } from '../data/bosses.js';
 import * as L from './app-logic.js';
+import {
+  today, dailyState, dailyFor, dailyStep, describeGoal, judgeDaily, dailyResult, settleDaily, msToMidnight, addDays,
+  dailyTag, dailyPayout,
+} from './daily-logic.js';
+import { createDailyDoneScreen } from '../screens/daily-done.js';
+
+/** The daily goals an Ow already spoils (the header chip says "missed" at the first Ow, T8.5). */
+const OW_GOALS = ['stars3', 'noOw'];
 
 /** Which shop tab shows an item kind (to come back to the same tab after a purchase). */
 const TAB_OF_KIND = { tool: 'tools', studio: 'studio', outfit: 'outfit' };
@@ -97,6 +108,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music, sfxVolume: save.settings.sfxVolume }); // comics and menus
   const music = createMusic({ sound, volume: save.settings.musicVolume }); // background music (T6.1a), on the same audio as the sounds
   let hurryTimer = 0; // ends the hectic music when a hurry request's time is up
+  let midnightTimer = 0; // redraws the menu at midnight, so a new day's challenge shows while the app is open (T8.5)
   // Browsers only allow sound after a tap: the first tap anywhere wakes the audio, and the music starts then.
   for (const type of ['click', 'touchend', 'keydown']) (root.ownerDocument ?? root).addEventListener(type, () => sound.unlock(), { passive: true });
   installVibrationSwitch();
@@ -139,6 +151,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   const currentGuideCards = () => guideCards({ seenKinds: metKinds(save), ownedTools: economyFromSave(save).unlockedTools });
   /** The Field guide's customer twist cards for the save as it is now (T8.3). @returns {object[]} cards (guide-logic.js twistCards) */
   const currentTwistCards = () => twistCards({ seenTwists: save.seenTwists });
+  /** The Field guide's Events cards for the save as it is now (T8.4). @returns {object[]} cards (guide-logic.js bossCards) */
+  const currentEventCards = () => bossCards({ seenBosses: save.seenBosses });
 
   /**
    * Keep a new save and write it to storage.
@@ -255,6 +269,25 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
 
   /**
+   * Put the daily challenge's goal into the pop scene's header (T8.5): a small gold chip under the customer's name.
+   * @param {{id: string, n?: number, timeLimit?: number}} goal the day's goal
+   * @returns {(missed: boolean) => void} repaints the chip (true = the goal can no longer be reached this try)
+   */
+  function addPopGoalChip(goal) {
+    const chip = document.createElement('p');
+    chip.className = 'pop-goal';
+    const name = t(describeGoal(goal).nameKey);
+    /** Paint the chip. @param {boolean} missed the goal is out of reach this try @returns {void} */
+    const paint = (missed) => {
+      chip.textContent = t(missed ? 'ui.daily.chipMissed' : 'ui.daily.chip', { goal: name });
+      chip.classList.toggle('pop-goal--missed', missed);
+    };
+    paint(false);
+    pop?.node.querySelector('.pop-title')?.after(chip);
+    return paint;
+  }
+
+  /**
    * Draw a customer's face for the intro portrait (the same face renderer as the pop scene, a bit worried).
    * @param {object} spec the face parts (customer.face)
    * @param {number} seed the face seed
@@ -285,15 +318,48 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     show(createTitleScreen({ t, reducedMotion: still(), onStart: () => { sound.unlock(); showMenu(); }, onAbout: () => showAbout(showTitle) }));
   }
 
+  /**
+   * The date of today's daily challenge (T8.5): the ?daily= date in a test run, else the phone's date right now.
+   * @returns {string} 'YYYY-MM-DD'
+   */
+  function dailyDate() {
+    return (flags.test && flags.daily) || today();
+  }
+
+  /**
+   * The second line of the menu's Daily challenge button (T8.5): today's goal and the streak, or "Done today".
+   * @returns {{key: string, vars?: object}} string key and its values
+   */
+  function dailyMenuLine() {
+    const date = dailyDate();
+    const st = dailyState(save, date);
+    if (st.done) return { key: 'ui.menu.dailyDone' };
+    const goal = t(describeGoal(dailyFor(date).goal).nameKey);
+    return st.streak ? { key: 'ui.menu.dailySub', vars: { goal, n: st.streak } } : { key: 'ui.menu.dailySubNew', vars: { goal } };
+  }
+
   /** The main menu. @returns {void} */
   function showMenu() {
-    show(createMenuScreen({
+    clearTimeout(midnightTimer);
+    const menu = showMenuScreen();
+    // At midnight the menu draws itself again (a new challenge, or the streak line), if it is still on show (T8.5).
+    if (L.keepWorkingOpen(save) && !(flags.test && flags.daily)) {
+      midnightTimer = setTimeout(() => { if (screen === menu) showMenu(); }, msToMidnight());
+    }
+  }
+
+  /** Build and show the main menu screen. @returns {object} the screen */
+  function showMenuScreen() {
+    return show(createMenuScreen({
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
       onContinue: () => { sound.unlock(); continueStory(); }, onFreePlay: startFreePlay, onComics: showComics, onGuide: () => showGuide(showMenu),
       onShop: () => showShop(showMenu), onStudio: () => showStudio(showMenu), onSettings: showSettings,
       onAbout: () => showAbout(showMenu), showShop: L.shopOpen(save), showStudio: L.shopOpen(save),
       showKeepWorking: L.keepWorkingOpen(save), keepWorkingPercent: L.KEEP_WORKING_PERCENT,
       onKeepWorking: () => { sound.unlock(); keepWorking(); },
+      // The daily challenge (T8.5): with Keep working, after the ending.
+      showDaily: L.keepWorkingOpen(save), dailySub: L.keepWorkingOpen(save) ? dailyMenuLine() : null,
+      onDaily: () => { sound.unlock(); playDaily(); },
       onAlbum: L.shopOpen(save) ? () => showAlbum(showMenu) : undefined, // the Face album (T8.2): from the career chapter on, like the shop
     }));
   }
@@ -331,12 +397,41 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
 
   /**
+   * The daily challenge (T8.5): today's customer through the same intro, round and result as Keep working, or, once
+   * today's goal is reached, the small "done today" screen (no replay: the reward is once per day and a second try
+   * would only pay normal Keep working coins). Waiting milestone strips and a scrub job come first, as in keepWorking.
+   * @returns {void}
+   */
+  function playDaily() {
+    const date = dailyDate();
+    if (dailyState(save, date).done) { showDailyDone(date); return; }
+    const lost = L.pendingStrips(save);
+    if (lost.length) { playStrips(lost, () => { persist(L.clearPendingStrips(save)); playDaily(); }); return; }
+    const waiting = L.pendingScrub(save);
+    if (waiting) { runScrub(waiting, playDaily); return; }
+    showIntro(dailyStep(date));
+  }
+
+  /**
+   * The "done today" screen of the daily challenge (T8.5): the streak, the best streak and tomorrow's goal.
+   * @param {string} date today, 'YYYY-MM-DD'
+   * @returns {void}
+   */
+  function showDailyDone(date) {
+    const st = dailyState(save, date);
+    show(createDailyDoneScreen({
+      t, reducedMotion: still(), streak: st.streak, best: st.best,
+      nextGoalKey: describeGoal(dailyFor(addDays(date, 1)).goal).nameKey, onMenu: showMenu,
+    }));
+  }
+
+  /**
    * The Field guide from the menu (T6.5).
    * @param {() => void} back where Back goes
    * @returns {void}
    */
   function showGuide(back) {
-    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), onBack: back }));
+    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), onBack: back }));
   }
 
   /**
@@ -347,7 +442,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function openGuideOverlay() {
     if (!pop || guideOverlay) return;
     guideOverlay = createGuideScreen({
-      t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), overlay: true, onBack: () => closeGuideOverlay(true),
+      t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), overlay: true, onBack: () => closeGuideOverlay(true),
     });
     pop.node.inert = true;
     root.append(guideOverlay.node);
@@ -445,7 +540,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showIntro(step) {
-    const args = L.roundArgs(save, step, flags.seed, flags.test ? flags.twist : null); // ?twist= only in test runs (T8.3)
+    // ?twist= (T8.3) and ?boss= (T8.4) only in test runs.
+    const args = L.roundArgs(save, step, flags.seed, flags.test ? flags.twist : null, flags.test ? flags.boss : null);
     if (!args && step.keepWorking) { showMenu(); return; } // never happens: every Keep working number has a customer
     if (!args) { persist(L.finishStep(save, step)); continueStory(); return; } // no such customer: never in v1 data
     // The twist pill (T8.3). A hurry request IS the "in a hurry" twist: its pill carries the request's own line (with
@@ -453,10 +549,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const req = describeRequest(args.request);
     const hurry = args.twist === 'hurry' && req;
     const twist = describeTwist(args.twist, { ownedTools: args.unlockedTools });
+    // The daily challenge (T8.5): "Daily challenge: Combo master" in the step pill, the goal's line in the note box.
+    const goal = args.daily ? describeGoal(args.daily.goal) : null;
+    const note = goal ? { key: goal.lineKey, vars: goal.vars, labelKey: 'ui.daily.label' } : hurry ? null : req;
     show(createCustomerIntroScreen({
-      t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: hurry ? null : req,
+      t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: note,
       twist: hurry ? { ...twist, lineKey: req.key, lineVars: req.vars, hintKey: null } : twist,
-      step: step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
+      boss: describeBoss(args.boss?.id ?? null), // a boss or event customer's gold pill (T8.4)
+      step: goal ? { key: 'ui.daily.pill', vars: { goal: t(goal.nameKey) } }
+        : step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
       portrait: facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
       hintKey: L.introHintKey(save, step), onStart: () => playRound(step, args), onMenu: showMenu,
     }));
@@ -471,13 +572,17 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function playRound(step, args) {
     clear();
     if (args.twist) persist(addSeenTwists(save, [args.twist])); // she has met this twist: its guide card opens (T8.3)
+    if (args.boss) persist(addSeenBosses(save, [args.boss.id])); // ... and this boss or event: its Events card (T8.4)
     pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
+    const paintGoal = args.daily ? addPopGoalChip(args.daily.goal) : null; // the daily goal in the header (T8.5)
+    // An Ow spoils a "3 stars" or "No Ows" day at once: the chip says so (Try again starts it fresh).
+    const goalHooks = paintGoal && OW_GOALS.includes(args.daily.goal.id) ? { onOw: () => paintGoal(true) } : {};
     sound.unlock();
     pop.unlock();
     /** Start (or start again) the round. @returns {void} */
-    const start = () => { roundMusic(args.request); pop.startRound({ ...args, customerName: args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args) }); };
+    const start = () => { roundMusic(args.request); paintGoal?.(false); pop.startRound({ ...args, ...goalHooks, customerName:args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args) }); };
     start();
   }
 
@@ -490,20 +595,28 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function finishRound(step, payload, again, args) {
-    const out = L.applyRound(save, payload, step);
+    const out = L.applyRound(save, payload, args?.boss ? { ...step, boss: args.boss.id } : step); // a boss pays its bonus (T8.4)
     if (out.retry) { again(); return; }
+    // T8.5: a daily challenge try (finished or skipped) settles the goal reward and the streak, once per day.
+    const daily = step.daily
+      ? settleDaily(out.save, { date: step.daily, reached: judgeDaily(args?.daily?.goal, dailyResult(payload)) }) : null;
+    const stamp = out.boss ?? daily?.milestone?.stamp ?? null; // a boss stamp (T8.4) or a streak milestone stamp (T8.5)
     // T8.2: a finished career or Keep working customer gets the before and after reveal and goes into the album.
     const face = args && !out.failed && revealOn(step) ? faceSetup(args, popStageSize()) : null;
     // The save also lists the milestone strips still to play (B4), so closing the app now loses none.
-    persist(recordFace(out.save, { step, customer: args?.customer, setup: face, stars: out.stars, failed: out.failed }));
+    persist(recordFace(daily ? daily.save : out.save, { step, customer: args?.customer, setup: face, stars: out.stars, failed: out.failed, stamp }));
     /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */
     const playWaiting = (then) => playStrips(L.pendingStrips(save), () => { persist(L.clearPendingStrips(save)); then(); });
-    const onward = step.keepWorking ? keepWorking : continueStory; // Keep working goes on to its next customer (T5.4)
+    // Keep working goes on to its next customer (T5.4); the daily challenge goes back to the menu (T8.5).
+    const onward = step.daily ? showMenu : step.keepWorking ? keepWorking : continueStory;
     if (out.failed) { playWaiting(onward); return; } // "Next customer": on with the story
+    const tag = daily ? dailyTag(daily) : step.keepWorking ? { key: 'ui.keepWorking.pay', vars: { pct: L.KEEP_WORKING_PERCENT } } : null;
     show(createResultScreen({
-      t, reducedMotion: still(), stars: out.stars, payout: out.payout, reputationChange: out.reputationChange,
+      t, reducedMotion: still(), stars: out.stars, payout: daily ? dailyPayout(out.payout, daily) : out.payout, reputationChange: out.reputationChange,
       factKey: out.factKey, reactionKey: out.reactionKey, playerName: playerName(),
-      tagKey: step.keepWorking ? 'ui.keepWorking.pay' : null, tagVars: { pct: L.KEEP_WORKING_PERCENT },
+      tagKey: tag?.key ?? null, tagVars: tag?.vars ?? {},
+      // "New stamp!" for a boss (T8.4) or a streak milestone (T8.5; its name key is boss.<stamp>.name, as in the album).
+      stampKey: stamp && face ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
       reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '' }) : null,
       onContinue: () => playWaiting(onward),
       onShop: L.shopOpen(save) ? () => playWaiting(() => showShop(onward)) : undefined,

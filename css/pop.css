@@ -105,6 +105,7 @@
 /* The customer's twist (T8.3): a small lilac label beside the meter; a giggle bubble is a yellow "Hehehe!". */
 .pop-twist { flex: none; padding: 0 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; line-height: 1.5; color: #2b1a40; background: #d9c6ff; white-space: nowrap; }
 .pop-twist[hidden] { display: none; }
+.pop-twist--boss { color: #2a211d; background: linear-gradient(160deg, #fff4b8, #ffd23f); box-shadow: inset 0 0 0 1.5px #2a211d; } /* a boss or event (T8.4) */
 .pop-giggle { background: #ffd23f; color: #3a2a00; }
 /* The customer's request (T3.1b): a small speech-bubble pill under the counter line; green when done, grey and
    struck through when missed. A hurry request shows its seconds left in a little badge. */

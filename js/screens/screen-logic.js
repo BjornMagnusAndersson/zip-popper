@@ -96,9 +96,10 @@ export function nameLimit() {
 
 /**
  * The lines of the coin breakdown on the result screen. Pops and total always show; the cotton pad bonus, patch tips,
- * nose strip bonus, tip, combo and request only when they paid something.
+ * nose strip bonus, tip, combo and request only when they paid something; a boss or event bonus (T8.4, eventBonus with
+ * eventId) shows as its own row ("Hair Day bonus", string key boss.<id>.bonus) just above the total.
  * @param {{popCoins?: number, toolBonus?: number, patchTips?: number, stripBonus?: number, tip?: number, combo?: number,
- *   requestBonus?: number, total?: number}} payout from economy.js roundPayout
+ *   requestBonus?: number, total?: number, eventBonus?: number, eventId?: string}} payout from economy.js roundPayout
  * @returns {{id: string, key: string, amount: number}[]} rows in order, the last one is the total
  */
 export function coinRows(payout) {
@@ -112,7 +113,10 @@ export function coinRows(payout) {
   const tip = num(p.tip);
   const combo = num(p.combo);
   const request = num(p.requestBonus);
-  const total = Number.isFinite(p.total) ? num(p.total) : pops + pad + patch + strip + tip + combo + request;
+  const event = typeof p.eventId === 'string' ? num(p.eventBonus) : 0;
+  const daily = num(p.dailyBonus); // the daily challenge's goal reward and a streak milestone's extra coins (T8.5)
+  const streak = num(p.streakBonus);
+  const total = Number.isFinite(p.total) ? num(p.total) : pops + pad + patch + strip + tip + combo + request + event + daily + streak;
   const rows = [{ id: 'pops', key: 'ui.result.pops', amount: pops }];
   if (pad > 0) rows.push({ id: 'pad', key: 'ui.result.padBonus', amount: pad });
   if (patch > 0) rows.push({ id: 'patch', key: 'ui.result.patchTips', amount: patch });
@@ -120,6 +124,9 @@ export function coinRows(payout) {
   if (tip > 0) rows.push({ id: 'tip', key: 'ui.result.tip', amount: tip });
   if (combo > 0) rows.push({ id: 'combo', key: 'ui.result.combo', amount: combo });
   if (request > 0) rows.push({ id: 'request', key: 'ui.result.request', amount: request });
+  if (event > 0) rows.push({ id: 'event', key: `boss.${p.eventId}.bonus`, amount: event }); // T8.4
+  if (daily > 0) rows.push({ id: 'daily', key: 'ui.result.dailyBonus', amount: daily }); // T8.5
+  if (streak > 0) rows.push({ id: 'streak', key: 'ui.result.streakBonus', amount: streak }); // T8.5
   rows.push({ id: 'total', key: 'ui.result.total', amount: total });
   return rows;
 }

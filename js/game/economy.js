@@ -8,6 +8,7 @@ import { bumpInfo } from '../data/bumps.js';
 import { toolInfo } from '../data/tools.js';
 import { defaultSave, normalizeSave } from '../core/save.js';
 import { outfitTier } from './studio.js';
+import { isBoss, bossBonus } from '../data/bosses.js';
 import {
   STAR_TIPS, REQUEST_BONUS, REQUEST_BONUS_DEFAULT, REPUTATION_PER_STAR, SKIP_PENALTIES, TIER_THRESHOLDS,
   SCRUB_REPUTATION, SHOP_ITEMS, MASTERY_LEVELS, MASTERY_STRIP_LEVEL, DIFFICULTY_BANDS,
@@ -60,10 +61,11 @@ function patchTipsFor(patches) {
  * @param {string[]} bumpTypesPopped the bump types that were popped clean (unknown types pay 0)
  * @param {boolean|string|null} requestDone false/null = no request done; 'gentle' | 'hurry' | 'combo' = that request done; true = done (default bonus)
  * @param {string[]|null} [bumpTools] the tool of each clean pop, same order as bumpTypesPopped (left out = no tool bonus)
- * @param {{patches?: number, stripPeeled?: boolean}|null} [extras] how many popped spots got a patch, and whether the
- *   nose strip was peeled off (left out = neither pays)
+ * @param {{patches?: number, stripPeeled?: boolean, boss?: string|null}|null} [extras] how many popped spots got a
+ *   patch, whether the nose strip was peeled off (left out = neither pays) and the boss or event id of the customer
+ *   (T8.4: then the payout also has eventBonus = data/bosses.js bossBonus, and eventId; only then)
  * @returns {{popCoins:number, toolBonus:number, patchTips:number, stripBonus:number, tip:number, combo:number,
- *   requestBonus:number, total:number}} the coins
+ *   requestBonus:number, total:number, eventBonus?: number, eventId?: string}} the coins
  */
 export function roundPayout(roundState, bumpTypesPopped, requestDone = false, bumpTools = null, extras = null) {
   if (roundState.failed) return { popCoins: 0, toolBonus: 0, patchTips: 0, stripBonus: 0, tip: 0, combo: 0, requestBonus: 0, total: 0 };
@@ -75,7 +77,13 @@ export function roundPayout(roundState, bumpTypesPopped, requestDone = false, bu
   const combo = comboBonus(roundState);
   const requestBonus = requestBonusFor(requestDone);
   const total = popCoins + toolBonus + patchTips + stripBonus + tip + combo + requestBonus;
-  return { popCoins, toolBonus, patchTips, stripBonus, tip, combo, requestBonus, total };
+  const out = { popCoins, toolBonus, patchTips, stripBonus, tip, combo, requestBonus, total };
+  if (isBoss(extras?.boss)) { // a boss or event customer pays its bonus on top (T8.4)
+    out.eventBonus = bossBonus(extras.boss, bumpTypesPopped, popCoins);
+    out.eventId = extras.boss;
+    out.total += out.eventBonus;
+  }
+  return out;
 }
 
 /**
@@ -100,6 +108,11 @@ export function keepWorkingPayout(payout, cleanPops, factor = KEEP_WORKING_PAY) 
     tip: cut(p.tip), combo: cut(p.combo), requestBonus: cut(p.requestBonus),
   };
   out.total = out.popCoins + out.toolBonus + out.patchTips + out.stripBonus + out.tip + out.combo + out.requestBonus;
+  if (Object.hasOwn(p, 'eventBonus')) { // a boss or event bonus (T8.4) is cut by the same factor
+    out.eventBonus = cut(p.eventBonus);
+    out.total += out.eventBonus;
+  }
+  if (typeof p.eventId === 'string') out.eventId = p.eventId;
   return out;
 }
 

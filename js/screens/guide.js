@@ -124,20 +124,21 @@ function drawTwistPicture(ctx, id, c) {
 /**
  * Build the Field guide screen.
  * @param {{t: (key: string, vars?: object) => string, cards: ReturnType<typeof import('./guide-logic.js').guideCards>,
- *   twistCards?: object[], onBack?: () => void, overlay?: boolean, reducedMotion?: boolean}} opts t = string
- *   function; cards = the cards (guide-logic.js guideCards); twistCards = the customer twist cards under a
- *   "Customers" heading (guide-logic.js twistCards, T8.3; left out = none); onBack = Back (or Escape) was pressed;
+ *   twistCards?: object[], eventCards?: object[], onBack?: () => void, overlay?: boolean, reducedMotion?: boolean}} opts
+ *   t = string function; cards = the cards (guide-logic.js guideCards); twistCards = the customer twist cards under a
+ *   "Customers" heading (guide-logic.js twistCards, T8.3; left out = none); eventCards = the boss and event cards under
+ *   an "Events" heading (guide-logic.js bossCards, T8.4; left out = none); onBack = Back (or Escape) was pressed;
  *   overlay = shown over the pop scene (it then lies on top as a dialog and takes keyboard focus)
  * @returns {{node: HTMLElement, focus: () => void, dispose: () => void}} the screen
  */
-export function createGuideScreen({ t, cards, twistCards = [], onBack, overlay = false, reducedMotion = false }) {
+export function createGuideScreen({ t, cards, twistCards = [], eventCards = [], onBack, overlay = false, reducedMotion = false }) {
   const shell = screenShell(`guide${overlay ? ' app-screen--overlay' : ''}`, { label: t('ui.guide.title'), reducedMotion });
   if (overlay) {
     shell.node.setAttribute('role', 'dialog');
     shell.node.setAttribute('aria-modal', 'true');
   }
   const head = header(t, t('ui.guide.title'), onBack, shell.signal);
-  const { open, total } = guideCount([...cards, ...twistCards]);
+  const { open, total } = guideCount([...cards, ...twistCards, ...eventCards]);
   head.append(el('p', 'app-guide__count', t('ui.guide.count', { open, total }))); // in the top row, so the list gets the room
   const panel = el('div', 'app-body app-shoplist app-guidelist');
   const frame = el('div', 'app-shoplistframe');
@@ -156,13 +157,13 @@ export function createGuideScreen({ t, cards, twistCards = [], onBack, overlay =
     if (!card.open) {
       pic.append(el('span', 'app-guidecard__q', t('ui.guide.lockedMark')));
       pic.setAttribute('aria-hidden', 'true');
-      const lockedLine = card.kind === 'twist' ? 'ui.guide.twistLocked' : 'ui.guide.lockedHint';
+      const lockedLine = { twist: 'ui.guide.twistLocked', event: 'ui.guide.eventLocked' }[card.kind] ?? 'ui.guide.lockedHint';
       text.append(el('h2', 'app-guidecard__name', t('ui.guide.locked')), el('p', 'app-guidecard__line', t(lockedLine)));
       node.append(pic, text);
       return node;
     }
     const name = t(card.nameKey);
-    const art = drawPicture(card.id, dpr);
+    const art = drawPicture(card.pic ?? card.id, dpr); // an Events card borrows a bump or tool picture (T8.4)
     art.className = 'app-guidecard__art';
     art.setAttribute('role', 'img');
     art.setAttribute('aria-label', t('ui.guide.picture', { name }));
@@ -172,7 +173,9 @@ export function createGuideScreen({ t, cards, twistCards = [], onBack, overlay =
     const tip = el('p', 'app-guidecard__tip');
     tip.append(icon('bulb'), el('span', '', t(card.tipKey)));
     // A customer twist card (T8.3) has no "What to use" line: its tip says what to do.
-    text.append(el('h2', 'app-guidecard__name', name), el('p', 'app-guidecard__line', t(card.lineKey)), ...(card.kind === 'twist' ? [] : [use]), tip);
+    const noUse = card.kind === 'twist' || card.kind === 'event'; // an Events card (T8.4) has no "What to use" line either
+    text.append(el('h2', 'app-guidecard__name', name), el('p', 'app-guidecard__line', t(card.lineKey)), ...(noUse ? [] : [use]), tip);
+    if (card.kind === 'event') node.classList.add('app-guidecard--event');
     node.append(pic, text);
     return node;
   }
@@ -180,6 +183,8 @@ export function createGuideScreen({ t, cards, twistCards = [], onBack, overlay =
   for (const card of cards) panel.append(cardNode(card));
   if (twistCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.customers'))); // T8.3
   for (const card of twistCards) panel.append(cardNode(card));
+  if (eventCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.events'))); // T8.4
+  for (const card of eventCards) panel.append(cardNode(card));
 
   /** Show the "more below" arrow only while the list can scroll further down. @returns {void} */
   function updateMore() {

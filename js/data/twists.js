@@ -44,7 +44,7 @@ export const SWAY = { amount: 0.07, maxPx: 14, period: 4.2, periodY: 5.7, reduce
  * adds to the irritation meter (times the customer's difficulty).
  */
 export const TICKLE = {
-  holdSeconds: 0.8, dropBack: 0.3, jerkSeconds: 0.4, jerkShare: 0.08, cooldown: 0.4, irritation: 0.03,
+  holdSeconds: 1.1, dropBack: 0.2, jerkSeconds: 0.4, jerkShare: 0.08, cooldown: 0.4, irritation: 0.03,
   zones: ['cheekL', 'cheekR', 'jawL', 'jawR', 'temple'],
 };
 
@@ -62,6 +62,13 @@ export const SENSITIVE = { roughScale: 2, owScale: 1.5, blush: 0.3 };
  * is Gus (a nervous, giggly groom) and 15 is Clown Cleo, who suit the ticklish twist (REGULAR_TWISTS).
  */
 export const CAREER_TWISTS = { chapter: 5, schedule: { 4: 'fidgety', 6: 'sensitive', 8: 'ticklish', 10: 'fidgety', 12: 'sensitive', 15: 'ticklish' } };
+
+/**
+ * T8.4: career customers 5, 9 and 13 are boss or event customers (data/bosses.js: no twist, no request). Customer 5
+ * (Prom Penny) used to roll the career's only hurry request, so this customer always gets a hurry request instead
+ * (app-logic.js roundArgs), else the career would have no "in a hurry" customer at all.
+ */
+export const CAREER_HURRY = { chapter: 5, n: 7 };
 
 /** Keep working: about chance of the customers get a twist, rolled with a fixed seed per customer number. */
 export const KEEP_WORKING_TWISTS = { chance: 0.6, seedBase: 90000 };

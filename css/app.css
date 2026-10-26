@@ -165,6 +165,13 @@
 .app-twist__line--request { font-size: 1.05rem; font-style: normal; font-weight: 800; }
 .app-twist__tip { display: flex; align-items: flex-start; gap: 6px; font-size: 0.88rem; font-weight: 700; line-height: 1.25; }
 .app-twist__tip .app-icon { width: 20px; height: 20px; flex: none; }
+/* A boss or event customer (T8.4): the same pill in gold, tilted the other way, with a reward line. */
+.app-twist--boss {
+  background: linear-gradient(160deg, #fff4b8, #ffd23f 70%, #f5b622); transform: rotate(0.8deg);
+  box-shadow: 3px 4px 0 var(--shadow), inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+.app-twist--boss .app-twist__label { padding: 0 8px; border-radius: 999px; background: var(--ink); color: #ffe27a; }
+.app-twist__reward { font-size: 0.9rem; font-weight: 900; line-height: 1.25; }
 .app-intro__start { margin-top: 4px; }
 
 /* ---------- Result ---------- */
@@ -182,6 +189,13 @@
 .app-coins__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; font-weight: 700; }
 .app-coins__row--total { margin-top: 4px; padding-top: 6px; border-top: 3px dashed var(--ink); font-size: 1.15rem; font-weight: 900; }
 .app-result__quote { order: 2; text-align: center; font-style: italic; font-weight: 700; color: var(--ink); background: rgba(255, 255, 255, 0.55); padding: 8px 12px; border-radius: 14px; }
+/* A finished boss or event (T8.4): "New stamp!" in a gold pill under the coins. */
+.app-result__stamp {
+  order: 1; display: flex; align-items: center; justify-content: center; gap: 8px; align-self: center; max-width: 100%; padding: 4px 14px 4px 8px;
+  border-radius: 999px; border: 3px solid var(--ink); background: linear-gradient(160deg, #fff4b8, #ffd23f); font-weight: 900; font-size: 0.92rem;
+  line-height: 1.2; box-shadow: 0 3px 0 var(--ink);
+}
+.app-result__stamp svg { flex: none; width: 24px; height: 24px; }
 .app-rep {
   order: 3; display: flex; align-items: center; justify-content: center; gap: 8px; align-self: center; max-width: 100%; padding: 6px 16px 6px 10px; border-radius: 999px;
   border: 3px solid var(--ink); background: var(--pink-soft); font-weight: 800; box-shadow: 0 3px 0 var(--ink);
@@ -490,6 +504,15 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
 .app-albumdetail__name { font-size: 1.4rem; font-weight: 900; text-align: center; overflow-wrap: anywhere; }
 .app-albumdetail .app-album__stars .app-icon { width: 40px; height: 40px; }
 .app-albumdetail__visits { font-weight: 700; color: #5f4a41; }
+/* A boss or event face (T8.4): a small round gold seal with a star on its tile, and a stamp line on the big face. */
+.app-albumtile--stamp { background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 38%), #ffe9a0; }
+.app-albumtile__stamp {
+  position: absolute; top: 3px; right: 3px; z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid var(--ink); background: radial-gradient(circle at 35% 30%, #fff4b8, #ffd23f 60%, #e9a812); box-shadow: 0 2px 0 rgba(42, 33, 29, 0.35);
+}
+.app-albumtile__stamp svg { width: 18px; height: 18px; }
+.app-albumdetail__stamp { display: flex; align-items: center; gap: 6px; padding: 2px 12px 2px 6px; border-radius: 999px; border: 2px solid var(--ink); background: #ffd23f; font-weight: 900; }
+.app-albumdetail__stamp svg { width: 22px; height: 22px; }
 .app-albumdetail__card > .app-btn { width: 100%; }
 @media (orientation: landscape) and (max-height: 600px) {
   .app-result.app-result--reveal { display: flex; flex-direction: row; align-items: center; gap: 16px; }
@@ -554,6 +577,10 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
   .app-intro { flex-direction: row; align-items: center; align-items: safe center; gap: 24px; } /* safe: a tall column scrolls, never cut at the top (T8.3) */
   .app-intro__who, .app-intro__what { flex: 1; justify-content: center; }
   .app-intro__portrait { width: min(30vh, 140px); }
+  /* A boss or event pill (T8.4) is a line taller than a twist: its tip waits for the pop scene's hint line here. */
+  .app-intro__what:has(.app-twist--boss) { gap: 8px; }
+  .app-twist--boss { padding: 6px 12px; }
+  .app-twist--boss .app-twist__tip { display: none; }
   .app-result { flex-direction: row; align-items: center; gap: 24px; }
   .app-result__left, .app-result__right { display: flex; flex-direction: column; flex: 1; justify-content: center; gap: 10px; min-width: 0; }
   .app-result__title { font-size: 1.6rem; }

@@ -2,6 +2,8 @@
 // saved recipe (screens/reveal.js faceCanvas, the real face drawing code), with its best stars under it. The named
 // regulars come first in the order she meets them; the ones she has not met yet are locked "?" silhouettes. Then the
 // walk-ins (strangers), the most recent first. Tapping a face opens it larger with its name, best stars and visits.
+// Boss and event faces (T8.4) carry a small gold stamp badge; the ones not shown as a regular's tile have their own
+// "Event faces" section after the walk-ins.
 // The list scrolls with the shop's "more below" arrow. Back and the Escape key close it (Escape closes the big face
 // first). The rules (what shows, the counts) are in album-logic.js; the game passes the saved album in.
 // All text comes from the string table.
@@ -30,6 +32,28 @@ function starRow(stars, size, label) {
   row.setAttribute('aria-label', label);
   for (const on of starStates(stars)) row.append(starIcon(on, size));
   return row;
+}
+
+/**
+ * The small gold stamp badge on a boss or event face's tile (T8.4): a round gold seal with a star.
+ * @returns {HTMLElement} the badge
+ */
+function stampBadge() {
+  const badge = el('span', 'app-albumtile__stamp');
+  badge.append(starIcon(true, 18));
+  return badge;
+}
+
+/**
+ * The stamp line on the big face of a boss or event face (T8.4): "Hair Day stamp" with a gold star.
+ * @param {(key: string, vars?: object) => string} t the string function
+ * @param {string} id the event id
+ * @returns {HTMLElement} the line
+ */
+function stampLine(t, id) {
+  const line = el('p', 'app-albumdetail__stamp');
+  line.append(starIcon(true, 22), el('span', '', t('ui.album.stampLine', { event: t(`boss.${id}.name`) })));
+  return line;
 }
 
 /**
@@ -87,10 +111,12 @@ export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false
    */
   function faceTile(entry) {
     const name = t(entryNameKey(entry));
-    const tile = button('app-albumtile', '', () => openDetail(entry, tile), shell.signal);
-    tile.setAttribute('aria-label', t('ui.album.tile', { name, n: entry.stars }));
+    const tile = button(`app-albumtile${entry.stamp ? ' app-albumtile--stamp' : ''}`, '', () => openDetail(entry, tile), shell.signal);
+    const label0 = entry.stamp ? t('ui.album.tileStamp', { name, n: entry.stars, event: t(`boss.${entry.stamp}.name`) }) : t('ui.album.tile', { name, n: entry.stars });
+    tile.setAttribute('aria-label', label0);
     const holder = el('span', 'app-albumtile__frame');
     holder.setAttribute('aria-hidden', 'true');
+    if (entry.stamp) holder.append(stampBadge()); // a boss or event face (T8.4)
     queue.push([holder, entry]);
     const label = el('span', 'app-albumtile__name', name);
     label.setAttribute('aria-hidden', 'true');
@@ -128,7 +154,8 @@ export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false
 
   panel.append(section('ui.album.regulars', view.regulars.map((r) => (r.entry ? faceTile(r.entry) : lockedTile()))));
   if (view.strangers.length) panel.append(section('ui.album.strangers', view.strangers.map(faceTile)));
-  else panel.append(el('p', 'app-album__empty', t(view.met ? 'ui.album.noStrangers' : 'ui.album.empty')));
+  else panel.append(el('p', 'app-album__empty', t(view.met || view.events.length ? 'ui.album.noStrangers' : 'ui.album.empty')));
+  if (view.events.length) panel.append(section('ui.album.events', view.events.map(faceTile))); // T8.4
 
   /**
    * Show one face large over the album (a small dialog): the clean face with sparkles, the name, the best stars and
@@ -152,7 +179,8 @@ export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false
     const close = button('app-btn app-btn--main', t('ui.album.close'), () => closeDetail(true), shell.signal);
     card.append(
       pic, el('h2', 'app-albumdetail__name', name), starRow(entry.stars, 40, t('ui.album.best', { n: entry.stars })),
-      el('p', 'app-albumdetail__visits', t('ui.album.visits', { n: entry.times })), close,
+      el('p', 'app-albumdetail__visits', t('ui.album.visits', { n: entry.times })),
+      ...(entry.stamp ? [stampLine(t, entry.stamp)] : []), close, // a boss or event face's stamp (T8.4)
     );
     box.append(card);
     box.addEventListener('click', (e) => { if (e.target === box) closeDetail(true); }, { signal: shell.signal });

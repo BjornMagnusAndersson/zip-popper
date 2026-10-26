@@ -774,6 +774,7 @@ export function createPopMode({
     const lay = layoutFace({
       seed: s, face, count: round ? cfg.setup.count : cfg.kind === 'free' ? FACE_BUMPS : count, strip: wantStrip && !clownNose,
       allowed: round ? cfg.setup.allowed : null, decoys: round ? cfg.setup.decoys : true,
+      mix: round ? cfg.setup.mix : null, grown: round ? cfg.setup.grown : 0, // a boss face's own bumps (T8.4)
     });
     // Skill by use (ECONOMY.md section 4): faster holds and fewer rough presses for kinds the player has mastered.
     const pimples = cfg.kind === 'demo' ? lay.pimples : applyMastery(lay.pimples, cfg.holdFactors, cfg.roughReductions);
@@ -922,7 +923,8 @@ export function createPopMode({
      *   costs in reputation, shown on the fail choice (left out = no cost shown). twist = the customer's twist
      *   (T8.3, data/twists.js: 'fidgety', 'ticklish', 'sensitive', or 'hurry' for a hurry request; shown as a label
      *   in the header, the first three also change the play); twistHintKey = its tip for the hint line (until the
-     *   first pop).
+     *   first pop). boss = a boss or event customer's face rules (T8.4, data/bosses.js bossSpec `boss`) and
+     *   bossNameKey = its name, shown in gold in the twist chip's place.
      *   For a special mode (T4.5): mood = a fixed face mood ('sleep'; an Ow still winces), onPop(bump, left) after
      *   every pop and onOw(at) after every Ow.
      * @returns {void}
@@ -935,6 +937,7 @@ export function createPopMode({
         setup: roundFaceSetup({
           customer: o.customer, bumpCount: o.bumpCount, allowedTypes: o.allowedTypes, unlockedTools: tools, decoys: o.decoys,
           seed: seed0, request: o.request ?? null, // the nose strip: about 2 faces in 5, never with a hurry request
+          boss: o.boss ?? null, // a boss or event face (T8.4): its own bump mix, the nose strip always on, grown horns
         }),
         seed: seed0,
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {}, irritation: irritationScales(o.difficulty),
@@ -943,8 +946,11 @@ export function createPopMode({
         twist: typeof o.twist === 'string' ? o.twist : null, // T8.3: the customer's twist
         twistHint: typeof o.twistHintKey === 'string' ? o.twistHintKey : null,
       };
-      twistChip.hidden = !cfg.twist;
-      twistChip.textContent = cfg.twist ? t(`twist.${cfg.twist}.name`) : '';
+      // The chip shows the twist's name, or a boss or event's name in gold (T8.4: a boss has no twist).
+      const chipKey = typeof o.bossNameKey === 'string' ? o.bossNameKey : cfg.twist ? `twist.${cfg.twist}.name` : null;
+      twistChip.hidden = !chipKey;
+      twistChip.textContent = chipKey ? t(chipKey) : '';
+      twistChip.classList.toggle('pop-twist--boss', typeof o.bossNameKey === 'string');
       moodOverride = typeof o.mood === 'string' ? o.mood : null;
       if (guideBtn) guideBtn.hidden = o.request?.type === 'hurry'; // a hurry clock cannot pause: no guide in that round (T6.5)
       setRoundTexts(typeof o.customerName === 'string' && o.customerName ? o.customerName : null, o.skipCost);

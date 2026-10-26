@@ -14,7 +14,9 @@ import {
   SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL, KEEP_WORKING_PAY,
 } from '../data/economy-data.js';
 import { pickRequest, hurryLimit } from './requests.js';
-import { twistFor, shownTwist, describeTwist, isTwist, TWIST_IDS } from '../data/twists.js';
+import { dailyFor, dailySpec, dailyRequest, isDateKey, addDays } from './daily-logic.js';
+import { twistFor, shownTwist, describeTwist, isTwist, TWIST_IDS, CAREER_HURRY } from '../data/twists.js';
+import { bossFor, bossSpec, describeBoss, isBoss, BOSS_IDS, BOSSES } from '../data/bosses.js';
 import { STUDIO_LAYERS, studioTier, studioLayersShown, heroOutfit, OUTFIT_TIERS, OUTFIT_ITEMS } from './studio.js';
 import { hurryHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
@@ -119,11 +121,14 @@ function intOrNull(v) {
  * owned and scrubbed, T5.1a, so the studio tiers and layers can be looked at; ?outfit=everyday|apron|scrubs = her
  * outfit tier, T5.2: the outfit items up to that tier owned, so the studio view and the comics show it; ?seen=all =
  * every Field guide card open, T6.5; ?twist=fidgety|ticklish|sensitive|hurry = every customer gets that twist,
- * T8.3, used only with ?test).
+ * T8.3, used only with ?test; ?boss=hairday|nosestrip|golden|horn = every customer is that boss or event, T8.4, only
+ * with ?test, and the tools it needs are owned; ?daily=YYYY-MM-DD = the daily challenge's date and ?dailystreak=N = a
+ * streak of N days up to the day before it, T8.5, used only with ?test).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
  *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null,
- *   outfit: string|null, seenAll: boolean, album: boolean, twist: string|null}} the flags (album = ?album=demo, T8.2; twist = ?twist=, T8.3)
+ *   outfit: string|null, seenAll: boolean, album: boolean, twist: string|null, boss: string|null}} the flags (album = ?album=demo, T8.2; twist = ?twist=, T8.3;
+ *   boss = ?boss=, T8.4)
  */
 export function parseFlags(search) {
   const p = new URLSearchParams(search ?? '');
@@ -138,6 +143,9 @@ export function parseFlags(search) {
     seenAll: p.get('seen') === 'all', // ?seen=all: every Field guide kind met (T6.5)
     album: p.get('album') === 'demo', // ?album=demo: 12 faces in the Face album (T8.2)
     twist: isTwist(p.get('twist')) ? p.get('twist') : null, // ?twist=: force a customer twist (T8.3)
+    boss: isBoss(p.get('boss')) ? p.get('boss') : null, // ?boss=: force a boss or event customer (T8.4)
+    daily: isDateKey(p.get('daily')) ? p.get('daily') : null, // ?daily=YYYY-MM-DD: the daily challenge's date (T8.5)
+    dailyStreak: intOrNull(p.get('dailystreak')), // ?dailystreak=N: a streak of N up to the day before ?daily= (T8.5)
   };
 }
 
@@ -203,7 +211,17 @@ export function applyTestFlags(save, flags, now = Date.now()) {
     s.outfitTier = OUTFIT_TIERS.indexOf(flags.outfit) + 1;
   }
   if (flags.seenAll) { s.seenKinds = [...GUIDE_KINDS]; s.seenTwists = [...TWIST_IDS]; } // ?seen=all: every Field guide card open (T6.5, T8.3)
+  if (flags.seenAll) s.seenBosses = [...BOSS_IDS]; // ... and the Events cards (T8.4)
+  if (flags.boss) { // ?boss=: the tools that event needs are owned (T8.4), so it is not swapped for Golden Day
+    let eco = economyFromSave(s);
+    for (const tool of BOSSES[flags.boss].needs) eco = grantItem(eco, tool);
+    s = economyToSave(s, eco);
+  }
   if (flags.album) s.albumFaces = demoAlbum(now); // ?album=demo: a Face album with 12 faces (T8.2)
+  if (flags.daily && flags.dailyStreak > 0) { // ?daily=&dailystreak=N: N days in a row done, the last one yesterday (T8.5)
+    const yesterday = addDays(flags.daily, -1);
+    s = { ...s, dailyStreak: flags.dailyStreak, dailyBest: flags.dailyStreak, dailyLastDone: yesterday, dailyLastPlayed: yesterday };
+  }
   return normalizeSave(s, now);
 }
 
@@ -323,6 +341,7 @@ export function keepWorkingSeed(k, forced = null) {
  * @returns {object|null} the spec (chapter-logic.js customerSpec shape)
  */
 function stepSpec(step) {
+  if (step?.daily) return dailySpec(step.daily); // the daily challenge's customer (T8.5)
   return step?.keepWorking ? keepWorkingSpec(step.n) : customerSpec(step.chapter, step.n);
 }
 
@@ -410,34 +429,50 @@ export function backdropRoom(chapter) {
  * @param {{chapter: number, n: number}} step a customer step (from nextStep)
  * @param {number|null} [forcedSeed] the ?seed= flag
  * @param {string|null} [forcedTwist] the ?twist= test flag (any twist id; 'hurry' makes a hurry request)
+ * @param {string|null} [forcedBoss] the ?boss= test flag (T8.4: any event id, used on every customer)
+ * Boss and event customers (T8.4, data/bosses.js bossFor): chapter 5 customers 5, 9 and 13 and every 8th Keep working
+ * customer. Same person, the event's bumps and accessory (bossSpec), no twist and no request; boss = the face rules
+ * and the event id (applyRound pays its bonus when the step carries `boss`), bossNameKey = its name for the chip,
+ * twistHintKey = the event's tip.
  * @returns {object|null} startRound arguments, or null when the chapter has no such customer
  */
-export function roundArgs(save, step, forcedSeed = null, forcedTwist = null) {
+export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, forcedBoss = null) {
   const kw = Boolean(step.keepWorking); // Keep working (T5.4): random customer, career rules, its own seeds
-  const spec = stepSpec(step);
-  if (!spec) return null;
+  const plain = stepSpec(step);
+  if (!plain) return null;
   const { holdFactors, roughReductions } = masteryTables(save);
   const career = getChapter(step.chapter)?.kind === 'career';
-  const seed = kw ? keepWorkingSeed(step.n, forcedSeed) : roundSeed(step.chapter, step.n, forcedSeed);
+  const daily = step.daily ? dailyFor(step.daily) : null; // the daily challenge (T8.5): its own seed, twist and goal
+  const seed = daily ? daily.seed : kw ? keepWorkingSeed(step.n, forcedSeed) : roundSeed(step.chapter, step.n, forcedSeed);
   const unlockedTools = [...economyFromSave(save).unlockedTools];
+  const bossId = daily ? null : isBoss(forcedBoss) ? forcedBoss : bossFor({ chapter: step.chapter, n: step.n, keepWorking: kw, ownedTools: unlockedTools });
+  const spec = bossId ? bossSpec(plain, bossId, seed) : plain; // a boss or event customer (T8.4)
   const decoys = career && (kw || step.n >= 4);
   const requestNumber = kw ? CAREER_BANDS[CAREER_BANDS.length - 1].to : step.n; // Keep working combos are as long as at the career's end
   const holds = hurryHolds({
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: spec.allowedTypes, unlockedTools, decoys, seed, holdFactors,
+    boss: spec.boss ?? null,
   });
-  const own = isTwist(forcedTwist) ? forcedTwist
-    : twistFor({ chapter: step.chapter, n: step.n, keepWorking: kw, regularId: spec.customer?.regular ? spec.customer.id : null });
+  // T8.4: the career's hurry customer (CAREER_HURRY, it moved from the boss slot 5) always has the hurry request.
+  const careerHurry = !kw && !daily && step.chapter === CAREER_HURRY.chapter && step.n === CAREER_HURRY.n;
+  const own = daily ? daily.twist : bossId ? null : isTwist(forcedTwist) ? forcedTwist // a boss has no twist (T8.4)
+    : careerHurry ? 'hurry' : twistFor({ chapter: step.chapter, n: step.n, keepWorking: kw, regularId: spec.customer?.regular ? spec.customer.id : null });
   let request = null; // one extra per customer (T8.3): a twist customer has no request
-  if (own === 'hurry') request = { type: 'hurry', timeLimit: hurryLimit(holds) };
-  else if (!own) request = pickRequest(spec, holds, seed + 101, requestNumber);
+  if (daily) request = dailyRequest(daily.goal, holds); // a daily clock day: the hurry clock with the daily limit (T8.5)
+  else if (own === 'hurry') request = { type: 'hurry', timeLimit: hurryLimit(holds) };
+  else if (!own && !bossId) request = pickRequest(spec, holds, seed + 101, requestNumber); // a boss has no request (T8.4)
   const twist = shownTwist(own, request);
+  const boss = describeBoss(bossId);
   return {
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
     seed, holdFactors, roughReductions, unlockedTools,
     request, room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), career: true,
     decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
-    twist, twistHintKey: describeTwist(twist, { ownedTools: unlockedTools })?.hintKey ?? null,
+    twist, twistHintKey: boss ? boss.hintKey : describeTwist(twist, { ownedTools: unlockedTools })?.hintKey ?? null,
+    boss: spec.boss ?? null, bossNameKey: boss?.nameKey ?? null, // T8.4
+    // T8.5: the daily challenge's date and goal (a clock goal carries its limit, the same as the hurry request's).
+    daily: daily ? { date: daily.date, goal: request ? { ...daily.goal, timeLimit: request.timeLimit } : { ...daily.goal } } : null,
   };
 }
 
@@ -518,11 +553,14 @@ export function reactionKey(customer, owCount) {
  * A Keep working step (keepWorking: true, T5.4) pays KEEP_WORKING_PAY of every coin line (economy.js
  * keepWorkingPayout) and counts keepWorkingDone up instead of moving the story; stars, mastery and the skip cost work
  * as in the career.
+ * A boss or event step (step.boss = its id, T8.4; app.js adds it from roundArgs) also pays the event bonus
+ * (economy.js roundPayout eventBonus, cut like every line in Keep working); skipping it costs the usual reputation.
  * @param {object} save the save
  * @param {object} payload the onFinish payload (round-logic.js finishPayload)
- * @param {{chapter: number, n: number}} step the customer step that was played
+ * @param {{chapter: number, n: number, boss?: string}} step the customer step that was played
  * @returns {{save: object, retry: boolean, failed: boolean, stars: number, payout: object|null, reputationChange: number,
- *   skipPenalty: number, strips: string[], factKey: string|null, reactionKey: string|undefined}} the outcome
+ *   skipPenalty: number, strips: string[], factKey: string|null, reactionKey: string|undefined, boss?: string|null}}
+ *   the outcome (boss = the finished boss's id, for its stamp)
  */
 export function applyRound(save, payload, step) {
   const failed = Boolean(payload?.failed);
@@ -540,6 +578,7 @@ export function applyRound(save, payload, step) {
     after = applyRoundResult(before, { failed: true, choice: 'next' });
   } else {
     const extras = { patches: payload.patches ?? 0, stripPeeled: payload.stripPeeled === true }; // patch tips, strip bonus
+    if (isBoss(step?.boss)) extras.boss = step.boss; // a boss or event customer's bonus (T8.4)
     let result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false, 'again', payload.cleanBumpTools ?? null, extras);
     if (kw) { // Keep working pays KEEP_WORKING_PAY of every coin line (T5.4)
       const cut = keepWorkingPayout(result.payout, (payload.cleanBumpTypes ?? []).length);
@@ -552,13 +591,15 @@ export function applyRound(save, payload, step) {
   }
   const strips = careerStrips(save, before, after, stars);
   // Keep working never moves the story: it only counts its own customers (a skip counts too, so the next one is new).
-  const moved = kw ? { keepWorkingDone: (save.keepWorkingDone ?? 0) + 1 } : progressToSave(advance(progressFromSave(save), failed ? 'skip' : 'done'));
+  // A daily challenge customer (T8.5) counts nothing here: daily-logic.js settleDaily keeps its own fields.
+  const moved = step?.daily ? {} : kw ? { keepWorkingDone: (save.keepWorkingDone ?? 0) + 1 } : progressToSave(advance(progressFromSave(save), failed ? 'skip' : 'done'));
   const next = { ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }; // kept until played (B4)
   const spec = stepSpec(step);
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
     strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
     reactionKey: failed ? undefined : reactionKey(spec?.customer, payload.owCount ?? 0),
+    boss: !failed && isBoss(step?.boss) ? step.boss : null, // a finished boss: its stamp goes into the album (T8.4)
   };
 }
 

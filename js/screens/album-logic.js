@@ -62,11 +62,14 @@ export function faceSetup(args, stage = null) {
   const a = args ?? {};
   const s = roundFaceSetup({
     customer: a.customer, bumpCount: a.bumpCount, allowedTypes: a.allowedTypes,
-    unlockedTools: roundTools(a.unlockedTools ?? ['fingers']), decoys: a.decoys,
+    unlockedTools: roundTools(a.unlockedTools ?? ['fingers']), decoys: a.decoys, boss: a.boss ?? null,
   });
   const seed = Number.isFinite(a.seed) && a.seed > 0 ? Math.floor(a.seed) : 1;
   const { w, h } = stageOrDefault(stage);
-  return { seed, spec: copySpec(s.spec), count: s.count, kinds: [...s.allowed], strip: s.strip, decoys: s.decoys, w, h };
+  const out = { seed, spec: copySpec(s.spec), count: s.count, kinds: [...s.allowed], strip: s.strip, decoys: s.decoys, w, h };
+  if (s.mix) out.mix = { ...s.mix }; // a boss face's own bump mix (T8.4)
+  if (s.grown) out.grown = s.grown;
+  return out;
 }
 
 /**
@@ -161,23 +164,27 @@ export function isNamedRegular(customer) {
  * A new album entry for a finished customer (small: no pictures, only what redraws the clean face).
  * Named regulars: id = their id (their face parts and name come from data/customers.js when drawn).
  * Strangers: id = STRANGER, plus their face parts and name key.
- * @param {{customer: object, setup: ReturnType<typeof faceSetup>, stars: number}} o the customer, the face recipe and
- *   the stars of this visit
+ * @param {{customer: object, setup: ReturnType<typeof faceSetup>, stars: number, stamp?: string|null}} o the customer,
+ *   the face recipe, the stars of this visit and a boss or event stamp (T8.4: the event id, or null)
  * @param {number} now time in ms
- * @returns {object} the entry: {id, seed, face?, nameKey?, count, kinds, strip, decoys, w, h, stars, times, lastSeen}
- *   (a later `stamp` field, T8.4, is kept when the entry is updated)
+ * @returns {object} the entry: {id, seed, face?, nameKey?, count, kinds, strip, decoys, w, h, stars, times, lastSeen,
+ *   stamp?, mix?, grown?} (stamp = the event id of a boss face, T8.4; mix and grown = its bump rules, so it redraws)
  */
-export function albumEntry({ customer, setup, stars }, now) {
+export function albumEntry({ customer, setup, stars, stamp = null }, now) {
   const named = isNamedRegular(customer);
   const entry = { id: named ? customer.id : STRANGER, seed: setup.seed };
   if (!named) {
     entry.face = copySpec(setup.spec);
     if (typeof customer?.nameKey === 'string') entry.nameKey = customer.nameKey;
-  }
-  return {
+  } else if (typeof stamp === 'string' && stamp) entry.face = copySpec(setup.spec); // a regular's event-day look (T8.4)
+  const out = {
     ...entry, count: setup.count, kinds: [...setup.kinds], strip: setup.strip, decoys: setup.decoys, w: setup.w, h: setup.h,
     stars: Math.min(3, Math.max(0, Math.round(Number(stars) || 0))), times: 1, lastSeen: Math.max(0, Number(now) || 0),
   };
+  if (typeof stamp === 'string' && stamp) out.stamp = stamp;
+  if (setup.mix) out.mix = { ...setup.mix };
+  if (setup.grown) out.grown = setup.grown;
+  return out;
 }
 
 /**
@@ -226,7 +233,11 @@ export function capAlbum(list, max = ALBUM_MAX) {
  */
 export function addAlbumFace(list, entry, max = ALBUM_MAX) {
   const faces = Array.isArray(list) ? list : [];
-  const i = faces.findIndex((e) => sameFace(e, entry));
+  // A boss or event face (T8.4, with a stamp) is its own entry: it only joins an entry with the same stamp. A plain
+  // visit joins the plain entry of that face, or (when there is none) its stamped one, whose stamp stays.
+  const stampOf = (e) => e.stamp ?? null; // an entry's stamp, or null
+  let i = faces.findIndex((e) => sameFace(e, entry) && stampOf(e) === stampOf(entry));
+  if (i < 0 && !entry.stamp) i = faces.findIndex((e) => sameFace(e, entry));
   if (i < 0) return capAlbum([...faces, entry], max);
   const old = faces[i];
   const merged = { ...entry, stars: Math.max(old.stars ?? 0, entry.stars ?? 0), times: (old.times ?? 1) + 1 };
@@ -243,9 +254,9 @@ export function addAlbumFace(list, entry, max = ALBUM_MAX) {
  * @param {number} [now] time in ms
  * @returns {object} the new save
  */
-export function recordFace(save, { step, customer, setup, stars, failed = false }, now = Date.now()) {
+export function recordFace(save, { step, customer, setup, stars, failed = false, stamp = null }, now = Date.now()) {
   if (failed || !setup || !revealOn(step)) return save;
-  return { ...save, albumFaces: addAlbumFace(save.albumFaces, albumEntry({ customer, setup, stars }, now)) };
+  return { ...save, albumFaces: addAlbumFace(save.albumFaces, albumEntry({ customer, setup, stars, stamp }, now)) };
 }
 
 /**
@@ -256,12 +267,16 @@ export function recordFace(save, { step, customer, setup, stars, failed = false 
  */
 export function entrySetup(entry) {
   const regular = REGULARS.find((r) => r.id === entry.id);
-  const spec = copySpec(regular?.face ?? entry.face ?? {});
+  // A stamped regular (T8.4) keeps the look of that event day (its accessory); otherwise a regular's own face parts.
+  const spec = copySpec((entry.stamp && entry.face) || regular?.face || entry.face || {});
   const { w, h } = stageOrDefault({ w: entry.w, h: entry.h });
-  return {
+  const out = {
     seed: entry.seed, spec, count: entry.count ?? 6, kinds: Array.isArray(entry.kinds) ? [...entry.kinds] : ['whitehead'],
     strip: Boolean(entry.strip), decoys: entry.decoys !== false, w, h,
   };
+  if (entry.mix && typeof entry.mix === 'object') out.mix = { ...entry.mix }; // a boss face's bump mix (T8.4)
+  if (Number.isFinite(entry.grown) && entry.grown > 0) out.grown = entry.grown;
+  return out;
 }
 
 /**
@@ -287,16 +302,25 @@ export function entryNameKey(entry) {
 /**
  * What the album screen shows: every named regular in the order she meets them (met = their entry, not met = a locked
  * "?" tile), then the strangers, the most recently seen first, and the counts for the header.
+ * Boss and event faces (T8.4, entries with a stamp) are their own entries: a regular's tile shows their plain entry,
+ * or their stamped one when she has only met them on an event day (so they count as met); every other stamped face
+ * goes into `events` (most recently seen first).
  * @param {object[]|undefined} list the album (save.albumFaces)
- * @returns {{regulars: {id: string, nameKey: string, entry: object|null}[], strangers: object[], met: number,
- *   total: number, faces: number}} the view
+ * @returns {{regulars: {id: string, nameKey: string, entry: object|null}[], strangers: object[], events: object[],
+ *   met: number, total: number, faces: number}} the view
  */
 export function albumView(list) {
   const faces = Array.isArray(list) ? list : [];
-  const regulars = REGULARS.map((r) => ({ id: r.id, nameKey: r.nameKey, entry: faces.find((e) => e.id === r.id) ?? null }));
-  const strangers = faces.filter((e) => !REGULARS.some((r) => r.id === e.id)).sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
+  const regulars = REGULARS.map((r) => ({
+    id: r.id, nameKey: r.nameKey, entry: faces.find((e) => e.id === r.id && !e.stamp) ?? faces.find((e) => e.id === r.id) ?? null,
+  }));
+  /** Most recently seen first. @param {object} a an entry @param {object} b an entry @returns {number} sort order */
+  const newest = (a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0);
+  const shown = new Set(regulars.map((r) => r.entry).filter(Boolean));
+  const strangers = faces.filter((e) => !e.stamp && !REGULARS.some((r) => r.id === e.id)).sort(newest);
+  const events = faces.filter((e) => e.stamp && !shown.has(e)).sort(newest);
   const met = regulars.filter((r) => r.entry).length;
-  return { regulars, strangers, met, total: REGULARS.length, faces: met + strangers.length };
+  return { regulars, strangers, events, met, total: REGULARS.length, faces: met + strangers.length + events.length };
 }
 
 /**

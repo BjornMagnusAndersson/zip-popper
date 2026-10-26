@@ -12,18 +12,20 @@ import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-l
  *   payout?: {popCoins?: number, tip?: number, combo?: number, requestBonus?: number, total?: number},
  *   reputationChange?: number, skipPenalty?: number, factKey?: string, reactionKey?: string, playerName?: string,
  *   onContinue?: () => void, onShop?: () => void, onTryAgain?: () => void, onNext?: () => void, reducedMotion?: boolean,
- *   tagKey?: string|null, tagVars?: object|null, reveal?: {node: HTMLElement, dispose?: () => void}|null}} opts
+ *   tagKey?: string|null, tagVars?: object|null, reveal?: {node: HTMLElement, dispose?: () => void}|null,
+ *   stampKey?: string|null}} opts
  *   t = string function; stars = 0 to 3; failed = the customer stormed off; payout = from roundPayout; reputationChange =
  *   points earned (not failed); skipPenalty = reputation "Next customer" costs (failed); factKey = info-card string key;
  *   reactionKey = what the customer says (a resultKeys string key); playerName = for the {name} in that line;
  *   onContinue = Continue; onShop = an optional "Shop" button beside Continue; onTryAgain / onNext = the two fail choices;
  *   tagKey + tagVars = an optional small line under the stars (Keep working's reduced pay, T5.4);
- *   reveal = the before and after card (T8.2, screens/reveal.js createReveal) shown as the top card, or null
+ *   reveal = the before and after card (T8.2, screens/reveal.js createReveal) shown as the top card, or null;
+ *   stampKey = the name key of a finished boss or event (T8.4): a gold "New stamp!" line under the coins, or null
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
-  onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null,
+  onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null, stampKey = null,
 }) {
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
@@ -60,6 +62,11 @@ export function createResultScreen({
       coins.append(line);
     }
     main.append(coins);
+    if (stampKey) { // a finished boss or event (T8.4): its stamp went into the Face album
+      const stamp = el('p', 'app-result__stamp');
+      stamp.append(starIcon(true, 24), el('span', '', t('ui.result.stamp', { name: t(stampKey) })));
+      main.append(stamp);
+    }
     if (reactionKey) main.append(el('p', 'app-result__quote', t(reactionKey, { name: playerName })));
   }
   const rep = reputationLine({ failed, reputationChange, skipPenalty });

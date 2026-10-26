@@ -263,3 +263,16 @@ export function keepWorkingSpec(k) {
   const base = rosterBase(keepWorkingEntry(n), LAST_CHAPTER);
   return specFrom(base, steady(KEEP_WORKING_ROSTER.seedBase * 4 + n, band.bumps), band.types, KEEP_WORKING_DIFFICULTY, true);
 }
+
+/**
+ * The spec (same shape as customerSpec) of any roster entry in her studio with the round settings given: used by the
+ * daily challenge (T8.5, game/daily-logic.js), whose customer is picked by the date, not by a customer number.
+ * @param {{who: string, id?: string, seed?: number}} entry a roster entry (data/chapters.js makeRoster shape)
+ * @param {{bumpCount: number, types: string[], difficulty: number, requestAllowed?: boolean}} o the round settings
+ * @returns {{customer: object, bumpCount: number, allowedTypes: string[], difficulty: number, requestAllowed: boolean}|null}
+ *   the spec, or null for an unknown regular
+ */
+export function rosterSpec(entry, { bumpCount, types, difficulty, requestAllowed = false }) {
+  const base = rosterBase(entry, LAST_CHAPTER);
+  return base ? specFrom(base, bumpCount, types, difficulty, requestAllowed) : null;
+}

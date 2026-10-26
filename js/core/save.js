@@ -43,9 +43,14 @@ export function defaultSave(now = Date.now()) {
     pendingStrips: [], // milestone strips earned by the last customer, not yet played (B4: they survive closing the app on the result screen)
     endingSeen: false, // the "To be continued" ending was reached: the menu shows Keep working (T5.4, SPEC D23)
     keepWorkingDone: 0, // Keep working customers finished or skipped (its own count; story progress never moves in it)
+    // Daily challenge (T8.5, game/daily-logic.js; old saves load these): streak = days in a row with the goal reached,
+    // lastDone = the last rewarded day and lastPlayed = the last day tried ('YYYY-MM-DD' or ''), best = the longest
+    // streak, attempts = tries in all (finished or skipped daily customers).
+    dailyStreak: 0, dailyLastDone: '', dailyLastPlayed: '', dailyBest: 0, dailyAttempts: 0,
     seenKinds: [], // Field guide (T6.5): the bump kinds, dotty nose and decoys she has met in a pop scene (old saves load [])
     albumFaces: [], // Face album (T8.2): small recipes of the faces she has cleared, no pictures (old saves load [])
     seenTwists: [], // Field guide (T8.3): the customer twists she has met (fidgety, ticklish, sensitive, hurry; old saves load [])
+    seenBosses: [], // Field guide (T8.4): the boss and event customers she has met (hairday, nosestrip, golden, horn; old saves load [])
   };
 }
 
@@ -69,6 +74,11 @@ function count(v, d) {
 /** A list of short strings, or the fallback. @param {unknown} v value @param {string[]} d fallback @returns {string[]} */
 function words(v, d) {
   return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 200) : d;
+}
+
+/** A date written as 'YYYY-MM-DD' (the daily challenge, T8.5), or ''. @param {unknown} v value @returns {string} */
+function dateText(v) {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
 }
 
 /** A true/false value, or the fallback. @param {unknown} v value @param {boolean} d fallback @returns {boolean} */
@@ -164,9 +174,15 @@ export function normalizeSave(raw, now = Date.now()) {
     pendingStrips: words(s.pendingStrips, d.pendingStrips),
     endingSeen: flag(s.endingSeen, d.endingSeen),
     keepWorkingDone: count(s.keepWorkingDone, d.keepWorkingDone),
+    dailyStreak: count(s.dailyStreak, d.dailyStreak),
+    dailyLastDone: dateText(s.dailyLastDone),
+    dailyLastPlayed: dateText(s.dailyLastPlayed),
+    dailyBest: count(s.dailyBest, d.dailyBest),
+    dailyAttempts: count(s.dailyAttempts, d.dailyAttempts),
     seenKinds: words(s.seenKinds, d.seenKinds),
     albumFaces: albumList(s.albumFaces),
     seenTwists: words(s.seenTwists, d.seenTwists),
+    seenBosses: words(s.seenBosses, d.seenBosses),
   };
 }
 
@@ -202,7 +218,12 @@ function albumList(v) {
       entry.face = face;
     }
     if (shortText(e.nameKey, 60)) entry.nameKey = e.nameKey;
-    if (shortText(e.stamp, 30)) entry.stamp = e.stamp; // a boss stamp (T8.4, later)
+    if (shortText(e.stamp, 30)) entry.stamp = e.stamp; // a boss or event stamp (T8.4): the event id
+    if (e.mix && typeof e.mix === 'object' && !Array.isArray(e.mix)) { // a boss face's bump mix (T8.4)
+      const mix = countTable(e.mix);
+      if (Object.keys(mix).length) entry.mix = mix;
+    }
+    if (Number.isFinite(e.grown) && e.grown > 0 && e.grown <= 3) entry.grown = e.grown; // a boss face's grown horns (T8.4)
     out.push(entry);
   }
   return out;
