@@ -5,13 +5,15 @@
 // round, result), the hygiene scare strip (gloves), the teaser strip and the "To be continued" screen. Free play,
 // Comics, the Field guide (T6.5; also over the pop scene from its "?" button), Shop (with the wipe-and-scrub job for
 // studio upgrades, T5.1b), Settings and About hang off the menu; after the ending also Keep working (T5.4: random
-// customers at lower pay through the same customer flow, no story).
+// customers at lower pay through the same customer flow, no story). From the career chapter on, every finished
+// customer's result screen opens with a before and after reveal, and the face goes into the Face album (T8.2, menu).
 // The save is written after every customer, purchase, scrub job, comic seen and setting change, so a reload goes on
 // exactly where the player was. All the rules are pure helpers in app-logic.js (tested in Node); this file only shows
 // screens and passes what happened back to those helpers. All text comes from the string table (t).
 // Testing flags (page address): ?test (a throwaway in-memory save; nothing is written to the phone), with ?test also
 // ?chapter=N&customer=M (jump: customer M is next), ?money=500, ?rep=40, ?name=Maja, ?layers=lamp,plant or
-// ?layers=all (studio upgrades owned, T5.1a); ?seed=N (every face uses that
+// ?layers=all (studio upgrades owned, T5.1a), ?album=demo (12 faces in the Face album, T8.2), ?twist=fidgety|ticklish|
+// sensitive|hurry (every customer gets that twist, T8.3); ?seed=N (every face uses that
 // seed, also without ?test); ?demo is handled by index.html (the old pop demo).
 
 import { t } from '../core/strings.js';
@@ -44,7 +46,11 @@ import { createScrubScreen } from '../screens/scrub.js';
 import { createEndScreen } from '../screens/end.js';
 import { createStudioScreen } from '../screens/studio.js';
 import { createGuideScreen } from '../screens/guide.js';
-import { guideCards, metKinds, addSeenKinds } from '../screens/guide-logic.js';
+import { guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists } from '../screens/guide-logic.js';
+import { createReveal } from '../screens/reveal.js';
+import { createAlbumScreen } from '../screens/album.js';
+import { faceSetup, recordFace, revealOn } from '../screens/album-logic.js';
+import { describeTwist } from '../data/twists.js';
 import * as L from './app-logic.js';
 
 /** Which shop tab shows an item kind (to come back to the same tab after a purchase). */
@@ -131,6 +137,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   });
   /** The Field guide's cards for the save as it is now. @returns {object[]} cards (guide-logic.js guideCards) */
   const currentGuideCards = () => guideCards({ seenKinds: metKinds(save), ownedTools: economyFromSave(save).unlockedTools });
+  /** The Field guide's customer twist cards for the save as it is now (T8.3). @returns {object[]} cards (guide-logic.js twistCards) */
+  const currentTwistCards = () => twistCards({ seenTwists: save.seenTwists });
 
   /**
    * Keep a new save and write it to storage.
@@ -286,7 +294,26 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       onAbout: () => showAbout(showMenu), showShop: L.shopOpen(save), showStudio: L.shopOpen(save),
       showKeepWorking: L.keepWorkingOpen(save), keepWorkingPercent: L.KEEP_WORKING_PERCENT,
       onKeepWorking: () => { sound.unlock(); keepWorking(); },
+      onAlbum: L.shopOpen(save) ? () => showAlbum(showMenu) : undefined, // the Face album (T8.2): from the career chapter on, like the shop
     }));
+  }
+
+  /**
+   * The Face album (T8.2): the faces she has cleared in her studio.
+   * @param {() => void} back where Back goes
+   * @returns {void}
+   */
+  function showAlbum(back) {
+    show(createAlbumScreen({ t, reducedMotion: still(), faces: save.albumFaces, onBack: back }));
+  }
+
+  /**
+   * The pop scene's stage size right now (the face layout depends on it), for the before and after reveal (T8.2).
+   * @returns {{w: number, h: number}|null} CSS px, or null when there is no pop scene
+   */
+  function popStageSize() {
+    const r = pop?.node.querySelector('.pop-stage')?.getBoundingClientRect();
+    return r ? { w: r.width, h: r.height } : null;
   }
 
   /**
@@ -309,7 +336,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showGuide(back) {
-    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), onBack: back }));
+    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), onBack: back }));
   }
 
   /**
@@ -319,7 +346,9 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function openGuideOverlay() {
     if (!pop || guideOverlay) return;
-    guideOverlay = createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), overlay: true, onBack: () => closeGuideOverlay(true) });
+    guideOverlay = createGuideScreen({
+      t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), overlay: true, onBack: () => closeGuideOverlay(true),
+    });
     pop.node.inert = true;
     root.append(guideOverlay.node);
     guideOverlay.focus();
@@ -416,11 +445,17 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showIntro(step) {
-    const args = L.roundArgs(save, step, flags.seed);
+    const args = L.roundArgs(save, step, flags.seed, flags.test ? flags.twist : null); // ?twist= only in test runs (T8.3)
     if (!args && step.keepWorking) { showMenu(); return; } // never happens: every Keep working number has a customer
     if (!args) { persist(L.finishStep(save, step)); continueStory(); return; } // no such customer: never in v1 data
+    // The twist pill (T8.3). A hurry request IS the "in a hurry" twist: its pill carries the request's own line (with
+    // the seconds) instead of a second box.
+    const req = describeRequest(args.request);
+    const hurry = args.twist === 'hurry' && req;
+    const twist = describeTwist(args.twist, { ownedTools: args.unlockedTools });
     show(createCustomerIntroScreen({
-      t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: describeRequest(args.request),
+      t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: hurry ? null : req,
+      twist: hurry ? { ...twist, lineKey: req.key, lineVars: req.vars, hintKey: null } : twist,
       step: step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
       portrait: facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
       hintKey: L.introHintKey(save, step), onStart: () => playRound(step, args), onMenu: showMenu,
@@ -435,13 +470,14 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playRound(step, args) {
     clear();
+    if (args.twist) persist(addSeenTwists(save, [args.twist])); // she has met this twist: its guide card opens (T8.3)
     pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     sound.unlock();
     pop.unlock();
     /** Start (or start again) the round. @returns {void} */
-    const start = () => { roundMusic(args.request); pop.startRound({ ...args, customerName: args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start) }); };
+    const start = () => { roundMusic(args.request); pop.startRound({ ...args, customerName: args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args) }); };
     start();
   }
 
@@ -450,12 +486,16 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @param {{chapter: number, n: number}} step the customer step
    * @param {object} payload the onFinish payload
    * @param {() => void} again starts the same round again
+   * @param {object} [args] the round's startRound arguments (for the before and after reveal and the album, T8.2)
    * @returns {void}
    */
-  function finishRound(step, payload, again) {
+  function finishRound(step, payload, again, args) {
     const out = L.applyRound(save, payload, step);
     if (out.retry) { again(); return; }
-    persist(out.save); // the save also lists the milestone strips still to play (B4), so closing the app now loses none
+    // T8.2: a finished career or Keep working customer gets the before and after reveal and goes into the album.
+    const face = args && !out.failed && revealOn(step) ? faceSetup(args, popStageSize()) : null;
+    // The save also lists the milestone strips still to play (B4), so closing the app now loses none.
+    persist(recordFace(out.save, { step, customer: args?.customer, setup: face, stars: out.stars, failed: out.failed }));
     /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */
     const playWaiting = (then) => playStrips(L.pendingStrips(save), () => { persist(L.clearPendingStrips(save)); then(); });
     const onward = step.keepWorking ? keepWorking : continueStory; // Keep working goes on to its next customer (T5.4)
@@ -464,6 +504,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       t, reducedMotion: still(), stars: out.stars, payout: out.payout, reputationChange: out.reputationChange,
       factKey: out.factKey, reactionKey: out.reactionKey, playerName: playerName(),
       tagKey: step.keepWorking ? 'ui.keepWorking.pay' : null, tagVars: { pct: L.KEEP_WORKING_PERCENT },
+      reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '' }) : null,
       onContinue: () => playWaiting(onward),
       onShop: L.shopOpen(save) ? () => playWaiting(() => showShop(onward)) : undefined,
     }));

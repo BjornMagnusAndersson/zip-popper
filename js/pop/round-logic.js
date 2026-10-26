@@ -4,8 +4,9 @@
 // request banner reads, and what the game gets back when the round ends (onFinish). pop-mode.js is the DOM glue.
 // No DOM, no audio, no timers here, so Node can test it.
 import { FACE_BUMPS, holdTime, faceGeometry, layoutFace } from './logic.js';
-import { toolBarIds, START_TOOL } from './tool-logic.js';
+import { toolBarIds, START_TOOL, bestToolFor, effectiveHold } from './tool-logic.js';
 import { isImplemented } from '../data/bumps.js';
+import { makeRng } from '../data/customers.js';
 import { describeRequest, requestProgress, requestResult } from '../game/requests.js';
 import { starsFor } from '../game/scoring.js';
 
@@ -18,6 +19,13 @@ export const DIFFICULTY_MAX = 4;
 /** Seconds the healed, glowing face stays on screen before onFinish is called (shorter with reduced motion). */
 export const END_PAUSE = 0.9;
 export const END_PAUSE_REDUCED = 0.3;
+/**
+ * The share of customers (who could have one) that get a nose strip on the nose: about 2 in 5, decided by the face
+ * seed so a reload or Try again shows the same face. Before this every customer had one once the tool was bought.
+ */
+export const NOSE_STRIP_CHANCE = 0.4;
+/** Added to the face seed for the nose strip's coin toss, so the toss does not follow the layout's own numbers. */
+const STRIP_SEED_SALT = 4409;
 
 /**
  * A positive number, or a fallback when it is not one.
@@ -80,11 +88,41 @@ export function applyMastery(pimples, holdFactors = {}, roughReductions = {}) {
  *   decoys?: boolean, seed: number, holdFactors?: Object<string, number>}} o the same arguments as startRound
  * @returns {number[]} hold seconds of every bump, scaled by mastery
  */
-export function faceBumpHolds({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, holdFactors = {} } = {}) {
+export function faceBumpHolds(o = {}) {
+  return applyMastery(roundPimples(o), o.holdFactors ?? {}).map((p) => p.hold);
+}
+
+/**
+ * The bumps of a customer's face, laid out as the pop scene will (same seed, kinds and count) at a nominal size. The
+ * nose strip is left off: it moves bumps a little but never changes their kinds, so the hold times stay the same.
+ * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[]|null,
+ *   decoys?: boolean, seed: number}} o as for faceBumpHolds
+ * @returns {object[]} the bumps (logic.js layoutFace pimples)
+ */
+function roundPimples({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed } = {}) {
   const setup = roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools: roundTools(unlockedTools), decoys });
   const face = faceGeometry(360, 480, setup.spec);
-  const lay = layoutFace({ seed, face, count: setup.count, strip: setup.strip, allowed: setup.allowed, decoys: setup.decoys });
-  return applyMastery(lay.pimples, holdFactors).map((p) => p.hold);
+  return layoutFace({ seed, face, count: setup.count, strip: false, allowed: setup.allowed, decoys: setup.decoys }).pimples;
+}
+
+/**
+ * The hold seconds a hurry request is measured against: every bump of the face with the best tool she owns for it
+ * (tool-logic.js bestToolFor and effectiveHold) at her mastery, on a cold face (the warm cloth is NOT assumed).
+ * @param {object} o the same arguments as faceBumpHolds
+ * @returns {number[]} seconds per bump
+ */
+export function hurryHolds(o = {}) {
+  const tools = roundTools(o.unlockedTools ?? null);
+  return applyMastery(roundPimples(o), o.holdFactors ?? {}).map((p) => effectiveHold(p.hold, bestToolFor(p.type, tools), p.type, 0));
+}
+
+/**
+ * Whether a face wins the nose strip coin toss (NOSE_STRIP_CHANCE), decided by its seed alone.
+ * @param {number} seed the face seed
+ * @returns {boolean} true for about 2 faces in 5 (false when the seed is not a number)
+ */
+export function stripChance(seed) {
+  return Number.isFinite(seed) && makeRng(Math.floor(seed) + STRIP_SEED_SALT)() < NOSE_STRIP_CHANCE;
 }
 
 /**
@@ -125,19 +163,34 @@ export function allowedKinds(allowedTypes) {
 /**
  * How to lay out the face of a customer round (hand the result to faceGeometry and layoutFace): the customer's face
  * parts, exactly bumpCount bumps of the allowed kinds, and a blackhead strip on the nose only when the player owns
- * the nose strip, blackheads are allowed and there is no clown nose in the way (without the tool a strip could never
- * come off and the round would never end). Decoys follow the existing layout rules unless switched off.
+ * the nose strip, blackheads are allowed, there is no clown nose in the way, the customer is not in a hurry (a hurry
+ * clock leaves no time for a bonus) and the face seed's coin toss says so (stripChance: about 2 in 5). The strip is
+ * optional: the round goes on to the wipe without peeling it (logic.js popStepOver); peeling it pays a bonus.
+ * Decoys follow the existing layout rules unless switched off.
  * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[]|null,
- *   decoys?: boolean}} o the customer (customerSpec customer), bump count, allowed kinds, owned tools, decoys allowed
+ *   decoys?: boolean, seed?: number, request?: {type: string}|null}} o the customer (customerSpec customer), bump
+ *   count, allowed kinds, owned tools, decoys allowed, the face seed (no seed = no strip) and the request
  * @returns {{spec: object, count: number, allowed: string[], strip: boolean, decoys: boolean}} the layout setup
  */
-export function roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true } = {}) {
+export function roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, request = null } = {}) {
   const spec = customer?.face && typeof customer.face === 'object' ? customer.face : {};
   const count = Number.isFinite(bumpCount) ? clamp(Math.round(bumpCount), ROUND_BUMPS_MIN, ROUND_BUMPS_MAX) : FACE_BUMPS;
   const allowed = allowedKinds(allowedTypes);
   const clownNose = (spec.accessories ?? []).includes('clown-nose');
-  const strip = roundTools(unlockedTools).includes('noseStrip') && allowed.includes('blackhead') && !clownNose;
+  const strip = roundTools(unlockedTools).includes('noseStrip') && allowed.includes('blackhead') && !clownNose
+    && request?.type !== 'hurry' && stripChance(seed);
   return { spec, count, allowed, strip, decoys: decoys !== false };
+}
+
+/**
+ * The tip on the hint line while a nose strip is on the face (optional, it pays a bonus): shown when she owns the
+ * nose strip, the strip is still on (not peeled) and not stuck on yet, and the strip is not the tool in hand (that
+ * tool's own hint says how it works).
+ * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string}} o the face and the tool bar now
+ * @returns {string|null} the string key, or null for no strip tip
+ */
+export function stripHintKey({ stripOnFace, stuck = false, owned, toolInHand }) {
+  return stripOnFace && !stuck && owned && toolInHand !== 'noseStrip' ? 'pop.hint.stripBonus' : null;
 }
 
 /**

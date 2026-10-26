@@ -1,5 +1,6 @@
 // The main menu (T3.1a): Continue (shows the current chapter's title), Keep working (T5.4, only after the ending),
-// Free play, Comics, Field guide (T6.5, when the game passes onGuide), Shop, Your studio (T5.1c), Settings, About.
+// Free play, Comics, Field guide (T6.5, when the game passes onGuide), Face album (T8.2, when the game passes onAlbum),
+// Shop, Your studio (T5.1c), Settings, About.
 // State comes in, every tap goes out through a callback. update({playerName, chapterTitleKey}) refreshes the greeting
 // and the Continue line when the save changes.
 
@@ -11,7 +12,8 @@ import { mascotArt } from './mascot.js';
  * @param {{t: (key: string, vars?: object) => string, playerName?: string, chapterTitleKey?: string,
  *   onContinue?: () => void, onFreePlay?: () => void, onComics?: () => void, onGuide?: () => void, onShop?: () => void,
  *   onStudio?: () => void, onSettings?: () => void, onAbout?: () => void, showShop?: boolean, showStudio?: boolean,
- *   reducedMotion?: boolean, showKeepWorking?: boolean, onKeepWorking?: () => void, keepWorkingPercent?: number}} opts
+ *   reducedMotion?: boolean, showKeepWorking?: boolean, onKeepWorking?: () => void, keepWorkingPercent?: number,
+ *   onAlbum?: () => void}} opts (onAlbum = the Face album button's tap; left out = no button, T8.2)
  *   t = string function; playerName = the player's name (plain text); chapterTitleKey = string key of the current chapter's
  *   title; the on... callbacks report which button was tapped; showShop = false leaves the Shop button out (the
  *   shop opens with the career chapter); showStudio = true adds the "Your studio" button (the studio view, T5.1c;
@@ -21,7 +23,7 @@ import { mascotArt } from './mascot.js';
  */
 export function createMenuScreen({
   t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
-  showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60,
+  showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60, onAlbum,
 }) {
   const shell = screenShell('menu', { label: t('ui.menu.title'), reducedMotion });
   const body = el('div', 'app-body app-menu');
@@ -58,11 +60,12 @@ export function createMenuScreen({
   add('ui.menu.freePlay', onFreePlay);
   add('ui.menu.comics', onComics);
   if (onGuide) add('ui.menu.guide', onGuide); // the Field guide (T6.5): always there, like Comics (unmet cards are locked)
+  if (onAlbum) add('ui.menu.album', onAlbum); // the Face album (T8.2): the game passes it from the career chapter on
   if (showShop) add('ui.menu.shop', onShop);
   if (showStudio) add('ui.menu.studio', onStudio);
   add('ui.menu.settings', onSettings);
   add('ui.menu.about', onAbout);
-
+  if (list.children.length > 9) list.classList.add('app-menu__list--long'); // ten buttons (T8.2): a little tighter, so they fit
   /** Show the greeting and the Continue line for the current data. @param {{playerName?: string, chapterTitleKey?: string}} data new data @returns {void} */
   function render(data) {
     hello.textContent = data.playerName ? t('ui.menu.hello', { name: data.playerName }) : t('ui.menu.helloNoName');

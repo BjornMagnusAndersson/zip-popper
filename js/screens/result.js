@@ -1,6 +1,7 @@
 // The result screen (T3.1a): 0 to 3 cartoon stars, the coin breakdown (pops, tip, combo, request, total), the reputation
 // change, an info-card fact and a Continue button. A fail variant (the customer stormed off) shows "Try again" and
 // "Next customer" with the reputation cost of skipping. Numbers come from economy.js roundPayout; this file only draws.
+// T8.2: an optional before and after card (screens/reveal.js) goes on top, beside the stars.
 
 import { el, button, starIcon, icon, coinPill, screenShell } from './dom.js';
 import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-logic.js';
@@ -11,21 +12,23 @@ import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-l
  *   payout?: {popCoins?: number, tip?: number, combo?: number, requestBonus?: number, total?: number},
  *   reputationChange?: number, skipPenalty?: number, factKey?: string, reactionKey?: string, playerName?: string,
  *   onContinue?: () => void, onShop?: () => void, onTryAgain?: () => void, onNext?: () => void, reducedMotion?: boolean,
- *   tagKey?: string|null, tagVars?: object|null}} opts
+ *   tagKey?: string|null, tagVars?: object|null, reveal?: {node: HTMLElement, dispose?: () => void}|null}} opts
  *   t = string function; stars = 0 to 3; failed = the customer stormed off; payout = from roundPayout; reputationChange =
  *   points earned (not failed); skipPenalty = reputation "Next customer" costs (failed); factKey = info-card string key;
  *   reactionKey = what the customer says (a resultKeys string key); playerName = for the {name} in that line;
  *   onContinue = Continue; onShop = an optional "Shop" button beside Continue; onTryAgain / onNext = the two fail choices;
- *   tagKey + tagVars = an optional small line under the stars (Keep working's reduced pay, T5.4)
+ *   tagKey + tagVars = an optional small line under the stars (Keep working's reduced pay, T5.4);
+ *   reveal = the before and after card (T8.2, screens/reveal.js createReveal) shown as the top card, or null
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
-  onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null,
+  onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null,
 }) {
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
-  const body = el('div', 'app-body app-result');
+  const body = el('div', `app-body app-result${reveal ? ' app-result--reveal' : ''}`);
+  if (reveal) body.append(reveal.node); // the before and after card first (T8.2)
 
   const top = el('div', 'app-result__top');
   if (failed) top.append(el('p', 'app-huff', t('ui.result.fail.huff')));
@@ -85,5 +88,7 @@ export function createResultScreen({
   left.prepend(top);
   body.append(left, main);
   shell.node.append(body);
-  return { node: shell.node, dispose: shell.dispose };
+  /** Stop the reveal (if any) and remove the screen. @returns {void} */
+  const dispose = () => { reveal?.dispose?.(); shell.dispose(); };
+  return { node: shell.node, dispose };
 }

@@ -36,6 +36,9 @@ const PRECACHE = [
   './js/screens/studio.js',
   './js/screens/guide.js',
   './js/screens/guide-logic.js',
+  './js/screens/reveal.js',
+  './js/screens/album.js',
+  './js/screens/album-logic.js',
   './strings/en.json',
   './js/core/save.js',
   './js/core/sound.js',
@@ -55,6 +58,8 @@ const PRECACHE = [
   './js/data/economy-data.js',
   './js/data/facts.js',
   './js/data/tools.js',
+  './js/data/twists.js',
+  './js/pop/twist-logic.js',
   './js/game/chapter-logic.js',
   './js/game/torchlight-logic.js',
   './js/game/phonescroll-logic.js',
@@ -99,7 +104,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v36';
+const CACHE_VERSION = 'v37';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

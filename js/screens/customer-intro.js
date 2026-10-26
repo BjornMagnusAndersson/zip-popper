@@ -9,16 +9,20 @@ import { el, button, icon, screenShell } from './dom.js';
  * @param {{t: (key: string, vars?: object) => string, customer: {nameKey: string, introKey: string, deadlineKey?: string},
  *   playerName?: string, request?: {key: string, vars?: object}|null,
  *   step?: {n: number, total?: number, key?: string, vars?: object}|null,
- *   portrait?: HTMLElement|null, hintKey?: string|null, onStart?: () => void, onMenu?: () => void, reducedMotion?: boolean}} opts
+ *   portrait?: HTMLElement|null, hintKey?: string|null,
+ *   twist?: {nameKey: string, lineKey: string, lineVars?: object, hintKey?: string|null}|null,
+ *   onStart?: () => void, onMenu?: () => void, reducedMotion?: boolean}} opts
  *   t = string function; customer = the customer's string keys; playerName = for the {name} in the story; request = what
  *   they ask for, or null; step = "customer n of total" or null (step.key + step.vars = another line in that pill,
  *   such as Keep working's "Keep working: customer n", T5.4); portrait = an optional picture (a canvas, say) the game
  *   draws for the customer; hintKey = an optional tip line (a string key, such as the "buy tweezers" hint);
- *   onStart = the Start button; onMenu = an optional small "Menu" button (back to the main menu)
+ *   onStart = the Start button; onMenu = an optional small "Menu" button (back to the main menu); twist = the
+ *   customer's twist as string keys (data/twists.js describeTwist, T8.3), shown as a pill above the request, or null
+ *   (lineVars = the {placeholders} of its line: the hurry twist shows the hurry request's line with its seconds)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createCustomerIntroScreen({
-  t, customer, playerName = '', request = null, step = null, portrait = null, hintKey = null, onStart, onMenu, reducedMotion = false,
+  t, customer, playerName = '', request = null, step = null, portrait = null, hintKey = null, twist = null, onStart, onMenu, reducedMotion = false,
 }) {
   const name = t(customer.nameKey);
   const shell = screenShell('intro', { label: name, reducedMotion });
@@ -37,6 +41,18 @@ export function createCustomerIntroScreen({
   bubble.append(el('p', 'app-bubble__text', t(customer.introKey, { name: playerName })));
   if (customer.deadlineKey) bubble.append(el('p', 'app-bubble__deadline', t(customer.deadlineKey, { name: playerName })));
   right.append(bubble);
+  if (twist) { // the customer's twist (T8.3): "Twist: Ticklish", its funny line and a tip
+    const pill = el('div', 'app-twist');
+    const head = el('p', 'app-twist__head');
+    head.append(el('span', 'app-twist__label', t('ui.intro.twist')), el('span', 'app-twist__name', t(twist.nameKey)));
+    pill.append(head, el('p', `app-twist__line${twist.lineVars ? ' app-twist__line--request' : ''}`, t(twist.lineKey, twist.lineVars ?? {})));
+    if (twist.hintKey) {
+      const tip = el('p', 'app-twist__tip');
+      tip.append(icon('bulb'), el('span', '', t(twist.hintKey)));
+      pill.append(tip);
+    }
+    right.append(pill);
+  }
   if (request) {
     const note = el('div', 'app-note');
     note.append(el('p', 'app-note__label', t('ui.intro.request')), el('p', 'app-note__text', t(request.key, request.vars ?? {})));

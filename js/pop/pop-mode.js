@@ -35,6 +35,8 @@
 // Field guide (T6.5): with onGuide a small "?" button in the header opens the guide (the game shows it over the scene;
 // it is left out of hurry rounds, whose clock cannot pause). With seenKinds, each new face tells the game which kinds
 // she meets for the first time (onSeenKinds), and the hint line says "New: ...!" for them, one at a time.
+// Twists (T8.3): startRound's twist goes to the engine (fidgety sway, ticklish giggle, sensitive skin), shows as a
+// small label beside the meter, and its tip sits on the hint line until the first pop; a giggle shows "Hehehe!".
 import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
@@ -46,6 +48,7 @@ import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
 import {
   applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
+  stripChance, stripHintKey,
 } from './round-logic.js';
 import { kindsOnFace, newKindQueue, hintQueueAfterPop, newKindHintKey } from '../screens/guide-logic.js';
 
@@ -176,7 +179,10 @@ export function createPopMode({
   const irrFill = el('span', 'pop-irr__fill');
   irrMeter.append(irrFill);
   const countLine = el('div', 'pop-countline');
-  countLine.append(count_, irrMeter);
+  // The customer's twist (T8.3) as a small label beside the meter while that customer is in the chair.
+  const twistChip = el('span', 'pop-twist');
+  twistChip.hidden = true;
+  countLine.append(count_, irrMeter, twistChip);
   // The customer's request (T3.1b): a small banner under the counter line, only in a round with a request. The text
   // stays; a mark says done or missed (read out once), and a hurry request counts its seconds down (not read out).
   const reqBox = el('p', 'pop-req');
@@ -362,7 +368,13 @@ export function createPopMode({
    * @returns {string} the text
    */
   function hintFor(step, newOk = true) {
+    if (step === 'pop' && newOk && twistHintKey()) return t(twistHintKey()); // the twist's tip until the first pop (T8.3)
     if (step === 'pop' && newOk && newHintKind()) return t(newKindHintKey(newHintKind())); // "New: Evil Horn! ..." (T6.5)
+    const stripKey = step === 'pop' && newOk ? stripHintKey({
+      stripOnFace: Boolean(current?.hasStrip && !current.stripPeeled && current.scene?.stripOn?.()),
+      stuck: Boolean(current?.scene?.stripStuck?.()), owned: toolIds.includes('noseStrip'), toolInHand: toolId,
+    }) : null;
+    if (stripKey) return t(stripKey); // "Dotty nose: try the nose strip for a bonus!" (the strip is optional)
     if (step === 'wipe') { // with the cotton pad in the bar but not in hand: tell her it wipes faster (B13 round 2b)
       return t(toolIds.includes('cottonPad') && toolId !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe');
     }
@@ -379,7 +391,16 @@ export function createPopMode({
    * @returns {string|null} a guide kind id
    */
   function newHintKind() {
-    return !squeezeHintOn && current?.newQueue?.length ? current.newQueue[0] : null;
+    return !squeezeHintOn && !twistHintKey() && current?.newQueue?.length ? current.newQueue[0] : null;
+  }
+
+  /**
+   * The customer's twist tip that is due on the hint line (T8.3: "Sensitive skin: warm cloth first!"), until the first
+   * pop of the face; the one-time squeeze hint goes first. Null when there is none.
+   * @returns {string|null} a string key
+   */
+  function twistHintKey() {
+    return !squeezeHintOn && current?.twistHint ? current.twistHint : null;
   }
 
   /**
@@ -389,7 +410,7 @@ export function createPopMode({
    * @returns {void}
    */
   function paintHint(step, newOk = true) {
-    const fresh = step === 'pop' && newOk && Boolean(newHintKind());
+    const fresh = step === 'pop' && newOk && (Boolean(twistHintKey()) || Boolean(newHintKind()));
     const text = hintFor(step, newOk);
     const changed = hint.textContent !== text;
     hint.textContent = text;
@@ -524,6 +545,31 @@ export function createPopMode({
     }, 700);
   }
 
+  /**
+   * The ticklish customer giggled (T8.3): a "Hehehe!" bubble over the bump and a happy face for a moment. Not an Ow
+   * (the counter does not change); the engine already let go of the press.
+   * @param {object} c the current face
+   * @param {{x: number, y: number}} at where the bump is (scene px)
+   * @returns {void}
+   */
+  function showGiggle(c, at) {
+    const bubble = el('p', 'pop-ow pop-giggle', t('pop.giggle'));
+    bubble.setAttribute('aria-hidden', 'true');
+    const sp = c.scene?.toScreen(at.x, at.y) ?? at;
+    bubble.style.left = `${sp.x}px`;
+    bubble.style.top = `${sp.y}px`;
+    stage.append(bubble);
+    setTimeout(() => bubble.remove(), 900);
+    clearTimeout(c.giggleTimer);
+    c.giggle = true;
+    c.scene?.setTexture(faceTexture(c));
+    c.giggleTimer = setTimeout(() => {
+      if (current !== c || !c.scene) return;
+      c.giggle = false;
+      c.scene.setTexture(faceTexture(c));
+    }, 600);
+  }
+
   /** Show how many bumps are left and how many Ow so far (only while popping). @returns {void} */
   function drawCount() {
     const scene = current?.scene;
@@ -654,7 +700,8 @@ export function createPopMode({
    */
   function faceTexture(c) {
     const cleared = c.scene ? c.scene.all().filter((p) => p.popped).length : 0;
-    const mood = c.wince && !c.healed ? 'ow' : moodOverride ?? faceMood(cleared, c.total, c.healed); // a short wince after an Ow
+    // a short wince after an Ow; a short happy face after a giggle (ticklish, T8.3)
+    const mood = c.wince && !c.healed ? 'ow' : c.giggle && !c.healed ? 'happy' : moodOverride ?? faceMood(cleared, c.total, c.healed);
     const redness = c.healed ? 0 : 1 - cleared / Math.max(1, c.total);
     const { canvas, ctx } = makeCanvas(c.w, c.h, c.dpr);
     ctx.lineCap = 'butt';
@@ -723,7 +770,7 @@ export function createPopMode({
     const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
     const face = faceGeometry(w, h, spec);
     const clownNose = (spec.accessories ?? []).includes('clown-nose'); // no nose strip over a clown nose
-    const wantStrip = round ? cfg.setup.strip : cfg.kind === 'free' ? toolIds.includes('noseStrip') : strip;
+    const wantStrip = round ? cfg.setup.strip : cfg.kind === 'free' ? toolIds.includes('noseStrip') && stripChance(s) : strip;
     const lay = layoutFace({
       seed: s, face, count: round ? cfg.setup.count : cfg.kind === 'free' ? FACE_BUMPS : count, strip: wantStrip && !clownNose,
       allowed: round ? cfg.setup.allowed : null, decoys: round ? cfg.setup.decoys : true,
@@ -737,11 +784,13 @@ export function createPopMode({
     stage.append(canvas);
     const c = {
       canvas, w, h, dpr, face, spec, seed: s, total: pimples.length, healed: false, scene: null,
-      round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0, stripPeeled: false,
+      round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0, stripPeeled: false, hasStrip: Boolean(lay.strip),
       owed: new Set(), cleanTypes: [], cleanTools: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
       request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
       hooks: round ? cfg.hooks : {}, // a special mode's onPop and onOw listeners (T4.5)
       newQueue: meetKinds(lay), // first-time hints for the kinds she meets on this face (T6.5)
+      twistHint: round ? cfg.twistHint : null, // the twist's tip on the hint line until the first pop (T8.3)
+      giggle: false, giggleTimer: 0, // a short happy face after a giggle (ticklish, T8.3)
     };
     current = c;
     sizeCanvas(canvas, w, h);
@@ -750,6 +799,8 @@ export function createPopMode({
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
+      twist: round ? cfg.twist : null, // the customer's twist (T8.3; the hurry twist is the request banner)
+      onGiggle: (at) => { if (current === c) showGiggle(c, at); },
       onOw: (at) => {
         if (current !== c) return;
         showOw(c, at);
@@ -768,6 +819,8 @@ export function createPopMode({
       onNote: (n) => { if (n === 'patchFirst' && current === c) { hint.textContent = t('tool.patch.notYet'); hint.classList.remove('pop-hint--new', 'pop-hint--flash'); } },
       onPop: (p) => {
         const shownNew = newHintKind(); // a first-time hint that was due before this pop (T6.5)
+        const shownTwist = Boolean(twistHintKey()); // the twist's tip was on show: it has done its job (T8.3)
+        c.twistHint = null;
         if (c.newQueue.length) { // a first-time hint is done once that kind is popped; the next one shows
           c.newQueue = shownNew ? hintQueueAfterPop(c.newQueue, p.type) : c.newQueue.filter((k) => k !== p.type);
         }
@@ -775,7 +828,7 @@ export function createPopMode({
           squeezeHintOn = false;
           try { onSqueezeHint(); } catch (e) { console.warn('onSqueezeHint failed:', e); }
           if (c.scene?.step() === 'pop') paintHint('pop');
-        } else if (shownNew && c.scene?.step() === 'pop') paintHint('pop');
+        } else if ((shownNew || shownTwist) && c.scene?.step() === 'pop') paintHint('pop');
         const clean = !c.owed.has(p.id); // clean = no Ow on this bump (counts for mastery and pay)
         c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean });
         c.popTypes.push(p.type);
@@ -866,21 +919,32 @@ export function createPopMode({
      *   room 0..2; layers = owned studio upgrades drawn in the studio (save.studioLayers, T5.1a); career = false makes a round that cannot fail (default
      *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload;
      *   customerName = shown in the header ("Popping Pilot Pete", else "Pop them!"); skipCost = what "Next customer"
-     *   costs in reputation, shown on the fail choice (left out = no cost shown).
+     *   costs in reputation, shown on the fail choice (left out = no cost shown). twist = the customer's twist
+     *   (T8.3, data/twists.js: 'fidgety', 'ticklish', 'sensitive', or 'hurry' for a hurry request; shown as a label
+     *   in the header, the first three also change the play); twistHintKey = its tip for the hint line (until the
+     *   first pop).
      *   For a special mode (T4.5): mood = a fixed face mood ('sleep'; an Ow still winces), onPop(bump, left) after
      *   every pop and onOw(at) after every Ow.
      * @returns {void}
      */
     startRound(o = {}) {
       const tools = roundTools(o.unlockedTools ?? [START_TOOL]);
+      const seed0 = Number.isFinite(o.seed) && o.seed > 0 ? Math.floor(o.seed) : 1 + Math.floor(Math.random() * 2e9);
       cfg = {
         kind: 'round', failMode: o.career === false ? 'free' : 'career', unlockedTools: o.unlockedTools ?? [START_TOOL],
-        setup: roundFaceSetup({ customer: o.customer, bumpCount: o.bumpCount, allowedTypes: o.allowedTypes, unlockedTools: tools, decoys: o.decoys }),
-        seed: Number.isFinite(o.seed) && o.seed > 0 ? Math.floor(o.seed) : 1 + Math.floor(Math.random() * 2e9),
+        setup: roundFaceSetup({
+          customer: o.customer, bumpCount: o.bumpCount, allowedTypes: o.allowedTypes, unlockedTools: tools, decoys: o.decoys,
+          seed: seed0, request: o.request ?? null, // the nose strip: about 2 faces in 5, never with a hurry request
+        }),
+        seed: seed0,
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {}, irritation: irritationScales(o.difficulty),
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
         hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
+        twist: typeof o.twist === 'string' ? o.twist : null, // T8.3: the customer's twist
+        twistHint: typeof o.twistHintKey === 'string' ? o.twistHintKey : null,
       };
+      twistChip.hidden = !cfg.twist;
+      twistChip.textContent = cfg.twist ? t(`twist.${cfg.twist}.name`) : '';
       moodOverride = typeof o.mood === 'string' ? o.mood : null;
       if (guideBtn) guideBtn.hidden = o.request?.type === 'hurry'; // a hurry clock cannot pause: no guide in that round (T6.5)
       setRoundTexts(typeof o.customerName === 'string' && o.customerName ? o.customerName : null, o.skipCost);
@@ -906,6 +970,7 @@ export function createPopMode({
       };
       if (Number.isFinite(o.seed) && o.seed > 0) { seed = Math.floor(o.seed); freshSeed = true; }
       if (guideBtn) guideBtn.hidden = false;
+      twistChip.hidden = true; // free play has no twists (T8.3)
       setRoundTexts(null, null);
       buildToolBar(roundTools(cfg.unlockedTools));
       room = 'studio'; // free play is always in the studio

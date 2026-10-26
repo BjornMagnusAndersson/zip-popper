@@ -196,10 +196,24 @@ export function roughness(toolId, bumpType, warmth = 0) {
  * @param {string} bumpType a bump id
  * @param {number} [warmth] the warm meter, 0..1
  * @param {number} [irritation] the irritation meter, 0..1
+ * @param {number} [skin] how delicate the skin is (T8.3 sensitive skin: data/twists.js SENSITIVE.roughScale; 1 =
+ *   normal); see skinRoughFactor
  * @returns {number} chance 0..1
  */
-export function roughChance(toolId, bumpType, warmth = 0, irritation = 0) {
-  return Math.min(1, roughness(toolId, bumpType, warmth) * (1 + IRRITATION.boost * unit(irritation)));
+export function roughChance(toolId, bumpType, warmth = 0, irritation = 0, skin = 1) {
+  return Math.min(1, roughness(toolId, bumpType, warmth) * skinRoughFactor(skin, warmth) * (1 + IRRITATION.boost * unit(irritation)));
+}
+
+/**
+ * The extra rough-press factor of delicate skin (T8.3, the sensitive twist): the full skin factor on a cold face, and
+ * nothing extra on a fully warm one (the warm cloth takes the extra away as it warms, on top of its usual cut).
+ * @param {number} skin the skin factor (2 = twice the Ow chance when cold; 1 or less, or not a number = normal)
+ * @param {number} [warmth] the warm meter, 0..1
+ * @returns {number} the multiplier, 1 or more
+ */
+export function skinRoughFactor(skin, warmth = 0) {
+  const s = Number.isFinite(skin) && skin > 1 ? skin : 1;
+  return 1 + (s - 1) * (1 - unit(warmth));
 }
 
 /**
@@ -281,6 +295,21 @@ export function isFail(level, mode) {
 export function warmStep(warmth, dt, holding) {
   if (holding) return Math.min(1, warmth + dt * WARM.fillPerSecond);
   return Math.max(0, warmth - dt * WARM.drainPerSecond);
+}
+
+/**
+ * Whether the popping step is over, so the wipe can start: every bump is popped. The nose strip never holds it up (it
+ * is optional and only pays a bonus when peeled); only a strip that is being peeled right now is waited for (a finger
+ * on it, flying off, or past 0.6 and finishing by itself), so a peel she started still gets its bonus.
+ * @param {{popped: boolean}[]} pimples the bumps
+ * @param {{off?: boolean, flying?: boolean, q?: number}|null} [strip] the nose strip (engine state), or null
+ * @param {boolean} [peeling] a finger is peeling the strip now
+ * @returns {boolean} true when the wipe can start
+ */
+export function popStepOver(pimples, strip = null, peeling = false) {
+  if (pimples.some((p) => !p.popped)) return false;
+  if (!strip || strip.off) return true;
+  return !(peeling || strip.flying || (strip.q ?? 0) > 0.6);
 }
 
 /**

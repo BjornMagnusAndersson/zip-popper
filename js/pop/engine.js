@@ -17,13 +17,18 @@
 // bump's normal press progress (squeeze-logic.js), so every rule of a hold still applies. A ring shows which bump,
 // ghost finger pads press on its edges, a squeak rises and tiny buzz pulses quicken; the goo squirts across the
 // squeeze. Near a bump two fingers never zoom; far from every bump they zoom as before.
+// Customer twists (T8.3, option twist, data/twists.js): 'fidgety' = the whole face slowly sways (a small offset on
+// top of the zoom view, so drawing and every press move together and a held press follows its bump; capped so no bump
+// leaves the screen or slides under the tool bar); 'ticklish' = a squeeze held on a cheek, the jaw or near the ear
+// makes her giggle (the face jerks away, the press drops back and must be made again; onGiggle tells the controller);
+// 'sensitive' = cold squeezes give more Ows, each Ow irritates more, and her cheeks start a little red.
 import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius } from './logic.js';
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
-  wipeReach, autoWipeSeconds, padRestSpot,
+  wipeReach, autoWipeSeconds, padRestSpot, popStepOver,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
@@ -35,6 +40,8 @@ import {
   drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
   gooLook, capList,
 } from './art.js';
+import { SWAY, TICKLE, SENSITIVE } from '../data/twists.js';
+import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset } from './twist-logic.js';
 
 const GRID = 8; // mesh cells across the squeezed area
 const WIPE_CELL = 10; // px; goo coverage is counted in cells this size
@@ -116,6 +123,8 @@ function affine(s, d) {
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
  *   irritation?: {rise: number, drain: number} (how touchy the customer is, T3.1b; 1 and 1 = normal),
  *   squeeze?: boolean (two fingers round a bump squeeze it, T1.7; off = two fingers always zoom),
+ *   twist?: string|null (the customer's twist, T8.3: 'fidgety', 'ticklish' or 'sensitive'; anything else = none),
+ *   onGiggle?: (at: {x: number, y: number}) => void (the ticklish customer giggled at this bump, scene px),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
@@ -178,6 +187,56 @@ export function createPopScene(canvas, o) {
   let keyHold = null; // {p, until} a key press squeezing
   const warnedThresholds = new Set();
   let lastWipeSound = -1;
+  // Customer twists (T8.3). off = the twist's screen px offset now (sway plus a giggle's jerk), swayK = how much of
+  // the sway is on (fades in at the start, out after the pops), room = how far the face may move (twist-logic.js
+  // swayRoom; worked out again on every pop and resize), giggleAt = the time of the last giggle.
+  const twist = ['fidgety', 'ticklish', 'sensitive'].includes(o.twist) ? o.twist : null;
+  let off = { x: 0, y: 0 };
+  let swayK = 0;
+  let room = 0;
+  let giggleAt = -Infinity;
+  let jerk = null; // {x, y}: the way the face jerks after a giggle (away from the pressed bump)
+  const skin = twist === 'sensitive' ? SENSITIVE.roughScale : 1; // delicate skin: more rough presses when cold
+
+  // Idle life (T8.1): the face picture carries a plan for blinks and glances (face.js makeFaceLife, texture.faceLife),
+  // drawn over the picture each frame; while nothing else moves, a timer wakes the loop for the next blink or glance.
+  // The whole canvas breathes: a slow 1 to 2 px sway done by the browser (no redraws). None of it with reduced motion.
+  let lifeTimer = 0;
+  let breathing = null;
+  try {
+    const b = reduced ? null : o.texture?.faceLife?.breath;
+    if (b && typeof canvas.animate === 'function') {
+      breathing = canvas.animate([
+        { translate: '0 0', easing: 'ease-in-out' }, { translate: `0 ${-b.px}px`, easing: 'ease-in-out' }, { translate: '0 0' },
+      ], { duration: b.period * 1000, iterations: Infinity });
+    }
+  } catch { breathing = null; } // an old browser without this: the face keeps still
+
+  /** The face picture's idle life, or null (reduced motion, after a storm-off, or a picture without one). @returns {object|null} life */
+  const faceLife = () => (reduced || halted ? null : texture?.faceLife ?? null);
+  /** Wall-clock seconds for the idle life (the loop's own time stands still while it sleeps). @returns {number} seconds */
+  const lifeNow = () => performance.now() / 1000;
+
+  /**
+   * While nothing else moves, wake the drawing loop when the face's next blink or glance starts. While the page or
+   * the scene is hidden it only looks again now and then (no drawing).
+   * @returns {void}
+   */
+  function planLife() {
+    clearTimeout(lifeTimer);
+    lifeTimer = 0;
+    const life = faceLife();
+    if (!life || disposed) return;
+    const wait = life.next(lifeNow());
+    if (!Number.isFinite(wait)) return;
+    lifeTimer = setTimeout(() => {
+      lifeTimer = 0;
+      if (disposed) return;
+      const hidden = globalThis.document?.hidden || (typeof canvas.getClientRects === 'function' && canvas.getClientRects().length === 0);
+      if (hidden) { lifeTimer = setTimeout(planLife, 1000); return; }
+      kick();
+    }, Math.max(30, Math.min(30000, wait * 1000)));
+  }
 
   /**
    * Play a sound through the scene's sound player (if any).
@@ -194,8 +253,73 @@ export function createPopScene(canvas, o) {
    */
   const buzz = (pattern) => { try { o.buzz?.(pattern); } catch { /* not allowed */ } };
 
+  /**
+   * Work out how far the face may sway (T8.3): the room the bumps still to pop leave to the screen edges and to the
+   * control boxes over the scene (twist-logic.js swayRoom), at the whole-face view. Only with a twist.
+   * @returns {void}
+   */
+  function measureRoom() {
+    if (!twist) return;
+    let covered = [];
+    try { covered = o.covered?.() ?? []; } catch { covered = []; }
+    room = swayRoom(pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r })), w, h, covered);
+  }
+
+  /**
+   * One step of the twist rules (T8.3): the fidgety sway fades in while popping and wiping and out after; a ticklish
+   * customer giggles when a squeeze is held too long on a ticklish spot; then the twist offset (sway plus a giggle's
+   * jerk) for this frame, never longer than the room.
+   * @param {number} dt seconds since the last frame
+   * @returns {boolean} true while the face is moving (the drawing loop keeps running)
+   */
+  function twistStep(dt) {
+    if (!twist) return false;
+    if (twist === 'fidgety') {
+      const target = !halted && (step === 'pop' || step === 'wipe') ? 1 : 0;
+      swayK = target > swayK ? Math.min(1, swayK + dt * SWAY.ease) : Math.max(0, swayK - dt * SWAY.ease);
+    }
+    if (twist === 'ticklish' && step === 'pop' && !halted) {
+      const held = hold ? { p: hold.p, since: hold.since } : squeeze ? { p: squeeze.p, since: squeeze.since ?? time } : null;
+      if (held && !held.p.popped && tickleDue(time - held.since, held.p.zone, time - giggleAt)) giggle(held.p);
+    }
+    const rx = face ? face.rx : Math.min(w, h) / 3;
+    let next = swayOffset(time, swayAmplitude(rx, room, reduced) * swayK);
+    if (jerk && !reduced) {
+      const j = jerkOffset(time - giggleAt, jerk, Math.min(SWAY.maxPx * 1.5, rx * TICKLE.jerkShare));
+      next = { x: next.x + j.x, y: next.y + j.y };
+    }
+    next = clampOffset(next, room);
+    const moved = next.x !== off.x || next.y !== off.y;
+    off = next;
+    return swayK > 0 || moved || giggleBlocks(time, giggleAt);
+  }
+
+  /**
+   * The ticklish customer giggles (T8.3): the press on this bump lets go and drops back (TICKLE.dropBack), the face
+   * jerks away from the finger (not with reduced motion: then it is only the short pause), a giggle sound and buzz, a
+   * small irritation nudge, and the controller shows its "Hehehe!" pop-up (onGiggle).
+   * @param {object} p the bump that was held
+   * @returns {void}
+   */
+  function giggle(p) {
+    giggleAt = time;
+    p.pressure = giggleDrop(p.pressure);
+    if (hold?.p === p) hold = null;
+    if (squeeze?.p === p) endSqueeze(); // the fingers then do nothing more until lifted
+    else springBack(p);
+    const cx = face ? face.cx : w / 2;
+    const cy = face ? face.cy : h / 2;
+    jerk = { x: (cx - p.x) || 1, y: (cy - p.y) * 0.5 }; // she pulls away from the finger
+    raiseIrritation(TICKLE.irritation);
+    play('giggle');
+    buzz([10, 30, 10]);
+    try { o.onGiggle?.({ x: p.x, y: p.y }); } catch (e) { console.warn('onGiggle failed:', e); }
+    kick();
+  }
+
   /** Start the drawing loop if it is not running. @returns {void} */
   function kick() {
+    if (lifeTimer) { clearTimeout(lifeTimer); lifeTimer = 0; }
     if (raf || disposed) return;
     last = performance.now();
     raf = requestAnimationFrame(frame);
@@ -232,13 +356,24 @@ export function createPopScene(canvas, o) {
    */
   function local(e) {
     const s = screenPt(e);
-    return screenToScene(view, s.x, s.y);
+    return screenToScene(shown(), s.x, s.y);
+  }
+
+  /**
+   * The view as it is drawn and touched: the zoom view moved by the twist offset (the fidgety sway and a ticklish
+   * jerk, T8.3; screen px, so the face moves the same few px at any zoom). Without a twist it is the zoom view itself.
+   * @returns {{z: number, x: number, y: number}} the view
+   */
+  function shown() {
+    if (!off.x && !off.y) return view;
+    return { z: view.z, x: view.x - off.x / view.z, y: view.y - off.y / view.z };
   }
 
   /** The drawing transform for the view: scene px to device px. @returns {number[]} [a, b, c, d, e, f] for setTransform */
   function viewMatrix() {
-    const k = dpr * view.z;
-    return [k, 0, 0, k, -view.x * k, -view.y * k];
+    const v = shown();
+    const k = dpr * v.z;
+    return [k, 0, 0, k, -v.x * k, -v.y * k];
   }
 
   /**
@@ -448,7 +583,7 @@ export function createPopScene(canvas, o) {
     }
     capList(drops, MAX_DROPS);
     if (big && !reduced) {
-      const at = sceneToScreen(view, p.x, p.y); // the lens is in front of the zoom: splats live in screen px
+      const at = sceneToScreen(shown(), p.x, p.y); // the lens is in front of the zoom: splats live in screen px
       splashLens(at.x, at.y, goo, 1);
     }
   }
@@ -514,20 +649,26 @@ export function createPopScene(canvas, o) {
     }
     marks.push({ x: p.x, y: p.y, r: p.r * (pulled(p) ? 0.9 : 1.1), patched: false });
     if (!reduced) { p.wob = tweezed(p) ? 0 : 0.55; p.wobV = 0; }
+    measureRoom(); // one bump fewer: the sway may have more room (T8.3)
     const left = pimples.filter((q) => !q.popped).length;
     try { o.onPop?.(p, left); } catch (e) { console.warn('onPop failed:', e); }
     maybeNextStep();
     kick();
   }
 
-  /** After the last pimple and the strip: start wiping (or straight to the cream when there is no goo). @returns {void} */
+  /**
+   * After the last pimple: start wiping (or straight to the cream when there is no goo). The nose strip is optional
+   * (tool-logic.js popStepOver): an unpeeled strip never holds the round up; only a peel in progress is waited for.
+   * @returns {void}
+   */
   function maybeNextStep() {
     if (step !== 'pop') return;
-    if (pimples.some((p) => !p.popped) || (strip && !strip.off)) return;
-    // Wait until the goo has landed, then start the wipe.
+    if (!popStepOver(pimples, strip, Boolean(peel))) return;
+    // Wait until the goo has landed (and a peel in progress is done), then start the wipe.
     const start = () => {
       if (disposed || step !== 'pop') return;
-      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || (strip && strip.flying)) { setTimeout(start, 120); return; }
+      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || !popStepOver(pimples, strip, Boolean(peel))) { setTimeout(start, 120); return; }
+      if (strip && !strip.off && strip.stuck) { strip.stuck = false; strip.q = 0; } // stuck on but never peeled: it comes away, no bonus
       beginWipe();
     };
     setTimeout(start, reduced ? 200 : 450);
@@ -657,6 +798,7 @@ export function createPopScene(canvas, o) {
     }
     if (peel) peel.x0 = peel.x0 * s + tx;
     if (cream) for (const d of cream.dollops) mv(d);
+    measureRoom(); // the sway's room on the new size (T8.3)
     if (wipe) {
       // Redraw the goo layer at the new size and count again what is left; keep the share already wiped.
       const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
@@ -737,7 +879,7 @@ export function createPopScene(canvas, o) {
    * @returns {boolean} true while something still moves
    */
   function update(dt) {
-    let busy = false;
+    let busy = twistStep(dt); // the fidgety sway and the ticklish giggle (T8.3)
     for (const p of pimples) {
       if (p.appear < 1) { p.appear = Math.min(1, p.appear + dt * 3.5); busy = true; }
       if (p.growFor && !p.popped && step === 'pop' && p.age < p.growFor) { // a growing bump (Evil Horn) gets bigger while you watch
@@ -916,6 +1058,7 @@ export function createPopScene(canvas, o) {
       const shake = !reduced && !p.popped && p.pressure > 0.8 ? Math.sin(time * 70) * 0.03 : 0;
       if (!tweezed(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
     }
+    faceLife()?.draw(ctx, lifeNow()); // the blinking, glancing eyes over the picture (only while they move, T8.1)
     if (warmth > 0.003 && face) { // a warm rosy glow on the skin while the warm meter is up (only over the person)
       ctx.save();
       ctx.globalCompositeOperation = 'source-atop';
@@ -926,7 +1069,8 @@ export function createPopScene(canvas, o) {
       ctx.fillRect(face.cx - face.rx * 1.3, face.cy - face.ry * 1.2, face.rx * 2.6, face.ry * 2.4);
       ctx.restore();
     }
-    if (irr.level > 0.02 && face) drawIrritation(irr.level); // redder, blotchy cheeks while irritated (no motion)
+    const blush = Math.max(irr.level, twist === 'sensitive' && (step === 'pop' || step === 'wipe') ? SENSITIVE.blush : 0); // delicate skin starts a bit red (T8.3)
+    if (blush > 0.02 && face) drawIrritation(blush); // redder, blotchy cheeks while irritated (no motion)
     for (const d of decoys) drawDecoy(ctx, d); // moles, freckles and beauty marks are part of the skin
     for (const m of marks) {
       const alpha = sx === null ? fadeAll : m.x < sx ? 0 : 1;
@@ -1080,9 +1224,10 @@ export function createPopScene(canvas, o) {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     time += dt;
-    const busy = update(dt);
+    const busy = update(dt) || Boolean(faceLife()?.busy(lifeNow())); // a blink or glance keeps it going too (T8.1)
     render();
     if (busy && !raf) raf = requestAnimationFrame(frame); // a kick() during this frame may already have asked for the next
+    if (!raf) planLife(); // asleep until the next blink or glance
   }
 
   /**
@@ -1141,7 +1286,7 @@ export function createPopScene(canvas, o) {
    */
   function ow(p) {
     p.ouch = time;
-    raiseIrritation(IRRITATION.perOw);
+    raiseIrritation(IRRITATION.perOw * (twist === 'sensitive' ? SENSITIVE.owScale : 1)); // delicate skin minds an Ow more (T8.3)
     play('ow_customer');
     buzz([20, 40, 20]);
     try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool, id: p.id }); } catch (e) { console.warn('onOw failed:', e); }
@@ -1210,7 +1355,7 @@ export function createPopScene(canvas, o) {
     const out = pressOutcome(tool, p.type);
     if (out === 'ow') { ow(p); return false; }
     if (out !== 'squeeze' && out !== 'pull') return false;
-    if (roll() < roughChance(tool, p.type, warmth, irr.level) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it)
+    if (roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
     if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
     delete p.sqReach; // a one-finger hold uses the drawn fingers again (not a two-finger squeeze's ghost pads)
     hold = { p, id: e.pointerId, since: time };
@@ -1226,6 +1371,7 @@ export function createPopScene(canvas, o) {
   function press(e) {
     if (e.button > 0 || halted) return false;
     const pt = local(e);
+    if (step === 'pop' && giggleBlocks(time, giggleAt)) return false; // she is still giggling (ticklish, T8.3): wait
     if (step === 'pop') {
       if (!pressPop(e, pt)) return false;
     } else if (step === 'wipe' && toolInfo(tool)?.use === 'patch' && patchAt(pt)) {
@@ -1288,7 +1434,7 @@ export function createPopScene(canvas, o) {
    * @param {{x: number, y: number}|undefined} s the finger in screen px
    * @returns {{x: number, y: number}|null} scene point, or null for a lifted finger
    */
-  const sceneOf = (s) => (s ? screenToScene(view, s.x, s.y) : null);
+  const sceneOf = (s) => (s ? screenToScene(shown(), s.x, s.y) : null);
 
   /**
    * Two fingers are down: with the squeeze switch on and fingers in hand, two fingers anywhere in a bump's catch zone
@@ -1323,13 +1469,14 @@ export function createPopScene(canvas, o) {
     if (memory && !again) forget();
     memory = null;
     stale = true; // unless the squeeze really starts below
+    if (giggleBlocks(time, giggleAt)) return; // still giggling (ticklish, T8.3): these fingers wait until lifted
     if (!again) {
       if (cand.decoy) { ow(p); return; }
       if (p.popped || step !== 'pop' || halted) return;
       const out = pressOutcome(tool, p.type);
       if (out === 'ow') { ow(p); return; }
       if (out !== 'squeeze' && out !== 'pull') return;
-      if (roll() < roughChance(tool, p.type, warmth, irr.level) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
+      if (roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
     }
     stale = false;
     p.tool = tool;
@@ -1337,7 +1484,7 @@ export function createPopScene(canvas, o) {
     const pb = touches.get(b);
     squeeze = {
       a, b, p, d0: Math.max(1, Math.hypot(pa.x - pb.x, pa.y - pb.y)), drive: startDrive(Math.max(p.pressure, level)),
-      nextSqueak: time, nextBuzz: time + 0.08, last: p.pressure,
+      nextSqueak: time, nextBuzz: time + 0.08, last: p.pressure, since: time, // since: for the ticklish giggle (T8.3)
     };
     if (!again) p.ringFrom = time;
     aimSqueeze(squeeze);
@@ -1504,7 +1651,7 @@ export function createPopScene(canvas, o) {
     const pr = Math.max(0, Math.min(1, p.pressure));
     const ang = p.axis ?? 0;
     const R = 14;
-    const spots = padSpots(sceneToScreen(view, p.x, p.y), p.r * view.z, ang, pr, R);
+    const spots = padSpots(sceneToScreen(shown(), p.x, p.y), p.r * view.z, ang, pr, R);
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     for (const [pt, dir] of [[spots.a, 1], [spots.b, -1]]) {
@@ -1637,7 +1784,7 @@ export function createPopScene(canvas, o) {
       if (hold.p.pressure >= 1) pop(hold.p);
       hold = null;
     }
-    if (peel && e.pointerId === peel.id) peel = null;
+    if (peel && e.pointerId === peel.id) { peel = null; maybeNextStep(); } // the last bump may be popped already
     if (warmHold && e.pointerId === warmHold.id) warmHold = null;
     if (wipe && wipe.id === e.pointerId) { wipe.id = null; wipe.last = null; }
     kick();
@@ -1650,6 +1797,9 @@ export function createPopScene(canvas, o) {
   function keyPress() {
     if (halted) return false;
     if (step === 'pop') {
+      // The nose strip first (it is optional, and the step ends with the last bump), then the bumps.
+      if (strip && !strip.off && !strip.stuck) { strip.stuck = true; play('peel'); kick(); return true; }
+      if (strip && !strip.off && !strip.flying) { strip.q = Math.min(1, strip.q + 0.34); kick(); return true; }
       const p = pimples.find((q) => !q.popped);
       if (p) { // the keyboard always uses the tool that suits the bump, so it never gives an Ow
         if (p.pressure < 0.05) p.tool = bestToolFor(p.type, usable ?? undefined);
@@ -1659,8 +1809,6 @@ export function createPopScene(canvas, o) {
         kick();
         return true;
       }
-      if (strip && !strip.off && !strip.stuck) { strip.stuck = true; play('peel'); kick(); return true; }
-      if (strip && !strip.off) { strip.q = Math.min(1, strip.q + 0.34); kick(); return true; }
     }
     if (step === 'wipe') { autoWipe(); return true; }
     return false;
@@ -1673,7 +1821,7 @@ export function createPopScene(canvas, o) {
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.popView = () => ({ ...view }); // for browser checks: the zoom view now (T1.4)
   // Debug and smoke-test hook: where the pimples still are (scene coordinates; on screen see popView and sceneToScreen).
-  canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type }));
+  canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type, zone: p.zone }));
   canvas.popDecoys = () => decoys.map((d) => ({ x: d.x, y: d.y, r: d.r, kind: d.kind })); // for browser checks, like popTargets
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
   canvas.popStep = () => step;
@@ -1683,6 +1831,8 @@ export function createPopScene(canvas, o) {
   canvas.popTool = () => tool;
   canvas.popWarmth = () => warmth;
   canvas.popIrritation = () => irr.level;
+  canvas.popTwist = () => ({ twist, off: { ...off }, room, swayK, giggleAt, time }); // for browser checks (T8.3)
+  measureRoom();
   render();
   kick();
 
@@ -1704,6 +1854,10 @@ export function createPopScene(canvas, o) {
     all: () => pimples,
     /** The step now: pop, wipe, cream or done. @returns {string} the step */
     step: () => step,
+    /** Whether the nose strip is still on the face (not peeled off). @returns {boolean} true while it is there */
+    stripOn: () => Boolean(strip && !strip.off),
+    /** Whether the nose strip is stuck on and waiting to be peeled. @returns {boolean} true when stuck on */
+    stripStuck: () => Boolean(strip && !strip.off && strip.stuck),
     /**
      * Swap the background picture (the face changes mood as it is cleared).
      * @param {HTMLCanvasElement} tex the new texture
@@ -1757,6 +1911,8 @@ export function createPopScene(canvas, o) {
       disposed = true;
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
+      clearTimeout(lifeTimer);
+      try { breathing?.cancel(); } catch { /* already gone */ }
       if (quake >= 0) canvas.style.transform = ''; // stop a horn wobble half-way
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
@@ -1793,6 +1949,6 @@ export function createPopScene(canvas, o) {
      * @param {number} y scene y
      * @returns {{x: number, y: number}} CSS px on the canvas
      */
-    toScreen: (x, y) => sceneToScreen(view, x, y),
+    toScreen: (x, y) => sceneToScreen(shown(), x, y),
   };
 }

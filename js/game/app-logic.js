@@ -13,13 +13,15 @@ import {
 import {
   SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL, KEEP_WORKING_PAY,
 } from '../data/economy-data.js';
-import { pickRequest } from './requests.js';
+import { pickRequest, hurryLimit } from './requests.js';
+import { twistFor, shownTwist, describeTwist, isTwist, TWIST_IDS } from '../data/twists.js';
 import { STUDIO_LAYERS, studioTier, studioLayersShown, heroOutfit, OUTFIT_TIERS, OUTFIT_ITEMS } from './studio.js';
-import { faceBumpHolds } from '../pop/round-logic.js';
+import { hurryHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
 import { GUIDE_KINDS } from '../screens/guide-logic.js';
+import { demoAlbum } from '../screens/album-logic.js';
 import { STRIP as strip0 } from '../data/comics/strip-0.js';
 import { STRIP as strip1 } from '../data/comics/strip-1.js';
 import { STRIP as strip2 } from '../data/comics/strip-2.js';
@@ -116,11 +118,12 @@ function intOrNull(v) {
  * ?squeeze = the two-finger squeeze switch on, T1.7; ?layers=lamp,plant or ?layers=all = these studio upgrades
  * owned and scrubbed, T5.1a, so the studio tiers and layers can be looked at; ?outfit=everyday|apron|scrubs = her
  * outfit tier, T5.2: the outfit items up to that tier owned, so the studio view and the comics show it; ?seen=all =
- * every Field guide card open, T6.5).
+ * every Field guide card open, T6.5; ?twist=fidgety|ticklish|sensitive|hurry = every customer gets that twist,
+ * T8.3, used only with ?test).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
  *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null,
- *   outfit: string|null, seenAll: boolean}} the flags
+ *   outfit: string|null, seenAll: boolean, album: boolean, twist: string|null}} the flags (album = ?album=demo, T8.2; twist = ?twist=, T8.3)
  */
 export function parseFlags(search) {
   const p = new URLSearchParams(search ?? '');
@@ -133,6 +136,8 @@ export function parseFlags(search) {
     layers: lay === null ? null : lay === 'all' ? [...STUDIO_LAYERS] : studioLayersShown(lay.split(',')),
     outfit: OUTFIT_TIERS.includes(p.get('outfit')) ? p.get('outfit') : null,
     seenAll: p.get('seen') === 'all', // ?seen=all: every Field guide kind met (T6.5)
+    album: p.get('album') === 'demo', // ?album=demo: 12 faces in the Face album (T8.2)
+    twist: isTwist(p.get('twist')) ? p.get('twist') : null, // ?twist=: force a customer twist (T8.3)
   };
 }
 
@@ -197,7 +202,8 @@ export function applyTestFlags(save, flags, now = Date.now()) {
     s.items = { ...s.items, ...Object.fromEntries(outfitTestItems(flags.outfit).map((id) => [id, { needsScrub: false }])) };
     s.outfitTier = OUTFIT_TIERS.indexOf(flags.outfit) + 1;
   }
-  if (flags.seenAll) s.seenKinds = [...GUIDE_KINDS]; // ?seen=all: every Field guide card open (T6.5)
+  if (flags.seenAll) { s.seenKinds = [...GUIDE_KINDS]; s.seenTwists = [...TWIST_IDS]; } // ?seen=all: every Field guide card open (T6.5, T8.3)
+  if (flags.album) s.albumFaces = demoAlbum(now); // ?album=demo: a Face album with 12 faces (T8.2)
   return normalizeSave(s, now);
 }
 
@@ -391,17 +397,22 @@ export function backdropRoom(chapter) {
  * Everything pop-mode.js startRound needs for a story customer (all but onFinish): the customer and their bumps
  * (chapter-logic.js customerSpec), the owned tools, mastery, the room (home or studio, backdropRoom) and studio
  * tier, decoys (career customers from number 4,
- * ECONOMY.md section 6) and the request (requests.js pickRequest; the hurry limit uses the mastery-scaled hold times
- * of the real bumps of the face, round-logic.js faceBumpHolds), the customer's name key (the scene header, B5) and
+ * ECONOMY.md section 6) and the request (requests.js pickRequest; the hurry limit uses the hold times of the real
+ * bumps of the face with her best owned tools at her mastery, round-logic.js hurryHolds), the customer's name key
+ * (the scene header, B5) and
  * what "Next customer" would cost now (skipCost, B3). A Keep working step (T5.4) takes its customer from
  * chapter-logic.js keepWorkingSpec and its face seed from keepWorkingSeed, always has decoys, and its combo requests
  * are as long as at the career's end.
+ * Twists (T8.3, data/twists.js twistFor): one extra per customer, a twist OR a request. A customer with a twist asks
+ * for no request; the others may roll a request as before, and a hurry request is shown as the "in a hurry" twist.
+ * twist = the twist shown (with 'hurry'), twistHintKey = its tip (describeTwist).
  * @param {object} save the save
  * @param {{chapter: number, n: number}} step a customer step (from nextStep)
  * @param {number|null} [forcedSeed] the ?seed= flag
+ * @param {string|null} [forcedTwist] the ?twist= test flag (any twist id; 'hurry' makes a hurry request)
  * @returns {object|null} startRound arguments, or null when the chapter has no such customer
  */
-export function roundArgs(save, step, forcedSeed = null) {
+export function roundArgs(save, step, forcedSeed = null, forcedTwist = null) {
   const kw = Boolean(step.keepWorking); // Keep working (T5.4): random customer, career rules, its own seeds
   const spec = stepSpec(step);
   if (!spec) return null;
@@ -411,15 +422,22 @@ export function roundArgs(save, step, forcedSeed = null) {
   const unlockedTools = [...economyFromSave(save).unlockedTools];
   const decoys = career && (kw || step.n >= 4);
   const requestNumber = kw ? CAREER_BANDS[CAREER_BANDS.length - 1].to : step.n; // Keep working combos are as long as at the career's end
-  const holds = faceBumpHolds({
+  const holds = hurryHolds({
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: spec.allowedTypes, unlockedTools, decoys, seed, holdFactors,
   });
+  const own = isTwist(forcedTwist) ? forcedTwist
+    : twistFor({ chapter: step.chapter, n: step.n, keepWorking: kw, regularId: spec.customer?.regular ? spec.customer.id : null });
+  let request = null; // one extra per customer (T8.3): a twist customer has no request
+  if (own === 'hurry') request = { type: 'hurry', timeLimit: hurryLimit(holds) };
+  else if (!own) request = pickRequest(spec, holds, seed + 101, requestNumber);
+  const twist = shownTwist(own, request);
   return {
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
     seed, holdFactors, roughReductions, unlockedTools,
-    request: pickRequest(spec, holds, seed + 101, requestNumber), room: backdropRoom(step.chapter), tier: backdropTier(save),
+    request, room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), career: true,
     decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
+    twist, twistHintKey: describeTwist(twist, { ownedTools: unlockedTools })?.hintKey ?? null,
   };
 }
 

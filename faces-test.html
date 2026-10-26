@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Faces test</title>
 <style>
-  /* Developer page (T2.1): the 8 regulars and 4 generated customers in every mood. Not part of the game. */
+  /* Developer page (T2.1, T8.1): the 8 regulars, the husband and 4 generated customers in every mood. Not part of the game. */
   body { margin: 0; padding: 12px; background: #23393a; color: #eef6f4; font: 14px/1.3 system-ui, sans-serif; }
   .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
   .bar button { font: inherit; padding: 6px 12px; border-radius: 16px; border: 1px solid #6b9; background: #2f4c4d; color: inherit; cursor: pointer; }
@@ -15,28 +15,46 @@
   th { font-weight: 600; padding: 2px 4px; text-align: center; font-size: 12px; }
   th.mood { writing-mode: vertical-rl; transform: rotate(180deg); }
   td { padding: 2px; }
-  canvas { display: block; width: 117px; height: 240px; border-radius: 6px; }
+  canvas { display: block; width: 117px; height: 240px; border-radius: 6px; background: #a7d1cc; }
   body.one canvas { width: 195px; height: 400px; }
   body.wide canvas { width: 240px; height: 117px; }
   body.wide.one canvas { width: 400px; height: 195px; }
+  pre { white-space: pre-wrap; font-size: 12px; }
 </style>
 </head>
 <body>
 <div class="bar" id="bar"></div>
 <table><thead id="head"></thead><tbody id="grid"></tbody></table>
+<pre id="perf"></pre>
 <script type="module">
-// Developer page: draws each test face as a 390 x 800 phone scene, shown small. Optional ?bumps draws the bumps and
-// the keep-out boxes from layoutFace / faceGeometry on top, to check they sit on bare skin.
+// Developer page: draws each test face as a 390 x 800 phone scene, shown small. Options:
+//   ?bumps          the bumps and the keep-out boxes from layoutFace / faceGeometry on top, to check they sit on bare skin
+//   ?show=bumps     bumps and decoys (moles, freckles) in every mood, no boxes: to judge how well they read on the skin
+//   ?w=800&h=390    a landscape phone; ?px=400 shows each picture that many CSS px high; ?dpr=2 paints sharper
+//   ?who=a,b        only these people; ?mood=grim only this mood
+//   ?live           the idle life (blinks and glances) runs on every picture (T8.1); with ?blink=1 (0..1) or
+//                   ?gaze=0.25 (-0.3..0.3) every picture shows that one moment instead (for screenshots)
+//   ?perf           measures how long a face picture takes to paint and how long one scene frame takes (T8.1);
+//                   ?perf=blink times the frames with the eyes drawn again on every frame (the idle life's worst case),
+//                   ?perf=still with reduced motion (no idle life, no breathing), ?perf=nobreath without the sway
 import { faceGeometry, layoutFace } from './js/pop/logic.js';
-import { makeFaceTexture, MOODS } from './js/pop/face.js';
-import { drawPimple } from './js/pop/art.js';
+import * as FACE from './js/pop/face.js';
+import { drawPimple, drawDecoy } from './js/pop/art.js';
+import { createPopScene } from './js/pop/engine.js';
 import { REGULARS, makeCustomer } from './js/data/customers.js';
 import { HUSBAND, HUSBAND_ARMOR } from './js/data/chapters.js';
 
+const { makeFaceTexture, MOODS } = FACE;
 const params = new URLSearchParams(location.search);
 const W = Number(params.get('w')) || 390; // ?w=800&h=390 = a landscape phone
 const H = Number(params.get('h')) || 800;
+const PX = Number(params.get('px')) || 0; // display height in CSS px (0 = the stylesheet's sizes)
+const DPR = Number(params.get('dpr')) || 1;
+const LIVE = params.has('live');
+// A fixed idle-life moment for every picture (?blink, ?gaze), or null for the real timing.
+const FIXED = params.has('blink') || params.has('gaze') ? { blink: Number(params.get('blink')) || 0, gx: Number(params.get('gaze')) || 0, gy: 0 } : null;
 let showBumps = params.has('bumps');
+const plainBumps = params.get('show') === 'bumps';
 let only = MOODS.includes(params.get('mood')) ? params.get('mood') : null;
 const everyone = [
   // The husband (T2.4): at home (chapter 0), in armor (chapter 2), and a preview of the last boss (hat, plumes, cracks).
@@ -47,7 +65,8 @@ const everyone = [
   ...[11, 22, 33, 44].map((seed, i) => { const c = makeCustomer(seed, { chapter: 2 + i }); return { name: `gen ${seed}`, face: c.face, bumps: c.bumps, seed }; }),
 ];
 const who = params.get('who')?.split(',') ?? null; // ?who=husband,armor shows only these
-const people = who ? everyone.filter((p) => who.includes(p.name)) : everyone;
+const people = who ? who.map((n) => everyone.find((p) => p.name === n)).filter(Boolean) : everyone;
+const lives = []; // {canvas, tex, life} for ?live
 
 /**
  * Draw one person in one mood into a new canvas (with bumps and keep-out boxes when asked).
@@ -57,20 +76,36 @@ const people = who ? everyone.filter((p) => who.includes(p.name)) : everyone;
  */
 function faceCanvas(p, mood) {
   const face = faceGeometry(W, H, p.face);
-  const tex = makeFaceTexture(W, H, 1, face, p.face, { mood, redness: mood === 'grim' || mood === 'ow' ? 1 : mood === 'relief' ? 0.3 : 0, seed: p.seed });
-  if (showBumps) {
-    const ctx = tex.getContext('2d');
+  const redness = mood === 'grim' || mood === 'ow' || mood === 'sleep' ? 1 : mood === 'relief' ? 0.3 : 0;
+  const tex = makeFaceTexture(W, H, DPR, face, p.face, { mood, redness, seed: p.seed });
+  const ctx = tex.getContext('2d');
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (plainBumps) {
+    const lay = layoutFace({ seed: p.seed, face, count: Math.max(8, p.bumps), decoys: true });
+    for (const d of lay.decoys ?? []) drawDecoy(ctx, d);
+    for (const b of lay.pimples) drawPimple(ctx, b, 0, 1, 0.4);
+  } else if (showBumps) {
     if (mood === 'grim' || mood === 'ow') for (const b of layoutFace({ seed: p.seed, face, count: p.bumps }).pimples) drawPimple(ctx, b, 0, 1, 0);
     ctx.strokeStyle = 'rgba(0,120,255,0.8)';
     ctx.lineWidth = 2;
     for (const k of face.keepOut) ctx.strokeRect(k.x, k.y, k.w, k.h);
   }
-  tex.title = `${p.name}: ${JSON.stringify(p.face)}`;
-  return tex;
+  let shown = tex;
+  if (LIVE && FACE.makeFaceLife) { // a second canvas shows the picture plus the moving eyes on top
+    shown = document.createElement('canvas');
+    shown.width = tex.width;
+    shown.height = tex.height;
+    const life = FIXED ? FACE.makeFaceLife(face, p.face, { mood, seed: p.seed, dpr: DPR, debugBlink: FIXED }) : tex.faceLife;
+    lives.push({ canvas: shown, tex, life });
+  }
+  if (PX) { shown.style.height = `${PX}px`; shown.style.width = `${Math.round((PX * W) / H)}px`; }
+  shown.title = `${p.name}: ${JSON.stringify(p.face)}`;
+  return shown;
 }
 
 /** Fill the table: one row per mood (or only the chosen one), one column per person. @returns {void} */
 function render() {
+  lives.length = 0;
   document.body.classList.toggle('one', Boolean(only));
   document.body.classList.toggle('wide', W > H);
   const head = document.getElementById('head');
@@ -89,6 +124,23 @@ function render() {
     for (const p of people) tr.insertCell().append(faceCanvas(p, mood));
   }
   for (const b of document.querySelectorAll('#bar button')) b.setAttribute('aria-pressed', String((b.dataset.mood || null) === only));
+}
+
+/**
+ * The ?live loop: copy each picture and draw its moving parts on top for this moment.
+ * @param {number} now time stamp in ms
+ * @returns {void}
+ */
+function liveFrame(now) {
+  for (const l of lives) {
+    const ctx = l.canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, l.canvas.width, l.canvas.height);
+    ctx.drawImage(l.tex, 0, 0);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    l.life.draw(ctx, now / 1000);
+  }
+  requestAnimationFrame(liveFrame);
 }
 
 /** Build the mood switch and the bumps checkbox. @returns {void} */
@@ -110,8 +162,85 @@ function buildBar() {
   bar.append(label);
 }
 
+/**
+ * Wait for the next animation frame.
+ * @returns {Promise<number>} its time stamp
+ */
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+
+/**
+ * ?perf: time the face picture (makeFaceTexture, painted after each pop) for every person, and the scene's frames
+ * (engine.js, a gold bump keeps it busy) for a phone-sized scene at pixel ratio 2, portrait and landscape. Each frame
+ * is timed from the start of its callback to the end of a 1-pixel read-back (so the drawing really happened).
+ * The results go into window.__perf and the page.
+ * @returns {Promise<void>} done
+ */
+async function perf() {
+  const out = { texture: {}, frame: {} };
+  const dpr = 2;
+  const sizes = [[390, 800, 'warmup'], [390, 800, 'portrait'], [800, 390, 'landscape']]; // the first run only warms up
+  for (const [w, h, tag] of sizes) {
+    const cold = []; // the first picture of a person at this size
+    const warm = []; // the next ones (after a pop: other redness or mood, same person and size)
+    for (const p of people) {
+      const face = faceGeometry(w, h, p.face);
+      for (let rep = 0; rep < 4; rep += 1) {
+        const t0 = performance.now();
+        const c = makeFaceTexture(w, h, dpr, face, p.face, { mood: rep === 2 ? 'relief' : 'grim', redness: 1 - rep * 0.25, seed: p.seed });
+        c.getContext('2d').getImageData(0, 0, 1, 1);
+        (rep ? warm : cold).push(performance.now() - t0);
+      }
+    }
+    /** Mean and median of a list of times. @param {number[]} a ms @returns {{mean: number, median: number}} summary */
+    const sum = (a) => { a.sort((x, y) => x - y); return { mean: a.reduce((s2, v) => s2 + v, 0) / a.length, median: a[a.length >> 1] }; };
+    out.texture[tag] = { cold: sum(cold), afterPop: sum(warm) };
+    // One busy scene: the frame loop runs every animation frame while the gold bump twinkles.
+    const p = people.find((q) => q.name === 'greta') ?? people[0];
+    const face = faceGeometry(w, h, p.face);
+    const lay = layoutFace({ seed: p.seed, face, count: 8, decoys: true });
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = `position:fixed;left:0;top:0;width:${w}px;height:${h}px`;
+    document.body.append(canvas);
+    const texture = makeFaceTexture(w, h, dpr, face, p.face, { mood: 'grim', redness: 1, seed: p.seed });
+    // ?perf=blink: the worst case, the eyes drawn again on every frame (as if always blinking and glancing).
+    if (params.get('perf') === 'blink' && FACE.makeFaceLife) texture.faceLife = FACE.makeFaceLife(face, p.face, { mood: 'grim', seed: p.seed, debugBlink: true, dpr });
+    // ?perf=hold: a glance held (the eyes drawn over the picture on every frame, always the same state).
+    if (params.get('perf') === 'hold' && FACE.makeFaceLife) texture.faceLife = FACE.makeFaceLife(face, p.face, { mood: 'grim', seed: p.seed, debugBlink: { gx: 0.25 }, dpr });
+    if (params.get('perf') === 'nobreath' && texture.faceLife) texture.faceLife = { ...texture.faceLife, breath: null }; // life without the sway
+    const times = [];
+    const raf = window.requestAnimationFrame;
+    window.requestAnimationFrame = (cb) => raf((t) => { // time every frame the scene draws
+      const t0 = performance.now();
+      cb(t);
+      if (cb.name === 'frame') { canvas.getContext('2d').getImageData(0, 0, 1, 1); times.push(performance.now() - t0); }
+    });
+    const scene = createPopScene(canvas, {
+      width: w, height: h, dpr, texture, pimples: lay.pimples, decoys: lay.decoys, reduced: params.get('perf') === 'still',
+      face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
+    });
+    for (let i = 0; i < 20; i += 1) await nextFrame(); // warm up
+    times.length = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 3000) await nextFrame();
+    window.requestAnimationFrame = raf;
+    scene.dispose();
+    canvas.remove();
+    times.sort((a, b) => a - b);
+    out.frame[tag] = {
+      frames: times.length, mean: times.reduce((s, v) => s + v, 0) / Math.max(1, times.length),
+      median: times[times.length >> 1], p95: times[Math.floor(times.length * 0.95)],
+    };
+  }
+  delete out.texture.warmup;
+  delete out.frame.warmup;
+  window.__perf = out;
+  document.getElementById('perf').textContent = JSON.stringify(out, null, 1);
+}
+
 buildBar();
 render();
+if (LIVE) requestAnimationFrame(liveFrame);
+if (params.has('perf')) perf();
 </script>
 </body>
 </html>

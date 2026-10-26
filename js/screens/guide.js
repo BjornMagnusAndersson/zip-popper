@@ -54,26 +54,90 @@ function drawPicture(id, dpr) {
     drawDecoy(ctx, { kind: 'freckles', x: 49, y: 44, r: 14, dots: [{ u: -0.6, v: -0.3, s: 0.16 }, { u: 0.1, v: -0.6, s: 0.14 }, { u: 0.6, v: 0, s: 0.16 }, { u: -0.1, v: 0.45, s: 0.15 }] });
     drawDecoy(ctx, { kind: 'beauty', x: 26, y: 54, r: 3.5 });
   } else if (id === 'warmCloth') drawCloth(ctx, c, c + 8, 22, 0);
+  else drawTwistPicture(ctx, id, c);
   ctx.restore();
   return canvas;
 }
 
 /**
+ * The little cartoon on a customer twist card (T8.3), on the same skin patch: sway lines, a feather, rosy cheeks or a
+ * clock. Lines only, standing still.
+ * @param {CanvasRenderingContext2D} ctx the card picture
+ * @param {string} id the twist id
+ * @param {number} c the middle of the picture
+ * @returns {void}
+ */
+function drawTwistPicture(ctx, id, c) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#5a3a2e';
+  ctx.lineWidth = 3;
+  if (id === 'fidgety') { // a small face leaning over, with sway lines on both sides
+    ctx.save();
+    ctx.translate(c, c + 2);
+    ctx.rotate(-0.25);
+    ctx.fillStyle = '#ffdcc4';
+    ctx.beginPath(); ctx.ellipse(0, 0, 15, 18, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5a3a2e';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * 6, -4, 2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(0, 4, 6, 0.2, Math.PI - 0.2); ctx.stroke();
+    ctx.restore();
+    for (const s of [-1, 1]) {
+      for (const k of [0, 1]) {
+        ctx.beginPath();
+        ctx.arc(c, c + 2, 24 + k * 7, s < 0 ? Math.PI - 0.5 : -0.5, s < 0 ? Math.PI + 0.5 : 0.5);
+        ctx.stroke();
+      }
+    }
+  } else if (id === 'ticklish') { // a soft feather
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate(-0.7);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(0, -4, 9, 24, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(0, -24); ctx.stroke();
+    ctx.lineWidth = 1.6;
+    for (let y = -16; y <= 12; y += 6) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(-7, y - 4); ctx.moveTo(0, y); ctx.lineTo(7, y - 4); ctx.stroke();
+    }
+    ctx.restore();
+  } else if (id === 'sensitive') { // rosy cheeks and a small sparkle
+    for (const s of [-1, 1]) {
+      const g = ctx.createRadialGradient(c + s * 15, c + 6, 0, c + s * 15, c + 6, 13);
+      g.addColorStop(0, 'rgba(235,60,70,0.75)');
+      g.addColorStop(1, 'rgba(235,60,70,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(c + s * 15 - 13, c - 7, 26, 26);
+    }
+    ctx.beginPath(); ctx.arc(c, c + 8, 6, 0.2, Math.PI - 0.2); ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.moveTo(c + 16, c - 24); ctx.lineTo(c + 16, c - 12); ctx.moveTo(c + 10, c - 18); ctx.lineTo(c + 22, c - 18); ctx.stroke();
+  } else if (id === 'hurry') { // an alarm clock
+    ctx.fillStyle = '#fff6e0';
+    ctx.beginPath(); ctx.arc(c, c + 3, 20, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(c, c + 3); ctx.lineTo(c, c - 9); ctx.moveTo(c, c + 3); ctx.lineTo(c + 9, c + 7); ctx.stroke();
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(c + s * 15, c - 17, 6, Math.PI, 0); ctx.stroke(); }
+  }
+}
+
+/**
  * Build the Field guide screen.
  * @param {{t: (key: string, vars?: object) => string, cards: ReturnType<typeof import('./guide-logic.js').guideCards>,
- *   onBack?: () => void, overlay?: boolean, reducedMotion?: boolean}} opts t = string function; cards = the cards
- *   (guide-logic.js guideCards); onBack = Back (or Escape) was pressed; overlay = shown over the pop scene (it then
- *   lies on top as a dialog and takes keyboard focus)
+ *   twistCards?: object[], onBack?: () => void, overlay?: boolean, reducedMotion?: boolean}} opts t = string
+ *   function; cards = the cards (guide-logic.js guideCards); twistCards = the customer twist cards under a
+ *   "Customers" heading (guide-logic.js twistCards, T8.3; left out = none); onBack = Back (or Escape) was pressed;
+ *   overlay = shown over the pop scene (it then lies on top as a dialog and takes keyboard focus)
  * @returns {{node: HTMLElement, focus: () => void, dispose: () => void}} the screen
  */
-export function createGuideScreen({ t, cards, onBack, overlay = false, reducedMotion = false }) {
+export function createGuideScreen({ t, cards, twistCards = [], onBack, overlay = false, reducedMotion = false }) {
   const shell = screenShell(`guide${overlay ? ' app-screen--overlay' : ''}`, { label: t('ui.guide.title'), reducedMotion });
   if (overlay) {
     shell.node.setAttribute('role', 'dialog');
     shell.node.setAttribute('aria-modal', 'true');
   }
   const head = header(t, t('ui.guide.title'), onBack, shell.signal);
-  const { open, total } = guideCount(cards);
+  const { open, total } = guideCount([...cards, ...twistCards]);
   head.append(el('p', 'app-guide__count', t('ui.guide.count', { open, total }))); // in the top row, so the list gets the room
   const panel = el('div', 'app-body app-shoplist app-guidelist');
   const frame = el('div', 'app-shoplistframe');
@@ -92,7 +156,8 @@ export function createGuideScreen({ t, cards, onBack, overlay = false, reducedMo
     if (!card.open) {
       pic.append(el('span', 'app-guidecard__q', t('ui.guide.lockedMark')));
       pic.setAttribute('aria-hidden', 'true');
-      text.append(el('h2', 'app-guidecard__name', t('ui.guide.locked')), el('p', 'app-guidecard__line', t('ui.guide.lockedHint')));
+      const lockedLine = card.kind === 'twist' ? 'ui.guide.twistLocked' : 'ui.guide.lockedHint';
+      text.append(el('h2', 'app-guidecard__name', t('ui.guide.locked')), el('p', 'app-guidecard__line', t(lockedLine)));
       node.append(pic, text);
       return node;
     }
@@ -106,12 +171,15 @@ export function createGuideScreen({ t, cards, onBack, overlay = false, reducedMo
     use.append(el('span', 'app-guidecard__label', t('ui.guide.use')), el('span', 'app-guidecard__tools', useText(t, card.tools)));
     const tip = el('p', 'app-guidecard__tip');
     tip.append(icon('bulb'), el('span', '', t(card.tipKey)));
-    text.append(el('h2', 'app-guidecard__name', name), el('p', 'app-guidecard__line', t(card.lineKey)), use, tip);
+    // A customer twist card (T8.3) has no "What to use" line: its tip says what to do.
+    text.append(el('h2', 'app-guidecard__name', name), el('p', 'app-guidecard__line', t(card.lineKey)), ...(card.kind === 'twist' ? [] : [use]), tip);
     node.append(pic, text);
     return node;
   }
 
   for (const card of cards) panel.append(cardNode(card));
+  if (twistCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.customers'))); // T8.3
+  for (const card of twistCards) panel.append(cardNode(card));
 
   /** Show the "more below" arrow only while the list can scroll further down. @returns {void} */
   function updateMore() {

@@ -108,6 +108,9 @@ function phoneWall(x, y, k) {
 /** A small art layer helper: the sad plant she adopts, on its own. @param {number} x @param {number} y pot bottom @param {number} s scale @param {string} eyes face @returns {object} layer */
 const littlePlant = (x, y, s, eyes) => ({ id: 'plant', art: 'plant', x, y, scale: s, eyes, mouth: [x, y - 150 * s] });
 
+/** Where a figure's raised hand is in the 'wave' pose (comic-art POSES.wave: hand at 190, -530). @param {object} l the figure layer @returns {number[]} [x, y] in panel units */
+const waveHand = (l) => [l.x + (l.flip ? -190 : 190) * (l.scale ?? 1), l.y - 530 * (l.scale ?? 1)];
+
 /**
  * The splash's thought cloud: puffs with one outline, a trail of small puffs down to her head, and inside it the
  * dream: the same room clean and sparkling, a pink chair, a lamp, a sparkly sign, and the plant, happy.
@@ -183,21 +186,68 @@ const counter = (x0, x1, top, bottom) => [
 ];
 
 /**
- * A little green watering can held up and pouring (moving in: she waters the plant).
- * @param {number} x handle (her hand) @param {number} y handle @returns {object[]} shape layers
+ * A little green watering can held by its back handle in her fist, tipped forward, pouring: a spray of water falls
+ * from the spout's rose in an arc and lands on the plant (moving in: she waters the plant, B50).
+ * Tagged layers for the test: 'can' (the fist on the handle), 'spout' (the rose), 'water' (the main stream; its path
+ * ends where the water lands).
+ * @param {number} x her hand @param {number} y her hand @param {number[]} land where the water lands [x, y]
+ * @param {number} [tilt] how far the can is tipped forward, in degrees
+ * @returns {object[]} shape layers (put them after her)
  */
-const wateringCan = (x, y) => [
-  { shape: 'path', d: `M${x + 40} ${y + 20} L${x + 140} ${y - 60}`, stroke: true, sw: 18 },
-  { shape: 'path', d: `M${x + 40} ${y + 20} L${x + 140} ${y - 60}`, stroke: '#3fae8c', sw: 10 },
-  { shape: 'rect', x: x - 50, y: y - 10, w: 110, h: 90, rx: 18, fill: '#3fae8c', stroke: true, sw: 5, rotate: -18 },
-  { shape: 'path', d: `M${x - 40} ${y - 4} Q${x - 10} ${y - 70} ${x + 30} ${y - 20}`, fill: 'none', stroke: true, sw: 7 },
-  ...[[150, -46], [164, -20], [148, 4]].map(([dx, dy]) => ({ shape: 'ellipse', x: x + dx, y: y + dy, rx: 6, ry: 10, fill: '#9ad8ff', stroke: true, sw: 2.5 })),
-];
+function wateringCan(x, y, land, tilt = 14) {
+  const a = (tilt * Math.PI) / 180;
+  /** A point of the can (drawn upright with the hand at 0 0) turned by the tilt and moved to the hand. @param {number} u @param {number} v @returns {number[]} panel point */
+  const p = (u, v) => [Math.round(x + u * Math.cos(a) - v * Math.sin(a)), Math.round(y + u * Math.sin(a) + v * Math.cos(a))];
+  /** The same point as path text. @param {number} u @param {number} v @returns {string} "x y" */
+  const t = (u, v) => p(u, v).join(' ');
+  const [rx, ry] = p(206, -56); // the rose (sprinkler head) at the end of the spout
+  const [lx, ly] = land;
+  const out = [
+    // Spout first (the body covers its root), then the rose.
+    { shape: 'path', d: `M${t(100, 20)} L${t(200, -50)}`, stroke: true, sw: 20 },
+    { shape: 'path', d: `M${t(100, 20)} L${t(200, -50)}`, stroke: '#3fae8c', sw: 11 },
+    { id: 'spout', shape: 'circle', x: rx, y: ry, r: 15, fill: '#3fae8c', stroke: true, sw: 5 },
+    { shape: 'circle', x: rx + 3, y: ry + 3, r: 6, fill: '#2e8a6c' },
+    // The tub: a slightly tapered body, a rim and a shine.
+    { shape: 'path', d: `M${t(30, -40)} L${t(116, -40)} L${t(122, 40)} L${t(24, 40)}Z`, fill: '#3fae8c', stroke: true, sw: 6 },
+    { shape: 'path', d: `M${t(26, -40)} L${t(120, -40)}`, stroke: true, sw: 16 },
+    { shape: 'path', d: `M${t(26, -40)} L${t(120, -40)}`, stroke: '#59b85f', sw: 8 },
+    { shape: 'path', d: `M${t(42, -26)} L${t(40, 26)}`, stroke: '#ffffff', sw: 8, opacity: 0.5 },
+    // The back handle, a loop her fist closes round.
+    { shape: 'path', d: `M${t(32, -30)} C${t(-14, -32)} ${t(-14, 32)} ${t(28, 30)}`, stroke: true, sw: 18 },
+    { shape: 'path', d: `M${t(32, -30)} C${t(-14, -32)} ${t(-14, 32)} ${t(28, 30)}`, stroke: '#3fae8c', sw: 9 },
+    { id: 'can', shape: 'ellipse', x, y, rx: 26, ry: 24, fill: '#ebb795', stroke: true, sw: 5 },
+    { shape: 'path', d: `M${x + 4} ${y - 12} l14 0 M${x + 6} ${y} l14 0 M${x + 4} ${y + 12} l12 0`, stroke: true, sw: 4, opacity: 0.6 },
+  ];
+  // The spray: three arcs from the rose fanning down onto the plant, with drops along them; the middle one is 'water'.
+  for (const [dx, i] of [[-16, 0], [0, 1], [16, 2]]) {
+    const ex = lx + dx;
+    const ey = ly + Math.abs(dx) * 0.3;
+    const d = `M${rx + 10} ${ry + 6} Q${(rx + ex) / 2 + 14} ${ry - 4} ${ex} ${ey}`;
+    out.push({ shape: 'path', d, stroke: true, sw: 11, opacity: 0.45 });
+    out.push({ ...(i === 1 ? { id: 'water' } : {}), shape: 'path', d, stroke: '#bfe8ff', sw: 7 });
+    for (const f of [0.4, 0.8]) {
+      const qx = (1 - f) ** 2 * (rx + 10) + 2 * f * (1 - f) * ((rx + ex) / 2 + 14) + f * f * ex;
+      const qy = (1 - f) ** 2 * (ry + 6) + 2 * f * (1 - f) * (ry - 4) + f * f * ey;
+      out.push({ shape: 'ellipse', x: Math.round(qx), y: Math.round(qy), rx: 7, ry: 10, fill: '#9ad8ff', stroke: true, sw: 3 });
+    }
+  }
+  // A little splash where it lands.
+  out.push({ shape: 'path', d: `M${lx - 18} ${ly - 4} l-10 -10 M${lx} ${ly - 8} l0 -14 M${lx + 18} ${ly - 4} l10 -10`, stroke: '#9ad8ff', sw: 5 });
+  return out;
+}
 
 const P2_HIM = helmeted(1060, 900, 0.85, { pose: 'hips', expr: 'happy', look: -1 });
 const P3_HIM = helmeted(1310, 880, 0.86, { pose: 'stand', expr: 'shocked', look: -1 });
 const P5_HIM = helmeted(440, 740, 0.85, { pose: 'bust', expr: 'shocked', look: 1 });
 const P7_HIM = helmeted(470, 880, 0.85, { pose: 'stand', expr: 'happy', look: 1 });
+// Panel 7 (B50): the window (0..1 across), the plant on its sill (sill top y 384), the one chair she stands on (seat
+// top 138 units up at scale 1, so her raised hand is level with the sill) and where the spray lands (on the leaves).
+const P7_WINDOW_X = 0.68;
+const P7_PLANT = littlePlant(1190, 386, 0.32, 'wide');
+const P7_CHAIR = { art: 'chair', x: 760, y: 880, scale: 1, color: '#9a8f6a' };
+const P7_HER = { id: 'her', art: 'heroine', x: 760, y: 880 - 138 * P7_CHAIR.scale, scale: 0.85, pose: 'wave', expr: 'happy', look: 1 };
+const P7_LAND = [1180, 304];
 
 export const STRIP = {
   id: 'plan',
@@ -338,27 +388,28 @@ export const STRIP = {
       ],
     },
     {
-      // 7. Moving in (just the two of them): one chair, one bucket, one lamp. She waters the plant on the sill. Click.
+      // 7. Moving in (just the two of them): one chair, one bucket, one lamp. The sill is high, so she stands on the
+      // one chair to water the plant (B50: the can's rose is over the pot and the spray lands on it). Click.
       layout: 'wide',
       scene: {
         layers: [
-          { art: 'room', kind: 'studio', w: 1600, h: 900, floorY: 600, doorX: 0.08, windowX: 0.64, leakX: 0.36, bulb: false, sign: false, plant: false, lampX: 0.92 },
+          { art: 'room', kind: 'studio', w: 1600, h: 900, floorY: 600, doorX: 0.08, windowX: P7_WINDOW_X, leakX: 0.36, bulb: false, sign: false, plant: false, lampX: 0.92 },
           { shape: 'rect', x: 0, y: 0, w: 1600, h: 900, fill: '#ffb86b', opacity: 0.14 },
           { shape: 'path', d: 'M1400 140 l-30 -30 M1472 140 l30 -30 M1436 120 l0 -40 M1360 220 l-40 0 M1512 220 l40 0', stroke: '#ffd25a', sw: 8 },
-          { art: 'chair', x: 1240, y: 830, scale: 0.55, color: '#9a8f6a' },
           { art: 'drip', x: 576, y: 600, r: 16 },
           P7_HIM,
           ...spoon(P7_HIM),
           { art: 'bucket', x: 571, y: 830, scale: 0.45 },
-          littlePlant(1024, 386, 0.42, 'wide'),
-          { id: 'her', art: 'heroine', x: 760, y: 880, scale: 0.85, pose: 'wave', expr: 'happy', look: 1 },
-          ...wateringCan(922, 428),
+          P7_PLANT,
+          P7_CHAIR,
+          P7_HER,
+          ...wateringCan(...waveHand(P7_HER), P7_LAND, 8),
         ],
       },
       camera: { move: 'pullOut', focus: [800, 450], amount: 0.08, ms: 3500 },
       bubbles: [
         { kind: 'caption', key: 'comic.plan.p7.cap', at: [300, 52], w: 480 },
-        { kind: 'say', key: 'comic.plan.p7.her', at: [700, 190], to: 'her', w: 340 },
+        { kind: 'say', key: 'comic.plan.p7.her', at: [880, 110], to: 'her', w: 400 },
         { kind: 'shout', key: 'comic.plan.p7.click', at: [1400, 80], w: 280, sound: 'creak' },
       ],
     },

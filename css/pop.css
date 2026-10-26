@@ -102,6 +102,10 @@
 .pop-irr { flex: none; position: relative; width: 56px; height: 7px; margin-top: 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
 .pop-irr__fill { display: block; height: 100%; background: #ffb07a; transform: scaleX(0); transform-origin: left; transition: transform 0.2s linear, background 0.2s; }
 .pop-irr--high .pop-irr__fill { background: #ff4f7b; }
+/* The customer's twist (T8.3): a small lilac label beside the meter; a giggle bubble is a yellow "Hehehe!". */
+.pop-twist { flex: none; padding: 0 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; line-height: 1.5; color: #2b1a40; background: #d9c6ff; white-space: nowrap; }
+.pop-twist[hidden] { display: none; }
+.pop-giggle { background: #ffd23f; color: #3a2a00; }
 /* The customer's request (T3.1b): a small speech-bubble pill under the counter line; green when done, grey and
    struck through when missed. A hurry request shows its seconds left in a little badge. */
 .pop-req {

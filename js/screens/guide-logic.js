@@ -5,8 +5,11 @@
 // Rules (T6.5): a card opens once she has MET that kind in a pop scene (a round or free play; old saves also count the
 // kinds she already has clean pops of, save.mastery), and a tool card (nose strip, warm cloth) also opens once she owns
 // the tool. Unmet cards stay locked with a "?" (no spoilers).
+// Customers (T8.3): one more card per customer twist (fidgety, ticklish, sensitive skin, in a hurry) in its own
+// group, open once she has met a customer with it (save field seenTwists; old saves load []).
 
 import { BUMPS } from '../data/bumps.js';
+import { TWISTS, TWIST_IDS } from '../data/twists.js';
 
 /**
  * Every card in the guide, in the order it shows. kind: 'bump' (a bump id in data/bumps.js), 'tool' (a tool you own,
@@ -115,6 +118,43 @@ export function guideCards({ seenKinds = [], ownedTools = [] } = {}) {
   return GUIDE_ENTRIES.map((e) => ({
     id: e.id, kind: e.kind, open: seen.has(e.id) || (e.kind === 'tool' && owned.has(e.tool)),
     nameKey: `ui.guide.${e.id}.name`, lineKey: `ui.guide.${e.id}.line`, tipKey: `ui.guide.${e.id}.tip`, tools: guideTools(e.id),
+  }));
+}
+
+/**
+ * A clean list of twist ids (unknown ids and repeats dropped), in data/twists.js order.
+ * @param {unknown} list a list from a save
+ * @returns {string[]} twist ids
+ */
+export function cleanTwists(list) {
+  const have = new Set(Array.isArray(list) ? list.filter((x) => typeof x === 'string') : []);
+  return TWIST_IDS.filter((id) => have.has(id));
+}
+
+/**
+ * Adds twists to the save's seenTwists list (T8.3; once each).
+ * @param {object} save the save
+ * @param {string[]} twists twists just met
+ * @returns {object} the new save (the same object when nothing new was added)
+ */
+export function addSeenTwists(save, twists) {
+  const before = cleanTwists(save?.seenTwists);
+  const after = cleanTwists([...before, ...(Array.isArray(twists) ? twists : [])]);
+  return after.length === before.length ? save : { ...save, seenTwists: after };
+}
+
+/**
+ * The guide's "Customers" cards (T8.3): one per twist, open once she has met a customer with it (save.seenTwists).
+ * Texts: twist.<id>.name, .line and .tip.
+ * @param {{seenTwists?: string[]}} [o] the twists met
+ * @returns {{id: string, kind: 'twist', open: boolean, nameKey: string, lineKey: string, tipKey: string,
+ *   tools: {first: string[], then: string[]}}[]} one card per twist, in data/twists.js order
+ */
+export function twistCards({ seenTwists = [] } = {}) {
+  const seen = new Set(cleanTwists(seenTwists));
+  return TWIST_IDS.map((id) => ({
+    id, kind: 'twist', open: seen.has(id), nameKey: TWISTS[id].nameKey, lineKey: TWISTS[id].lineKey, tipKey: TWISTS[id].tipKey,
+    tools: { first: [], then: [] },
   }));
 }
 

@@ -153,6 +153,18 @@
 }
 .app-note__label { font-size: 0.75rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
 .app-note__text { font-size: 1.05rem; font-weight: 800; }
+/* The customer's twist (T8.3): a lilac pill with the twist's name, its funny line and a tip with a bulb. */
+.app-twist {
+  display: grid; gap: 2px; padding: 8px 14px; border-radius: 18px; border: 3px solid var(--ink); background: #e6dbff;
+  transform: rotate(-0.8deg); box-shadow: 3px 4px 0 var(--shadow);
+}
+.app-twist__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.app-twist__label { font-size: 0.75rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.app-twist__name { font-size: 1.05rem; font-weight: 900; }
+.app-twist__line { font-size: 0.9rem; font-style: italic; line-height: 1.25; }
+.app-twist__line--request { font-size: 1.05rem; font-style: normal; font-weight: 800; }
+.app-twist__tip { display: flex; align-items: flex-start; gap: 6px; font-size: 0.88rem; font-weight: 700; line-height: 1.25; }
+.app-twist__tip .app-icon { width: 20px; height: 20px; flex: none; }
 .app-intro__start { margin-top: 4px; }
 
 /* ---------- Result ---------- */
@@ -386,11 +398,121 @@
 .app-guidecard__tools { font-weight: 700; }
 .app-guidecard__tip { display: flex; align-items: flex-start; gap: 6px; font-size: 0.85rem; font-weight: 600; line-height: 1.25; }
 .app-guidecard__tip .app-icon { width: 20px; height: 20px; margin-top: -1px; }
+/* The "Customers" heading above the twist cards (T8.3); it spans both columns in landscape. */
+.app-guide__group {
+  grid-column: 1 / -1; justify-self: start; margin-top: 6px; padding: 2px 14px; border-radius: 999px; border: 3px solid var(--ink);
+  background: #d9c6ff; font-size: 1rem; font-weight: 900;
+}
 @media (orientation: landscape) and (max-height: 600px) {
   .app-guidelist { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 860px; }
   .app-guidecard__pic { width: 66px; height: 66px; }
   .app-guidecard__art { width: 60px; height: 60px; }
 }
+
+/* ---------- Before and after reveal and Face album (T8.2) ----------
+   The reveal: one 4:5 frame with the BEFORE face under the AFTER face; the after picture is cut off at the white wipe
+   line with its round mint handle (drag it, or the arrow keys). Upright, the result screen puts the frame and the stars
+   side by side on top and the coins, line, reputation, fact and buttons below; sideways, three columns.
+   The album: a grid of 4:5 face tiles with a star row under each, locked regulars as dashed "?" silhouettes, and one
+   face large in a small dialog. The menu gets a little tighter when it has ten buttons. */
+.app-reveal { margin: 0; min-width: 0; }
+.app-reveal__frame {
+  position: relative; width: 100%; aspect-ratio: 4 / 5; border-radius: 18px; border: 3px solid var(--ink); overflow: hidden;
+  box-shadow: 4px 5px 0 var(--shadow); background: #e6d8cc; touch-action: pan-y; cursor: ew-resize; user-select: none; -webkit-user-select: none;
+}
+.app-reveal__pic { position: absolute; inset: 0; }
+.app-reveal__pic canvas { display: block; width: 100%; height: 100%; }
+.app-reveal__pic--before { background: radial-gradient(circle at 50% 40%, #efe4d9, #cbbcb0); }
+.app-reveal__pic--after, .app-albumtile__frame, .app-albumdetail__pic { background: radial-gradient(circle at 50% 38%, #fffdf2, #ffe4ee 68%, #ffc6da); }
+.app-reveal__line { position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 0 2px var(--ink); pointer-events: none; }
+.app-reveal__knob { /* a sibling of the line: reveal.js keeps it whole inside the frame at the two ends */
+  position: absolute; top: 50%; left: 50%; display: grid; place-items: center; width: 40px; height: 40px; transform: translate(-50%, -50%); pointer-events: none;
+  border-radius: 50%; border: 3px solid var(--ink); background: var(--mint); box-shadow: 0 3px 0 var(--ink);
+}
+.app-reveal__knob .app-icon { width: 24px; height: 24px; }
+.app-reveal__tag {
+  position: absolute; top: 6px; padding: 0 9px; border-radius: 999px; border: 2px solid var(--ink); background: var(--cream); font-size: 0.78rem;
+  font-weight: 900; pointer-events: none; transition: opacity 0.2s;
+}
+.app-reveal__tag--after { left: 6px; background: var(--yellow); }
+.app-reveal__tag--before { right: 6px; }
+.app-reveal__tag--dim { opacity: 0.3; }
+.app-result--reveal { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); align-content: safe center; gap: 10px 12px; }
+.app-result--reveal .app-result__left > *, .app-result--reveal .app-result__right > * { grid-column: 1 / -1; }
+.app-result--reveal > .app-reveal { grid-column: 1; grid-row: 1; align-self: center; }
+.app-result--reveal .app-result__top { grid-column: 2; grid-row: 1; align-self: center; }
+.app-result--reveal .app-result__title { font-size: 1.6rem; }
+.app-result--reveal .app-stars { gap: 2px; }
+.app-result--reveal .app-star svg { width: 48px; height: 48px; }
+.app-result--reveal .app-coins__row { min-height: 28px; }
+.app-result--reveal .app-result__quote { font-size: 0.92rem; padding: 6px 12px; }
+.app-result--reveal .app-fact { padding: 10px 12px; }
+.app-result--reveal .app-fact__text { font-size: 0.92rem; }
+/* Upright, Continue stays in reach at the bottom when a long coin list makes the screen scroll. */
+.app-result--reveal .app-actions {
+  flex-direction: row; position: sticky; bottom: 0; z-index: 2; margin: -8px -4px 0; padding: 8px 4px 2px;
+  background: linear-gradient(180deg, rgba(238, 123, 163, 0), rgba(238, 123, 163, 0.92) 35%);
+}
+.app-result--reveal .app-actions > .app-btn { flex: 1 1 0; min-width: 0; padding-inline: 12px; }
+.app-body.app-menu { justify-content: safe center; } /* a long menu on a short phone scrolls instead of losing its top */
+.app-menu__list--long { gap: 9px; }
+.app-menu__list--long .app-menubtn { min-height: 50px; padding-block: 6px; }
+.app-menu__list--long .app-menubtn--main { min-height: 70px; }
+.app-album__count {
+  flex: none; display: grid; padding: 2px 12px; border-radius: 16px; border: 3px solid var(--ink); background: var(--cream); text-align: center;
+  font-weight: 800; font-size: 0.78rem; line-height: 1.2; white-space: nowrap;
+}
+.app-album__section { display: grid; gap: 6px; }
+.app-album__heading {
+  font-size: 1.15rem; font-weight: 900; color: var(--cream); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; text-shadow: 0 2px 0 var(--ink);
+}
+.app-albumgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 10px; }
+.app-albumtile {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; padding: 6px; border-radius: 16px; border: 3px solid var(--ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 38%), var(--cream); box-shadow: 3px 4px 0 var(--shadow);
+  font: inherit; color: var(--ink); cursor: pointer; touch-action: manipulation;
+}
+button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 var(--shadow); }
+.app-albumtile__frame { position: relative; display: block; width: 100%; aspect-ratio: 4 / 5; border-radius: 12px; border: 2px solid var(--ink); overflow: hidden; }
+.app-albumtile__pic { display: block; width: 100%; height: 100%; }
+.app-albumtile__name { max-width: 100%; font-size: 0.8rem; font-weight: 900; line-height: 1.2; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-album__stars { display: flex; gap: 1px; justify-content: center; }
+.app-album__stars .app-icon { width: 18px; height: 18px; }
+.app-albumtile--locked { cursor: default; border-style: dashed; background: #eadbd0; box-shadow: none; }
+.app-albumtile--locked .app-albumtile__frame { border-style: dashed; background: #f6ece4; }
+.app-albumtile__shadow { position: absolute; inset: 0; width: 100%; height: 100%; }
+.app-albumtile__q { position: absolute; inset: 0 0 18% 0; display: grid; place-items: center; font-size: 2.2rem; font-weight: 900; color: #f6ece4; }
+.app-albumtile--locked .app-albumtile__name { color: #8a756b; letter-spacing: 0.15em; }
+.app-album__empty { text-align: center; font-weight: 800; background: rgba(255, 255, 255, 0.6); padding: 10px 14px; border-radius: 14px; }
+.app-albumdetail { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(42, 33, 29, 0.5); }
+.app-albumdetail__card { display: grid; justify-items: center; gap: 6px; width: min(100%, 300px); max-height: 100%; overflow-y: auto; }
+.app-albumdetail__pic { display: block; width: min(100%, 224px); height: auto; border-radius: 14px; border: 3px solid var(--ink); }
+.app-albumdetail__name { font-size: 1.4rem; font-weight: 900; text-align: center; overflow-wrap: anywhere; }
+.app-albumdetail .app-album__stars .app-icon { width: 40px; height: 40px; }
+.app-albumdetail__visits { font-weight: 700; color: #5f4a41; }
+.app-albumdetail__card > .app-btn { width: 100%; }
+@media (orientation: landscape) and (max-height: 600px) {
+  .app-result.app-result--reveal { display: flex; flex-direction: row; align-items: center; gap: 16px; }
+  .app-result--reveal > .app-reveal { flex: none; height: min(calc(100vh - 40px), 290px); aspect-ratio: 4 / 5; }
+  .app-result--reveal .app-actions { position: static; margin: 0; padding: 0; background: none; } /* the column scrolls as before (B13) */
+  .app-result--reveal .app-result__quote { font-size: 0.82rem; padding: 4px 10px; }
+  .app-result--reveal .app-reveal__frame { height: 100%; }
+  .app-result--reveal .app-star svg { width: 44px; height: 44px; }
+  .app-result--reveal .app-coins__row { min-height: 24px; }
+  .app-result--reveal .app-fact { gap: 8px; padding: 8px 10px; }
+  .app-result--reveal .app-fact__text { font-size: 0.88rem; }
+  .app-result--reveal .app-actions > .app-btn--big { font-size: 1.05rem; min-height: 50px; }
+  .app-menu__list--long { gap: 8px; }
+  .app-menu__list--long .app-menubtn { min-height: 46px; padding-block: 4px; }
+  .app-menu__list--long .app-menubtn--main { min-height: 60px; }
+  .app-menu__list--long > .app-menubtn:last-child:nth-child(even) { grid-column: 1 / -1; }
+  .app-albumgrid { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  .app-albumdetail { padding: 8px 16px; }
+  .app-albumdetail__card { grid-template-columns: 176px minmax(0, 180px); align-items: center; column-gap: 14px; width: auto; }
+  .app-albumdetail__pic { grid-row: 1 / span 4; width: 176px; }
+}
+@media (prefers-reduced-motion: reduce) { .app-reveal__tag { transition: none; } }
+.app-still .app-reveal__tag { transition: none; }
 
 /* ---------- Animations ---------- */
 @keyframes app-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-6px) rotate(1.5deg); } }
@@ -429,7 +551,7 @@
   .app-menu__list { flex: 1.3; grid-template-columns: 1fr 1fr; gap: 10px; }
   .app-menubtn { min-height: 52px; font-size: 1.05rem; }
   .app-menubtn--main { grid-column: 1 / -1; min-height: 66px; font-size: 1.3rem; }
-  .app-intro { flex-direction: row; align-items: center; gap: 24px; }
+  .app-intro { flex-direction: row; align-items: center; align-items: safe center; gap: 24px; } /* safe: a tall column scrolls, never cut at the top (T8.3) */
   .app-intro__who, .app-intro__what { flex: 1; justify-content: center; }
   .app-intro__portrait { width: min(30vh, 140px); }
   .app-result { flex-direction: row; align-items: center; gap: 24px; }

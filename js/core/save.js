@@ -44,6 +44,8 @@ export function defaultSave(now = Date.now()) {
     endingSeen: false, // the "To be continued" ending was reached: the menu shows Keep working (T5.4, SPEC D23)
     keepWorkingDone: 0, // Keep working customers finished or skipped (its own count; story progress never moves in it)
     seenKinds: [], // Field guide (T6.5): the bump kinds, dotty nose and decoys she has met in a pop scene (old saves load [])
+    albumFaces: [], // Face album (T8.2): small recipes of the faces she has cleared, no pictures (old saves load [])
+    seenTwists: [], // Field guide (T8.3): the customer twists she has met (fidgety, ticklish, sensitive, hurry; old saves load [])
   };
 }
 
@@ -163,7 +165,47 @@ export function normalizeSave(raw, now = Date.now()) {
     endingSeen: flag(s.endingSeen, d.endingSeen),
     keepWorkingDone: count(s.keepWorkingDone, d.keepWorkingDone),
     seenKinds: words(s.seenKinds, d.seenKinds),
+    albumFaces: albumList(s.albumFaces),
+    seenTwists: words(s.seenTwists, d.seenTwists),
   };
+}
+
+/** A short text, or undefined. @param {unknown} v value @param {number} max longest length @returns {string|undefined} */
+function shortText(v, max) {
+  return typeof v === 'string' && v.length > 0 && v.length <= max ? v : undefined;
+}
+
+/**
+ * The Face album list (T8.2, screens/album-logic.js), cleaned: entries without an id or a seed are dropped, every
+ * other field gets a safe value, and at most 100 entries are read (the album itself keeps 60). A face spec keeps only
+ * short text and number parts and its accessories list.
+ * @param {unknown} v the stored list
+ * @returns {object[]} the album
+ */
+function albumList(v) {
+  if (!Array.isArray(v)) return [];
+  const out = [];
+  for (const e of v.slice(0, 100)) {
+    if (!e || typeof e !== 'object' || !shortText(e.id, 30) || !Number.isFinite(e.seed) || e.seed < 1) continue;
+    const entry = {
+      id: e.id, seed: Math.floor(e.seed), count: Math.min(12, Math.max(1, count(e.count, 6))), kinds: words(e.kinds, ['whitehead']).slice(0, 12),
+      strip: flag(e.strip, false), decoys: flag(e.decoys, true), w: count(e.w, 390), h: count(e.h, 560),
+      stars: Math.min(3, count(e.stars, 0)), times: Math.max(1, count(e.times, 1)), lastSeen: count(e.lastSeen, 0),
+    };
+    if (e.face && typeof e.face === 'object' && !Array.isArray(e.face)) {
+      const face = {};
+      for (const [k, x] of Object.entries(e.face).slice(0, 20)) {
+        if (k === '__proto__' || k.length > 20) continue;
+        if (k === 'accessories') face.accessories = words(x, []).slice(0, 6);
+        else if (shortText(x, 30) || Number.isFinite(x)) face[k] = x;
+      }
+      entry.face = face;
+    }
+    if (shortText(e.nameKey, 60)) entry.nameKey = e.nameKey;
+    if (shortText(e.stamp, 30)) entry.stamp = e.stamp; // a boss stamp (T8.4, later)
+    out.push(entry);
+  }
+  return out;
 }
 
 /**

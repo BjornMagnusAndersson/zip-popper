@@ -30,6 +30,7 @@ export const SOUND_TABLE = {
   ooh_happy: { type: 'synth', voice: 'ooh', category: 'sfx' },
   laugh_evil: { type: 'synth', voice: 'laughEvil', category: 'sfx' },
   ow_customer: { type: 'synth', voice: 'ow', category: 'sfx' },
+  giggle: { type: 'synth', voice: 'laughEvil', category: 'sfx' }, // the ticklish customer giggles (T8.3; reuses the laugh until a recording exists)
   // rewards
   cheer: { type: 'synth', voice: 'cheer', category: 'sfx' },
   cash: { type: 'synth', voice: 'cash', category: 'sfx' },
