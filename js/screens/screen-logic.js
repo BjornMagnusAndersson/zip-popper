@@ -5,6 +5,7 @@
 import { NAME_MAX, sanitizeName } from '../core/save.js';
 import { SHOP_ITEMS, SHOP_ITEM_IDS, TIER_THRESHOLDS } from '../data/economy-data.js';
 import { whyNot, tierFor } from '../game/economy.js';
+import { heroOutfit } from '../game/studio.js';
 
 /** The three shop tabs in order: id, the kind of item it lists (economy-data.js) and its string key. */
 export const SHOP_TABS = [
@@ -167,7 +168,9 @@ export function tierInfo(reputation) {
 export function whyLine(state, itemId, why) {
   if (why === null) return null;
   const item = SHOP_ITEMS[itemId];
-  if (why === 'tier' && item) return { key: 'ui.shop.why.tier', vars: { tier: item.tier } };
+  if (why === 'tier' && item) {
+    return { key: 'ui.shop.why.tier', vars: { tier: item.tier, n: TIER_THRESHOLDS[item.tier - 1] ?? 0, nameKey: `ui.shop.tier.${item.tier}` } };
+  }
   if (why === 'money' && item) return { key: 'ui.shop.why.money', vars: { n: Math.max(1, item.price - (state?.money ?? 0)) } };
   if (why === 'story') return { key: 'ui.shop.why.story', vars: {} };
   if (why === 'owned') return { key: 'ui.shop.owned', vars: {} };
@@ -179,12 +182,14 @@ export function whyLine(state, itemId, why) {
  * @param {object} state the economy state (economy.js): money, reputation, items ...
  * @param {string} tabId 'tools', 'studio' or 'outfit'
  * @returns {{id: string, nameKey: string, descKey: string, price: number, owned: boolean, story: boolean, scrubWaiting: boolean,
- *   canBuy: boolean, why: {key: string, vars: object}|null}[]} entries in shop order (cheap to expensive within the shop table order)
+ *   wearing: boolean, canBuy: boolean, why: {key: string, vars: object}|null}[]} entries in shop order (cheap to expensive
+ *   within the shop table order); wearing = an outfit item she has on right now (her best owned outfit, studio.js heroOutfit)
  */
 export function shopEntries(state, tabId) {
   const tab = SHOP_TABS.find((x) => x.id === tabId);
   if (!tab) return [];
   const items = state?.items ?? {};
+  const worn = heroOutfit(items);
   return SHOP_ITEM_IDS.filter((id) => SHOP_ITEMS[id].kind === tab.kind).map((id) => {
     const why = whyNot({ ...state, items }, id);
     const owned = Object.hasOwn(items, id);
@@ -196,10 +201,21 @@ export function shopEntries(state, tabId) {
       owned,
       story: Boolean(SHOP_ITEMS[id].story),
       scrubWaiting: owned && Boolean(items[id].needsScrub),
+      wearing: tab.kind === 'outfit' && owned && id === worn,
       canBuy: why === null,
       why: owned ? null : whyLine(state, id, why),
     };
   });
+}
+
+/**
+ * The outfit she wears now, for the shop's Outfit tab: its name (comic-art.js OUTFITS) and its string key.
+ * @param {object} state the economy state (items)
+ * @returns {{outfit: 'everyday'|'apron'|'scrubs', nameKey: string}} what she has on
+ */
+export function wornOutfit(state) {
+  const outfit = heroOutfit(state?.items ?? {});
+  return { outfit, nameKey: `ui.shop.outfit.${outfit}` };
 }
 
 /**

@@ -194,13 +194,14 @@
   touch-action: manipulation;
 }
 .app-tab--on { background: var(--mint); box-shadow: inset 0 0 0 3px var(--ink); }
-.app-shoplist { padding-top: 12px; }
+.app-shoplist { padding-top: 12px; padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px)); }
 .app-item {
   display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 16px; border: 3px solid var(--ink);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 38%), var(--cream); box-shadow: 3px 4px 0 var(--shadow);
 }
 .app-item--locked { background-color: #f1ddd0; }
 .app-item--owned { background-color: #d9fbf3; }
+.app-item--scrub { background-color: var(--yellow); border-style: dashed; }
 .app-item__badge { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--ink); background: var(--yellow); }
 .app-item__badge .app-icon { width: 26px; height: 26px; }
 .app-item__text { min-width: 0; display: grid; gap: 2px; }
@@ -212,6 +213,14 @@
 .app-item__note { color: #1e6a5e; }
 .app-owned { display: inline-flex; align-items: center; gap: 4px; font-weight: 900; color: #1e6a5e; }
 .app-owned .app-icon { width: 22px; height: 22px; }
+.app-owned--scrub { padding: 4px 12px; border-radius: 999px; border: 3px solid var(--ink); background: var(--hot); color: #fff; text-shadow: 0 1px 0 rgba(42, 33, 29, 0.5); }
+.app-item--scrub .app-item__note { color: #7a4a00; }
+.app-wearing-tag { padding: 2px 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--mint); font-size: 0.8rem; font-weight: 900; }
+.app-wearing { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 16px; border: 3px solid var(--ink); background: var(--cream); box-shadow: 3px 4px 0 var(--shadow); }
+.app-wearing__pic { flex: none; width: 68px; height: 140px; border-radius: 12px; background: var(--pink-soft); border: 3px solid var(--ink); }
+.app-wearing__text { display: grid; gap: 2px; }
+.app-wearing__label { font-size: 0.85rem; font-weight: 800; color: #5f4a41; }
+.app-wearing__name { font-size: 1.3rem; font-weight: 900; }
 .app-empty { text-align: center; font-weight: 800; color: var(--cream); text-shadow: 0 2px 0 var(--ink); }
 
 /* ---------- Comics ---------- */
@@ -309,6 +318,7 @@
 .app-studio__item { display: flex; align-items: flex-start; gap: 6px; }
 .app-studio__item .app-icon { width: 20px; height: 20px; }
 .app-shop-studio { width: 100%; }
+.app-shoplist > .app-shop-studio, .app-shoplist > .app-wearing, .app-shoplist > .app-empty { grid-column: 1 / -1; }
 
 /* ---------- Animations ---------- */
 @keyframes app-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-6px) rotate(1.5deg); } }
@@ -323,7 +333,9 @@
   .app-body { max-width: 860px; padding-top: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); gap: 10px; }
   .app-studio { flex-direction: row; padding-top: 4px; }
   .app-studio__notes { width: min(32%, 260px); max-height: none; }
-  .app-shopbar { max-width: 860px; grid-template-columns: 1fr 1fr; align-items: center; gap: 12px; }
+  .app-shopbar { max-width: 860px; grid-template-columns: auto minmax(250px, 1fr); align-items: center; gap: 12px; }
+  .app-shoplist { padding-bottom: max(24px, calc(env(safe-area-inset-bottom) + 12px)); }
+  .app-wearing__pic { width: 48px; height: 98px; }
   .app-title__tap { flex-direction: row; gap: 32px; }
   .app-title__start { margin-top: 6px; }
   .app-title__art { width: min(30vw, 62vh, 220px); }

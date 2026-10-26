@@ -8,7 +8,7 @@ const PRECACHE = [
   './index.html',
   './sound-test.html',
   './faces-test.html',
-  './manifest.webmanifest',
+  './popper.webmanifest',
   './css/pop.css',
   './css/comic.css',
   './css/app.css',
@@ -96,7 +96,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v28';
+const CACHE_VERSION = 'v30';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache.

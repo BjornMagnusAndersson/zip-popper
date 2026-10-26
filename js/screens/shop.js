@@ -2,8 +2,9 @@
 // (from economy.js whyNot, as a string key) or an "Owned" mark; the coins and the reputation tier show on top.
 // The economy state comes in; a tap on Buy is only reported (onBuy). The game buys, saves and calls update(state).
 
-import { el, button, icon, coinPill, header, screenShell } from './dom.js';
-import { SHOP_TABS, shopEntries, tierInfo } from './screen-logic.js';
+import { el, svg, button, icon, coinPill, header, screenShell } from './dom.js';
+import { SHOP_TABS, shopEntries, tierInfo, wornOutfit } from './screen-logic.js';
+import { drawCharacter, OUTFITS } from '../game/comic-art.js';
 
 /**
  * Build the shop screen.
@@ -52,19 +53,37 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     stats.append(pills, line);
   }
 
+  /**
+   * The "wearing now" strip of the Outfit tab: a small picture of her in the outfit she has on, and its name.
+   * @returns {HTMLElement} the strip
+   */
+  function wearingStrip() {
+    const worn = wornOutfit(current);
+    const name = t(worn.nameKey);
+    const box = el('div', 'app-wearing');
+    const pic = svg('svg', { class: 'app-wearing__pic', viewBox: '-170 -680 340 700', role: 'img', 'aria-label': t('ui.shop.preview', { outfit: name }) });
+    pic.append(drawCharacter('heroine', { x: 0, y: 0, scale: 1, pose: 'hips', expr: 'happy', outfit: worn.outfit, look: -1, cap: Boolean(OUTFITS[worn.outfit]?.cap) }).node);
+    const text = el('div', 'app-wearing__text');
+    text.append(el('p', 'app-wearing__label', t('ui.shop.wearingNow')), el('p', 'app-wearing__name', name));
+    box.append(pic, text);
+    return box;
+  }
+
   /** Draw one item card. @param {ReturnType<typeof shopEntries>[number]} item the entry @param {string} kindIcon icon name @returns {HTMLElement} the card */
   function itemCard(item, kindIcon) {
-    const card = el('article', `app-item${item.owned ? ' app-item--owned' : ''}${!item.owned && !item.canBuy ? ' app-item--locked' : ''}`);
+    const card = el('article', `app-item${item.owned ? ' app-item--owned' : ''}${item.scrubWaiting ? ' app-item--scrub' : ''}${!item.owned && !item.canBuy ? ' app-item--locked' : ''}`);
     const badge = el('span', 'app-item__badge');
     badge.append(icon(kindIcon));
     const text = el('div', 'app-item__text');
     text.append(el('h2', 'app-item__name', t(item.nameKey)), el('p', 'app-item__desc', t(item.descKey)));
     const side = el('div', 'app-item__side');
     if (item.owned) {
-      const owned = el('span', 'app-owned');
-      owned.append(icon('check'), el('span', '', t('ui.shop.owned')));
+      const owned = el('span', `app-owned${item.scrubWaiting ? ' app-owned--scrub' : ''}`);
+      if (item.scrubWaiting) owned.append(el('span', '', t('ui.shop.scrubTag')));
+      else owned.append(icon('check'), el('span', '', t('ui.shop.owned')));
       side.append(owned);
       if (item.scrubWaiting) text.append(el('p', 'app-item__note', t('ui.shop.scrub')));
+      if (item.wearing) side.append(el('span', 'app-wearing-tag', t('ui.shop.wearing')));
     } else if (item.story) {
       const why = el('p', 'app-item__why');
       why.append(icon('lock'), el('span', '', t('ui.shop.why.story')));
@@ -80,7 +99,8 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
       if (item.why) {
         const why = el('p', 'app-item__why');
         why.id = `app-why-${item.id}`;
-        why.append(icon('lock'), el('span', '', t(item.why.key, item.why.vars)));
+        const vars = item.why.vars.nameKey ? { ...item.why.vars, name: t(item.why.vars.nameKey) } : item.why.vars;
+        why.append(icon('lock'), el('span', '', t(item.why.key, vars)));
         text.append(why);
       }
     }
@@ -99,6 +119,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     panel.textContent = '';
     const entries = shopEntries(current, activeTab);
     const kindIcon = { tools: 'tool', studio: 'studio', outfit: 'outfit' }[activeTab] ?? 'tool';
+    if (activeTab === 'outfit') panel.append(wearingStrip());
     if (activeTab === 'studio' && onStudio) panel.append(button('app-btn app-shop-studio', t('ui.shop.seeStudio'), () => onStudio(), shell.signal));
     if (entries.length === 0) panel.append(el('p', 'app-empty', t('ui.shop.empty')));
     for (const item of entries) panel.append(itemCard(item, kindIcon));

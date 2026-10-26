@@ -2,6 +2,7 @@
   "name": "Popper",
   "short_name": "Popper",
   "description": "A cartoon popping game.",
+  "id": "./?app=2",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
