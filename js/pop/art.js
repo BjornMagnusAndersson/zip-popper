@@ -1,5 +1,5 @@
 // Drawings for the pop scene, all made in code on canvas (no pictures, no photos, no real people): skin with pores,
-// the bumps (whitehead, pink, blackhead, big, golden bonus), glossy goo worms and drops (cream-coloured, never blood),
+// the bumps (whitehead, pink, blackhead, big, golden bonus, Evil Horn), glossy goo worms and drops (cream-coloured, never blood),
 // the pink marks that fade, a blackhead strip with its peel, a cotton pad, cream dollops and tweezers. The face itself
 // is drawn in face.js. engine.js moves all of it.
 import { rng } from './logic.js';
@@ -122,7 +122,7 @@ export function drawPimple(ctx, p, amt, appear, time) {
   const { x, y, type } = p;
   const halo = {
     red: ['rgba(232,104,104,0.55)', 2.5], whitehead: ['rgba(232,128,116,0.36)', 1.9], big: ['rgba(226,96,96,0.58)', 2.3],
-    blackhead: ['rgba(170,110,90,0.16)', 1.6], gold: ['rgba(255,196,70,0.5)', 2.3],
+    blackhead: ['rgba(170,110,90,0.16)', 1.6], gold: ['rgba(255,196,70,0.5)', 2.3], horn: ['rgba(214,104,140,0.45)', 2.1],
   }[type] ?? ['rgba(232,128,116,0.36)', 1.9];
   const hr = s * halo[1];
   const g = ctx.createRadialGradient(x, y, s * 0.4, x, y, hr);
@@ -149,6 +149,18 @@ export function drawPimple(ctx, p, amt, appear, time) {
     ctx.beginPath(); ctx.arc(x - s * 0.18, y - s * 0.18, s * 0.14, 0, Math.PI * 2); ctx.fill();
     return;
   }
+  if (type === 'horn') { // the Evil Horn: a pink swollen base with a little cartoon horn poking out (it rises and wiggles as it is squeezed)
+    const base = ctx.createRadialGradient(x - s * 0.25, y - s * 0.1, s * 0.1, x, y + s * 0.15, s * 0.9);
+    base.addColorStop(0, '#ffe2d8'); base.addColorStop(0.6, '#f6a7ad'); base.addColorStop(1, 'rgba(240,140,150,0.55)');
+    ctx.fillStyle = base;
+    ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 1.0, s * 0.64, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = Math.max(1.5, s * 0.08); // a pale rim, so the base reads on dark skin too
+    ctx.strokeStyle = 'rgba(255,236,226,0.85)';
+    ctx.stroke();
+    const wiggle = amt > 0.05 ? Math.sin(time * 26) * 0.07 * Math.min(1, amt) : 0;
+    drawHorn(ctx, x, y + s * 0.42 - s * 0.2 * Math.min(1, amt), s * 1.65, wiggle); // big enough to read on a phone
+    return;
+  }
   const dome = ctx.createRadialGradient(x - s * 0.3, y - s * 0.35, s * 0.1, x, y, s * 1.05);
   if (type === 'gold') {
     dome.addColorStop(0, '#fff8d0'); dome.addColorStop(0.5, '#f6cc4a'); dome.addColorStop(1, 'rgba(214,140,30,0.2)');
@@ -173,6 +185,62 @@ export function drawPimple(ctx, p, amt, appear, time) {
   ctx.ellipse(x - s * 0.36, y - s * 0.42, s * 0.26, s * 0.15, -0.6, 0, Math.PI * 2);
   ctx.fill();
   if (type === 'gold') drawTwinkle(ctx, x + s * 0.55, y - s * 0.6, s * (0.45 + 0.25 * Math.sin(time * 5 + x)), 0.9);
+}
+
+/**
+ * A little cartoon horn (the Evil Horn): ivory, curled to one side, with two ridges and a shine. Its base sits on
+ * (x, y) and it points up (turned by angle); it is about 1.3 times size tall. No goo, no blood: just a silly horn.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x base centre x
+ * @param {number} y base centre y
+ * @param {number} size about the bump's radius
+ * @param {number} [angle] turn in radians (0 = straight up)
+ * @returns {void}
+ */
+export function drawHorn(ctx, x, y, size, angle = 0) {
+  if (size <= 0.5) return;
+  const bw = size * 0.95; // width at the base
+  const hh = size * 1.3; // height
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  /** The horn's outline. @returns {void} */
+  const outline = () => {
+    ctx.beginPath();
+    ctx.moveTo(-bw / 2, 0);
+    ctx.bezierCurveTo(-bw * 0.5, -hh * 0.55, -bw * 0.05, -hh * 0.85, bw * 0.38, -hh);
+    ctx.bezierCurveTo(bw * 0.12, -hh * 0.7, bw * 0.5, -hh * 0.35, bw / 2, 0);
+    ctx.quadraticCurveTo(0, bw * 0.16, -bw / 2, 0);
+    ctx.closePath();
+  };
+  const g = ctx.createLinearGradient(-bw / 2, 0, bw / 2, -hh);
+  g.addColorStop(0, '#fff7e4'); g.addColorStop(0.55, '#f1dfb8'); g.addColorStop(1, '#d9bd8a');
+  outline();
+  ctx.lineWidth = Math.max(3, size * 0.2); // a pale halo round the horn, so it stands out on dark skin
+  ctx.strokeStyle = 'rgba(255,248,232,0.9)';
+  ctx.stroke();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = Math.max(1, size * 0.07);
+  ctx.strokeStyle = '#9a7650';
+  ctx.stroke();
+  ctx.save();
+  outline();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(154,118,80,0.6)'; // ridges round the horn
+  ctx.lineWidth = Math.max(1, size * 0.05);
+  for (const k of [0.3, 0.55]) {
+    ctx.beginPath();
+    ctx.moveTo(-bw * 0.6, -hh * k + bw * 0.05);
+    ctx.quadraticCurveTo(0, -hh * k + bw * 0.18, bw * 0.6, -hh * k - bw * 0.1);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,0.75)'; // shine
+  ctx.beginPath();
+  ctx.ellipse(-bw * 0.2, -hh * 0.4, size * 0.07, size * 0.24, 0.25, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /**
@@ -561,6 +629,97 @@ export function drawTweezers(ctx, x, y, open, scale) {
     ctx.lineTo(4 * scale, side * 0.2);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The warm cloth held on the face: a folded, soft pink towel with little wavy steam lines rising from it.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} r size (half the width)
+ * @param {number} time seconds, for the steam wobble (0 = still, for reduced motion)
+ * @returns {void}
+ */
+export function drawCloth(ctx, x, y, r, time) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.12);
+  ctx.shadowColor = 'rgba(70,30,30,0.3)';
+  ctx.shadowBlur = r * 0.3;
+  ctx.shadowOffsetY = r * 0.1;
+  roundRect(ctx, -r, -r * 0.62, r * 2, r * 1.24, r * 0.28);
+  ctx.fillStyle = '#ffb3c4';
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; // the fold and the stripes of a towel
+  ctx.lineWidth = Math.max(1.5, r * 0.08);
+  for (const k of [-0.62, 0.62]) { ctx.beginPath(); ctx.moveTo(k * r, -r * 0.5); ctx.lineTo(k * r, r * 0.5); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(200,90,120,0.35)';
+  ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.lineTo(r * 0.9, 0); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)'; // steam
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(1.5, r * 0.07);
+  for (const s of [-0.45, 0, 0.45]) {
+    const rise = ((time * 0.8 + s + 1) % 1) * r * 0.3;
+    ctx.globalAlpha = time ? 1 - rise / (r * 0.3) : 0.8;
+    ctx.beginPath();
+    ctx.moveTo(s * r, -r * 0.75 - rise);
+    ctx.bezierCurveTo(s * r + r * 0.15, -r * 0.95 - rise, s * r - r * 0.15, -r * 1.1 - rise, s * r, -r * 1.3 - rise);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * A hydrocolloid patch on a popped spot: a round, see-through sticker with a soft shine.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} r radius
+ * @returns {void}
+ */
+export function drawPatch(ctx, x, y, r) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(80,40,30,0.18)';
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
+  ctx.fillStyle = 'rgba(250,236,214,0.78)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(214,190,160,0.9)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.ellipse(x - r * 0.35, y - r * 0.4, r * 0.32, r * 0.16, -0.6, 0, Math.PI * 2); ctx.fill();
+}
+
+/**
+ * Cartoon ouch lines round a bump that got the wrong tool: short pink strokes bursting out, then fading.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x bump x
+ * @param {number} y bump y
+ * @param {number} r bump radius
+ * @param {number} k progress 0..1
+ * @param {boolean} reduced reduced motion: the lines do not burst out, they only fade
+ * @returns {void}
+ */
+export function drawOuch(ctx, x, y, r, k, reduced) {
+  const out = reduced ? 0.5 : Math.min(1, k * 3);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - k);
+  ctx.strokeStyle = '#ff5c8a';
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(2, r * 0.16);
+  for (let i = 0; i < 6; i += 1) {
+    const a = -Math.PI / 2 + (i - 2.5) * 0.55;
+    const r0 = r * (1.3 + out * 0.4);
+    const r1 = r0 + r * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+    ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1);
     ctx.stroke();
   }
   ctx.restore();

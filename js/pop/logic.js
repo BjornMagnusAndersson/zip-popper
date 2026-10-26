@@ -3,7 +3,7 @@
 // mouth, never under the hair, never touching each other, each with a fingertip-sized tap target), the nose strip,
 // how squeezing builds pressure, which bump a finger touches, and the face's mood. No DOM, no audio, no timers here.
 // The kinds of bump (hold time, size, goo, tools, pay) live in data/bumps.js.
-import { bumpInfo, isImplemented } from '../data/bumps.js';
+import { BUMP_IDS, bumpInfo, isImplemented } from '../data/bumps.js';
 
 const POP_SOUND_KEY = 'popper.popSound'; // "on" or "off"; nothing stored = on
 
@@ -275,9 +275,14 @@ const ZONES = [
 /** Anywhere on the face, used only when a bump does not fit in its own zone. */
 const ANYWHERE = { name: 'any', u: [-0.8, 0.8], v: [-0.72, 0.9] };
 
+/** The extra kinds that only turn up on some faces (data/bumps.js `spawn`), e.g. the Evil Horn. */
+const SPAWN_KINDS = BUMP_IDS.filter((id) => bumpInfo(id).spawn);
+
 /**
  * Which kind each bump on a face is: the nose gets a blackhead, one cheek a big one, one other spot a golden one, the
- * rest whiteheads and pink ones. So every face has all five kinds once it has 4 or more bumps.
+ * rest whiteheads and pink ones. So every face has all five kinds once it has 4 or more bumps. Then the extra kinds
+ * (data/bumps.js `spawn`, e.g. the Evil Horn) may each replace a whitehead or pink one, by their chance and at most
+ * maxPerFace times, but only while both whiteheads and pink ones stay on the face.
  * @param {string[]} zones the zone name of each bump
  * @param {() => number} rand random numbers
  * @returns {string[]} the kind of each bump
@@ -285,8 +290,17 @@ const ANYWHERE = { name: 'any', u: [-0.8, 0.8], v: [-0.72, 0.9] };
 function typesFor(zones, rand) {
   const flip = rand() < 0.5 ? 1 : 0;
   const types = zones.map((z, i) => ((i + flip) % 2 ? 'whitehead' : 'red')); // taking 3 of these still leaves both kinds
-  const take = (want) => {
-    const free = zones.map((z, i) => i).filter((i) => (!want || want.includes(zones[i])) && !['blackhead', 'big', 'gold'].includes(types[i]));
+  /** How many bumps of a kind there are now. @param {string} t kind @returns {number} count */
+  const countOf = (t) => types.filter((x) => x === t).length;
+  /**
+   * Pick a plain bump (whitehead or pink) to turn into another kind.
+   * @param {string[]|null} want the zones it should be in (null = any)
+   * @param {boolean} [keepBoth] only pick one whose kind has another left, so both plain kinds stay on the face
+   * @returns {number} its index, or -1
+   */
+  const take = (want, keepBoth = false) => {
+    const free = zones.map((z, i) => i).filter((i) => (!want || want.includes(zones[i]))
+      && (types[i] === 'whitehead' || types[i] === 'red') && (!keepBoth || countOf(types[i]) > 1));
     return free.length ? free[Math.floor(rand() * free.length)] : -1;
   };
   const steps = [['blackhead', ['nose']], ['big', ['cheekL', 'cheekR']], ['gold', null]];
@@ -296,7 +310,31 @@ function typesFor(zones, rand) {
     if (i < 0) i = take(null);
     if (i >= 0) types[i] = type;
   }
+  for (const type of SPAWN_KINDS) {
+    if (!isImplemented(type)) continue;
+    const { chance = 0, maxPerFace = 1, zones: want = null } = bumpInfo(type).spawn;
+    for (let n = 0; n < maxPerFace; n += 1) {
+      if (rand() >= chance) continue;
+      let i = take(want, true);
+      if (i < 0) i = take(null, true);
+      if (i >= 0) types[i] = type;
+    }
+  }
   return types;
+}
+
+/**
+ * How big a growing bump (data/bumps.js `grow`, e.g. the Evil Horn) is after it has been on screen a while: it starts
+ * at r0, grows quickly at first and then slower, and stops at rMax.
+ * @param {number} r0 the radius it starts at
+ * @param {number} rMax the full radius (the layout keeps room for this)
+ * @param {number} seconds how long it takes to reach the full radius
+ * @param {number} age seconds it has been on screen
+ * @returns {number} the radius now, r0 .. rMax
+ */
+export function grownRadius(r0, rMax, seconds, age) {
+  const t = clamp((Number(age) || 0) / Math.max(0.1, seconds), 0, 1);
+  return r0 + (rMax - r0) * (1 - (1 - t) * (1 - t));
 }
 
 /**
@@ -363,9 +401,17 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false }) {
     placed.push({ ...it, x: pt.x, y: pt.y, r });
   }
   placed.sort((p, q) => p.i - q.i);
-  const pimples = placed.map((p) => ({
-    id: `f${seed}-${p.i}`, type: p.type, x: p.x, y: p.y, r: p.r, axis: rand() * Math.PI, hold: bumpInfo(p.type).hold, zone: p.zone.name,
-  }));
+  const pimples = placed.map((p) => {
+    const b = { id: `f${seed}-${p.i}`, type: p.type, x: p.x, y: p.y, r: p.r, axis: rand() * Math.PI, hold: bumpInfo(p.type).hold, zone: p.zone.name };
+    const grow = bumpInfo(p.type).grow;
+    if (grow) { // a growing bump starts small; the spot was chosen for its full size (rMax), so it never grows into another
+      b.rMax = p.r;
+      b.r0 = Math.min(p.r, Math.max(MIN_BUMP_R, p.r * grow.from));
+      b.r = b.r0;
+      b.growFor = grow.seconds;
+    }
+    return b;
+  });
   return { pimples, strip: box };
 }
 

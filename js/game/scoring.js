@@ -51,6 +51,15 @@ export function registerOw(state) {
   return { ...state, owCount: state.owCount + 1, combo: 0, lastPopTime: null };
 }
 
+/**
+ * Registers a fail (SPEC D15): the customer stormed off. A failed round never gets stars; the reputation it cost
+ * (0 for "Try again") is kept in the result for when reputation exists.
+ * @param {object} state @param {{reputationHit?: number}} [o] the reputation hit taken @returns {object} new state
+ */
+export function registerFail(state, { reputationHit = 0 } = {}) {
+  return { ...state, failed: true, reputationHit: (state.reputationHit ?? 0) + Math.max(0, reputationHit), combo: 0, lastPopTime: null };
+}
+
 /** Registers that the cleanup step was finished. @param {object} state @returns {object} new state */
 export function registerCleanup(state) {
   return { ...state, cleanupDone: true };
@@ -63,10 +72,10 @@ export function allHandled(state) {
 
 /**
  * Stars per the spec: 0 while bumps remain; 1 = all handled; 2 = all handled and at most 2 Ow;
- * 3 = all handled, cleanup finished and no Ow. @param {object} state @returns {number} 0 to 3
+ * 3 = all handled, cleanup finished and no Ow; a failed round (registerFail) gets none. @param {object} state @returns {number} 0 to 3
  */
 export function starsFor(state) {
-  if (!allHandled(state)) return 0;
+  if (state.failed || !allHandled(state)) return 0;
   if (state.cleanupDone && state.owCount === 0) return 3;
   if (state.owCount <= MAX_OW_FOR_TWO_STARS) return 2;
   return 1;

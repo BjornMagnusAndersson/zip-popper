@@ -36,6 +36,44 @@
 }
 .pop-btn { -webkit-tap-highlight-color: transparent; }
 
+/* The tool bar (T1.2): a row of tool buttons under the face; the one in hand is lit. The warm cloth's button has a
+   thin warm meter along its bottom edge. */
+.pop-tools {
+  flex: none; position: relative; z-index: 2; display: flex; justify-content: center; gap: 4px;
+  padding: 6px max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left)); background: rgba(16, 42, 40, 0.88);
+}
+.pop-tools[hidden] { display: none; }
+.pop-tool {
+  position: relative; flex: 1 1 0; min-width: 44px; max-width: 76px; min-height: 54px; padding: 4px 2px 6px;
+  display: grid; justify-items: center; align-content: center; gap: 2px; border-radius: 12px; font: inherit; color: #fff;
+  background: rgba(255, 255, 255, 0.1); border: 2px solid transparent; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.pop-tool:hover { background: rgba(255, 255, 255, 0.2); }
+.pop-tool[aria-pressed="true"] { color: #062b2b; background: #5eead4; border-color: #fff; }
+.pop-tool:focus-visible { outline: 3px solid #ffd166; outline-offset: 1px; }
+.pop-tool svg { width: 26px; height: 26px; }
+.pop-tool__name { font-size: 0.66rem; font-weight: 700; line-height: 1.05; text-align: center; }
+.pop-tool__meter { position: absolute; left: 8px; right: 8px; bottom: 3px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.pop-tool__fill { display: block; height: 100%; background: #ff8a65; transform: scaleX(0); transform-origin: left; }
+.pop-tool--warm .pop-tool__meter { height: 5px; }
+
+/* "Ow!" bubble over a bump that got the wrong tool (pop-mode.js puts it at the bump and removes it after 0.9 s). */
+.pop-ow {
+  position: absolute; z-index: 2; margin: 0; padding: 2px 12px; border-radius: 999px; pointer-events: none;
+  font-weight: 900; font-size: 1.35rem; color: #fff; background: #ff5c8a; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -170%); animation: pop-ow 0.9s ease-out forwards;
+}
+@keyframes pop-ow {
+  0% { opacity: 0; transform: translate(-50%, -120%) scale(0.6); }
+  20% { opacity: 1; transform: translate(-50%, -170%) scale(1.12); }
+  70% { opacity: 1; transform: translate(-50%, -190%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -220%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop-ow { animation: pop-ow-fade 0.9s linear forwards; }
+  @keyframes pop-ow-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+}
+
 .pop-foot { flex: none; position: relative; z-index: 2; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); background: rgba(16, 42, 40, 0.88); color: #fff; }
 .pop-foot[hidden] { display: none; }
 .pop-hint { margin: 0; font-size: 0.9rem; line-height: 1.3; min-height: 2.6em; }
@@ -47,6 +85,33 @@
 }
 .pop-done[hidden] { display: none; }
 .pop-done__text { margin: 0; font-size: 1.25rem; font-weight: 800; }
+/* The irritation meter beside the counter line (T1.2b): a small bar that turns hot pink when nearly full. */
+.pop-countline { display: flex; align-items: center; gap: 8px; }
+.pop-irr { flex: none; position: relative; width: 56px; height: 7px; margin-top: 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
+.pop-irr__fill { display: block; height: 100%; background: #ffb07a; transform: scaleX(0); transform-origin: left; transition: transform 0.2s linear, background 0.2s; }
+.pop-irr--high .pop-irr__fill { background: #ff4f7b; }
+/* The customer storms off (SPEC D15): the face huffs off to the side; with reduced motion it only fades. */
+.pop-canvas--storm { pointer-events: none; animation: pop-storm 0.7s ease-in forwards; }
+@keyframes pop-storm {
+  0% { transform: none; opacity: 1; }
+  25% { transform: translateX(-3%) rotate(-2deg); opacity: 1; }
+  100% { transform: translateX(70%) rotate(6deg); opacity: 0; }
+}
+.pop-fail {
+  position: absolute; z-index: 4; left: 16px; right: 16px; top: 50%; transform: translateY(-50%); max-width: 380px; margin: 0 auto;
+  display: grid; gap: 10px; padding: 18px; text-align: center; border-radius: 20px; background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); color: #102a28;
+}
+.pop-fail[hidden] { display: none; }
+.pop-fail__title { margin: 0; font-size: 1.3rem; font-weight: 900; }
+.pop-fail__text { margin: 0; font-size: 0.95rem; line-height: 1.35; }
+.pop-fail .pop-btn { color: #102a28; border-color: #102a28; }
+.pop-fail .pop-btn--main { border-color: #5eead4; }
+@media (prefers-reduced-motion: reduce) {
+  .pop-irr__fill { transition: none; }
+  .pop-canvas--storm { animation: pop-storm-fade 0.25s linear forwards; }
+  @keyframes pop-storm-fade { to { opacity: 0; } }
+}
 .pop-btn--main { color: #062b2b; background: #5eead4; border-color: #5eead4; }
 .pop-btn--main:hover { background: #7ff0de; }
 
@@ -73,6 +138,11 @@
     max-width: min(30%, 270px); padding: 8px 12px; border-radius: 14px; background: rgba(16, 42, 40, 0.82);
   }
   .pop-hint { font-size: 0.82rem; min-height: 0; }
+  .pop-tools { /* two rows of three at the bottom right, over the room beside the face */
+    position: absolute; left: auto; right: calc(10px + env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: repeat(3, 54px); gap: 4px; padding: 5px; border-radius: 14px; background: rgba(16, 42, 40, 0.82);
+  }
+  .pop-tool { max-width: none; min-height: 50px; }
   .pop-done { left: auto; right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); max-width: 26%; padding: 12px; }
   .pop-done__text { font-size: 1.05rem; }
 }

@@ -16,15 +16,15 @@
 <main id="game"></main>
 <script type="module">
 // The pop scene demo: one full face to clear. Serve this folder with: npx serve src (ES modules need http, not file://)
-// Optional for testing: ?seed=123 (always the same first face), ?strip (a blackhead strip on the nose),
-// ?tier=1 (the studio room behind the face: 0 dingy, 1 better, 2 spa).
+// Optional for testing: ?seed=123 (always the same first face), ?nostrip (no dotty nose for the nose strip tool;
+// every demo face has one so all tools can be tried), ?tier=1 (the studio room behind the face: 0 dingy, 1 better, 2 spa).
 import { loadStrings, t } from './js/core/strings.js';
 import { createPopMode } from './js/pop/pop-mode.js';
 await loadStrings('en');
 document.title = t('pop.region');
 const params = new URLSearchParams(location.search);
 const tier = Math.max(0, Math.min(2, Math.floor(Number(params.get('tier')) || 0)));
-const pop = createPopMode({ t, storage: localStorage, seed: Number(params.get('seed')) || undefined, strip: params.has('strip'), tier });
+const pop = createPopMode({ t, storage: localStorage, seed: Number(params.get('seed')) || undefined, strip: !params.has('nostrip'), tier, career: params.has('career') }); // ?career = a round that can fail (SPEC D15)
 pop.mount(document.getElementById('game'));
 </script>
 <script type="module">

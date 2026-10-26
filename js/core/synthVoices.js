@@ -34,6 +34,16 @@ export const VOICES = {
     k.tone(3400, t, 0.025, { type: 'square', vol: 0.04 });
     k.tone(600, t + 0.03, 0.08, { vol: 0.16, slideTo: 1500 });
   },
+  /** The Evil Horn coming out: a comic door-creak that rises, then a hollow "thwop". @param {object} k kit @param {number} t start */
+  creak(k, t) {
+    for (let i = 0; i < 14; i += 1) { // the creak: quick little clicks that get faster and higher
+      const d = 0.42 * Math.sqrt(i / 14);
+      k.tone(160 + i * 22, t + d, 0.05, { type: 'sawtooth', vol: 0.07, slideTo: 140 + i * 26 });
+    }
+    k.hiss(t, 0.45, { freq: 700, to: 1400, q: 8, vol: 0.05 });
+    k.tone(520, t + 0.47, 0.16, { vol: 0.35, slideTo: 160 }); // thwop
+    k.hiss(t + 0.47, 0.08, { type: 'lowpass', freq: 900, vol: 0.18 });
+  },
   /** The strip tearing off the skin. @param {object} k kit @param {number} t start */
   peel(k, t) {
     k.hiss(t, 0.32, { type: 'highpass', freq: 1800, to: 4200, vol: 0.12 });

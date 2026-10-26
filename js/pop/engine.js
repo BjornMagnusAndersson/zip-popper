@@ -8,11 +8,20 @@
 // The drawing loop only runs while something moves; dispose() stops it. resize() moves everything to a new scene size
 // (phone turned, window resized) without starting over. The face picture may be see-through around the person, so the
 // studio room drawn behind the canvas (backdrop.js) shows through.
-import { pressureStep, tapPressure, hitTest, rng, holdTime } from './logic.js';
+// Tools (T1.2): the player picks a tool (setTool) and a press does what that tool does (pop/tool-logic.js): fingers and
+// cotton pad squeeze, tweezers pull blackheads, the nose strip sticks on the dotty nose and is peeled off, the warm
+// cloth held on the face fills a warm meter (bumps pop faster for a while), the patch sticks on popped spots. The wrong
+// tool on a bump is an "Ow": no pressure, no pop, ouch lines, and onOw tells the controller (wince, counter).
+import { pressureStep, tapPressure, hitTest, rng, holdTime, grownRadius } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
+  START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
+  roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
+} from './tool-logic.js';
+import { toolInfo, IRRITATION } from '../data/tools.js';
+import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
-  drawTweezers, drawFinger,
+  drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn,
 } from './art.js';
 
 const GRID = 8; // mesh cells across the squeezed area
@@ -33,14 +42,28 @@ const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * @param {boolean} reduced reduced motion (it appears at once)
  * @returns {object} the scene's bump
  */
-const sceneBump = (p, reduced) => ({ ...p, hold: p.hold ?? holdTime(p.type), pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0 });
+const sceneBump = (p, reduced) => ({ ...p, hold: p.hold ?? holdTime(p.type), pressure: 0, popped: false, appear: reduced ? 1 : 0, wob: 0, wobV: 0, age: 0 });
 
 /**
- * Whether a bump comes out with tweezers (a pull, no goo) instead of a squeeze.
+ * Whether a bump comes out as a horn (the Evil Horn creaks out instead of squirting).
+ * @param {object} p the bump
+ * @returns {boolean} true for horn bumps
+ */
+const horned = (p) => bumpInfo(p.type)?.goo === 'horn';
+
+/**
+ * Whether a bump comes out as a plug (a pull, no goo) instead of a squeeze.
  * @param {object} p the bump
  * @returns {boolean} true for tweezer bumps (blackheads)
  */
 const pulled = (p) => bumpInfo(p.type)?.needsTool === 'tweezers';
+
+/**
+ * Whether a bump is being worked with tweezers (drawn tweezers, no finger dents), not squeezed.
+ * @param {object} p the bump
+ * @returns {boolean} true when its tool is the tweezers
+ */
+const tweezed = (p) => toolInfo(p.tool)?.use === 'pull';
 
 /**
  * The affine map that takes three source points to three destination points.
@@ -64,9 +87,16 @@ function affine(s, d) {
  * @param {HTMLCanvasElement} canvas the canvas (its CSS size should be width x height)
  * @param {{width: number, height: number, dpr?: number, texture: HTMLCanvasElement, pimples: object[], strip?: object|null,
  *   reduced?: boolean, sound?: {play: (name: string, o?: object) => void}, buzz?: (p: number|number[]) => void,
- *   onPop?: (p: object, left: number) => void, onStep?: (step: string) => void, onDone?: () => void}} o options
+ *   onPop?: (p: object, left: number) => void, onStep?: (step: string) => void, onDone?: () => void,
+ *   tool?: string, face?: {cx: number, cy: number, rx: number, ry: number}, tools?: string[],
+ *   onOw?: (o: {x: number, y: number, type: string, tool: string}) => void, onWarm?: (warmth: number) => void,
+ *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
+ *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
+ *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
+ *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
+ *   useful ('patchFirst' = a patch on a bump that is not popped yet)
  * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), size(), keyPress(),
- *   dispose()
+ *   setTool(id), tool(), warmth(), irritation(), halt(), dispose()
  */
 export function createPopScene(canvas, o) {
   let w = o.width; // changed only by resize()
@@ -87,13 +117,27 @@ export function createPopScene(canvas, o) {
   let disposed = false;
   let step = 'pop'; // pop (pimples and strip, any order) | wipe | cream | done
   const pimples = o.pimples.filter((p) => isImplemented(p.type)).map((p) => sceneBump(p, reduced)); // unbuilt kinds are skipped
-  const strip = o.strip ? { ...o.strip, q: 0, lift: 0, off: false, flying: false } : null;
+  // The nose strip: tiny dots on the nose until the strip is stuck on (nose strip tool), then peeled off.
+  const strip = o.strip ? { ...o.strip, q: 0, lift: 0, off: false, flying: false, stuck: false } : null;
+  let tool = toolInfo(o.tool)?.implemented ? o.tool : START_TOOL; // the tool in hand
+  const usable = Array.isArray(o.tools) ? o.tools : null; // tools the keyboard may pick
+  const face = o.face ? { cx: o.face.cx, cy: o.face.cy, rx: o.face.rx, ry: o.face.ry } : null; // the skin oval
+  let warmth = 0; // the warm meter, 0..1
+  let warmSent = 0; // the warmth last told to onWarm
+  let warmHold = null; // {id, x, y} the warm cloth held on the face
+  let irr = irritationStart(); // the irritation meter (T1.2b): Ows and cold pops fill it, it calms by itself
+  let irrSent = 0; // the level last told to onIrritation
+  let halted = false; // true after halt(): the customer stormed off, presses do nothing
+  const roll = typeof o.random === 'function' ? o.random : Math.random; // the rough-press dice
+  const patches = []; // patches stuck on popped spots
   const marks = []; // pink spots where pimples were (healed by the cream)
   const strands = []; // goo worms
   const drops = []; // goo drops in the air
   const blobs = []; // goo drops that landed
   const splats = []; // goo on the lens
   const tweezers = []; // tweezers pulling a blackhead out
+  const horns = []; // Evil Horns flying off after they creaked out
+  let quake = -1; // time the last horn came out (the picture wobbles for a moment); -1 = none
   let hold = null; // {p, id, since} the pimple being squeezed
   let peel = null; // {id, x0, q0} the strip being peeled
   let wipe = null; // {dirt, cells, dirty, clean, pad, auto, fading}
@@ -257,6 +301,12 @@ export function createPopScene(canvas, o) {
       const fx = p.x + ax * side * (reach + p.r * 0.1);
       const fy = p.y + ay * side * (reach + p.r * 0.1);
       drawFinger(ctx, fx, fy, p.axis + (side < 0 ? Math.PI : 0), Math.max(18, p.r * 1.7), Math.min(1, a * 3));
+      if (p.tool === 'cottonPad') { // a cotton pad wrapped round each fingertip
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 3);
+        drawPad(ctx, fx, fy, Math.max(10, p.r * 0.75));
+        ctx.restore();
+      }
     }
     const shine = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.2);
     shine.addColorStop(0, `rgba(255,236,228,${0.22 * Math.min(1, a)})`);
@@ -322,21 +372,31 @@ export function createPopScene(canvas, o) {
    * @returns {void}
    */
   function pop(p) {
+    if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
+      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth));
+      if (p.tool === 'cottonPad') irr = irritationSoothe(irr, 'pad');
+    }
     p.popped = true;
     p.pressure = 0;
     if (hold?.p === p) hold = null;
     if (keyHold?.p === p) keyHold = null;
-    if (pulled(p)) {
-      tweezers.push({ x: p.x, y: p.y, t: 0, r: p.r });
+    if (pulled(p)) { // the plug comes out (held in tweezers, or popped out by fingers)
+      tweezers.push({ x: p.x, y: p.y, t: 0, r: p.r, withTweezers: tweezed(p) });
       play('tweeze');
       buzz(14);
+    } else if (horned(p)) { // the Evil Horn creaks out, flies off with a dab of pale goo, and the picture wobbles
+      horns.push({ x: p.x, y: p.y, r: p.r * 1.65, t: 0, spin: rand() < 0.5 ? -1 : 1 });
+      squirt(p);
+      play('creak');
+      buzz([18, 30, 18, 30, 40]);
+      if (!reduced) quake = time;
     } else {
       squirt(p);
       play(p.type === 'big' ? 'pop_big' : p.type === 'gold' ? 'pop_gold' : 'pop_small');
       buzz(p.type === 'big' ? [30, 40, 50] : 24);
     }
-    marks.push({ x: p.x, y: p.y, r: p.r * (pulled(p) ? 0.9 : 1.1) });
-    if (!reduced) { p.wob = pulled(p) ? 0 : 0.55; p.wobV = 0; }
+    marks.push({ x: p.x, y: p.y, r: p.r * (pulled(p) ? 0.9 : 1.1), patched: false });
+    if (!reduced) { p.wob = tweezed(p) ? 0 : 0.55; p.wobV = 0; }
     const left = pimples.filter((q) => !q.popped).length;
     try { o.onPop?.(p, left); } catch (e) { console.warn('onPop failed:', e); }
     maybeNextStep();
@@ -350,7 +410,7 @@ export function createPopScene(canvas, o) {
     // Wait until the goo has landed, then start the wipe.
     const start = () => {
       if (disposed || step !== 'pop') return;
-      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || (strip && strip.flying)) { setTimeout(start, 120); return; }
+      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || (strip && strip.flying)) { setTimeout(start, 120); return; }
       beginWipe();
     };
     setTimeout(start, reduced ? 200 : 450);
@@ -447,8 +507,12 @@ export function createPopScene(canvas, o) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     texture = tex;
-    for (const p of pimples) mv(p);
+    for (const p of pimples) mv(p, ['r', 'r0', 'rMax']);
     for (const k of marks) mv(k);
+    for (const hn of horns) mv(hn);
+    for (const pa of patches) mv(pa);
+    if (face) Object.assign(face, { cx: face.cx * s + tx, cy: face.cy * s + ty, rx: face.rx * s, ry: face.ry * s });
+    if (warmHold) mv(warmHold, []);
     for (const st of strands) {
       mv(st, ['len', 'max', 'speed', 'w']);
       st.curl /= s; // the same bend over the longer or shorter worm
@@ -532,8 +596,10 @@ export function createPopScene(canvas, o) {
   /** Dab cream on every pink mark and rub it in with a clean sweep. @returns {void} */
   function beginCream() {
     wipe = null;
-    cream = { t: 0, dollops: marks.map((m, i) => ({ x: m.x, y: m.y, r: Math.max(6, m.r * 1.1), at: i * 0.08 })) };
+    cream = { t: 0, dollops: marks.filter((m) => !m.patched).map((m, i) => ({ x: m.x, y: m.y, r: Math.max(6, m.r * 1.1), at: i * 0.08 })) }; // patched spots need no cream
     play('cream_heal');
+    irr = irritationSoothe(irr, 'cream'); // the cream soothes the skin
+    tellIrritation(true);
     setStep('cream');
   }
 
@@ -546,11 +612,16 @@ export function createPopScene(canvas, o) {
     let busy = false;
     for (const p of pimples) {
       if (p.appear < 1) { p.appear = Math.min(1, p.appear + dt * 3.5); busy = true; }
+      if (p.growFor && !p.popped && step === 'pop' && p.age < p.growFor) { // a growing bump (Evil Horn) gets bigger while you watch
+        p.age += dt;
+        p.r = grownRadius(p.r0, p.rMax, p.growFor, p.age);
+        busy = true;
+      }
       if (!p.popped) {
         const held = hold?.p === p || (keyHold?.p === p && time < keyHold.until);
         const before = p.pressure;
         if (keyHold?.p === p && time < keyHold.until) p.pressure = Math.min(keyHold.target, p.pressure + dt * 2.4);
-        else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, p.hold);
+        else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, warmth));
         for (const th of [0.3, 0.6, 0.85]) {
           const key = `${p.id}:${th}`;
           if (before < th && p.pressure >= th && !warnedThresholds.has(key)) { warnedThresholds.add(key); play('squish', { level: th }); buzz(6); }
@@ -565,6 +636,21 @@ export function createPopScene(canvas, o) {
         if (Math.abs(p.wob) < 0.008 && Math.abs(p.wobV) < 0.05) { p.wob = 0; p.wobV = 0; } else busy = true;
       }
       if (p.type === 'gold' && !p.popped && !reduced) busy = true; // it twinkles
+      if (p.ouch !== undefined && time - p.ouch < 0.7) busy = true; // ouch lines after an Ow
+    }
+    // The warm meter: fills while the warm cloth is held on the face, then slowly cools.
+    const warmBefore = warmth;
+    warmth = warmStep(warmth, dt, Boolean(warmHold) && step === 'pop');
+    if (warmth > 0 || warmHold) busy = true;
+    // The irritation meter calms by itself after a quiet while, faster with the warm cloth or after a cotton pad.
+    if (step === 'pop' && irr.level > 0) {
+      irr = irritationStep(irr, dt, { warm: Boolean(warmHold) });
+      busy = true;
+      tellIrritation();
+    }
+    if (warmth !== warmBefore && (Math.abs(warmth - warmSent) >= 0.02 || warmth === 0 || warmth === 1)) {
+      warmSent = warmth;
+      try { o.onWarm?.(warmth); } catch (e) { console.warn('onWarm failed:', e); }
     }
     for (const s of strands) {
       if (s.len >= s.max) continue;
@@ -604,6 +690,12 @@ export function createPopScene(canvas, o) {
       busy = true;
       if (tweezers[i].t > 0.8) tweezers.splice(i, 1);
     }
+    for (let i = horns.length - 1; i >= 0; i -= 1) {
+      horns[i].t += dt;
+      busy = true;
+      if (horns[i].t > 1.1) horns.splice(i, 1);
+    }
+    if (quake >= 0) busy = true; // until wobbleScreen() has put the picture back
     if (strip && !strip.off) {
       if (!peel && strip.q > 0.6 && strip.q < 1) strip.q = Math.min(1, strip.q + dt * 2.2);
       if (strip.q >= 1 && !strip.flying) { strip.flying = true; play('peel'); buzz([12, 30, 18]); }
@@ -668,13 +760,25 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) {
       const a = (p.popped ? 0 : p.pressure) + p.wob;
       const shake = !reduced && !p.popped && p.pressure > 0.8 ? Math.sin(time * 70) * 0.03 : 0;
-      if (!pulled(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
+      if (!tweezed(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
     }
+    if (warmth > 0.003 && face) { // a warm rosy glow on the skin while the warm meter is up (only over the person)
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      const g = ctx.createRadialGradient(face.cx, face.cy, face.rx * 0.2, face.cx, face.cy, face.ry * 1.1);
+      g.addColorStop(0, `rgba(255,140,110,${0.2 * warmth})`);
+      g.addColorStop(1, 'rgba(255,140,110,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(face.cx - face.rx * 1.3, face.cy - face.ry * 1.2, face.rx * 2.6, face.ry * 2.4);
+      ctx.restore();
+    }
+    if (irr.level > 0.02 && face) drawIrritation(irr.level); // redder, blotchy cheeks while irritated (no motion)
     for (const m of marks) {
       const alpha = sx === null ? fadeAll : m.x < sx ? 0 : 1;
       if (alpha > 0) drawMark(ctx, m, alpha);
     }
-    if (strip && !strip.off) drawStripDots(ctx, strip.dots, strip.x + strip.q * strip.w);
+    for (const pa of patches) drawPatch(ctx, pa.x, pa.y, pa.r);
+    if (strip && !strip.off) drawStripDots(ctx, strip.dots, strip.stuck ? strip.x + strip.q * strip.w : -Infinity);
     for (const p of pimples) if (!p.popped) drawPimple(ctx, p, p.pressure, p.appear, time);
     for (const s of strands) drawStrand(ctx, s);
     for (const b of blobs) drawDrop(ctx, b);
@@ -686,23 +790,35 @@ export function createPopScene(canvas, o) {
     }
     // Tweezers: open over a blackhead while it is squeezed, then pull the plug up and away.
     for (const p of pimples) {
-      if (pulled(p) && !p.popped && p.pressure > 0.02) drawTweezers(ctx, p.x, p.y, 1 - p.pressure, scale);
+      if (tweezed(p) && !p.popped && p.pressure > 0.02) drawTweezers(ctx, p.x, p.y, 1 - p.pressure, scale);
     }
     for (const tw of tweezers) {
       const up = smooth(tw.t / 0.6) * 46 * scale;
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, tw.t - 0.5) / 0.3);
       drawStrand(ctx, { pts: [{ x: tw.x, y: tw.y - up + tw.r * 2.2 }, { x: tw.x, y: tw.y - up }], w: tw.r * 0.9, tip: true });
-      drawTweezers(ctx, tw.x, tw.y - up, 0, scale);
+      if (tw.withTweezers) drawTweezers(ctx, tw.x, tw.y - up, 0, scale);
       ctx.restore();
     }
-    if (strip && !strip.off) {
+    for (const hn of horns) { // an Evil Horn that creaked out: it pops up, tumbles away and fades
+      const up = smooth(hn.t / 0.5) * 40 * scale + Math.max(0, hn.t - 0.5) * 60 * scale;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, hn.t - 0.7) / 0.4);
+      drawHorn(ctx, hn.x + hn.spin * hn.t * 28 * scale, hn.y - up, hn.r, hn.spin * hn.t * 2.4);
+      ctx.restore();
+    }
+    for (const p of pimples) { // ouch lines round a bump that got the wrong tool
+      const age = p.ouch === undefined ? Infinity : time - p.ouch;
+      if (age < 0.7) drawOuch(ctx, p.x, p.y, p.r, age / 0.7, reduced);
+    }
+    if (strip && !strip.off && strip.stuck) {
       ctx.save();
       ctx.globalAlpha = 1 - strip.lift;
       drawStrip(ctx, strip, strip.q, strip.lift);
       ctx.restore();
     }
     for (const d of drops) drawDrop(ctx, d);
+    if (warmHold) drawCloth(ctx, warmHold.x, warmHold.y, 34 * scale, reduced ? 0 : time);
     if (wipe && !wipe.fade) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale);
     if (cream) {
       for (const d of cream.dollops) {
@@ -725,6 +841,16 @@ export function createPopScene(canvas, o) {
       }
     }
     for (const s of splats) if (time >= s.born) drawSplat(ctx, s);
+    wobbleScreen();
+  }
+
+  /** The picture wobbles for a moment after an Evil Horn comes out (never with reduced motion). @returns {void} */
+  function wobbleScreen() {
+    if (quake < 0) return;
+    const age = time - quake;
+    if (age >= 0.6 || reduced) { canvas.style.transform = ''; quake = -1; return; }
+    const k = 1 - age / 0.6;
+    canvas.style.transform = `translate(${(Math.sin(age * 47) * 5 * k).toFixed(2)}px, ${(Math.sin(age * 31) * 2 * k).toFixed(2)}px) rotate(${(Math.sin(age * 38) * 1.4 * k).toFixed(2)}deg)`;
   }
 
   /**
@@ -743,20 +869,143 @@ export function createPopScene(canvas, o) {
     if (busy && !raf) raf = requestAnimationFrame(frame); // a kick() during this frame may already have asked for the next
   }
 
-  /** Finger or mouse down: squeeze a pimple, grab the strip, or start wiping. @param {PointerEvent} e event @returns {void} */
+  /**
+   * Redder cheeks (and a pink flush on the forehead) on an irritated face, stronger as the meter fills. Cartoon blush,
+   * drawn only over the person; it does not move, so it is safe with reduced motion.
+   * @param {number} level the irritation meter, 0..1
+   * @returns {void}
+   */
+  function drawIrritation(level) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    const spots = [[-0.55, 0.22, 0.34], [0.55, 0.22, 0.34], [0, -0.45, 0.4]];
+    for (const [u, v, size] of spots) {
+      const x = face.cx + u * face.rx;
+      const y = face.cy + v * face.ry;
+      const r = face.rx * size * (0.8 + 0.4 * level);
+      const a = (u === 0 ? 0.25 : 0.55) * level;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(235,60,70,${a})`);
+      g.addColorStop(1, 'rgba(235,60,70,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * Raise the irritation meter and tell the controller.
+   * @param {number} amount how much, 0..1
+   * @returns {void}
+   */
+  function raiseIrritation(amount) {
+    if (!(amount > 0)) return;
+    irr = irritationRise(irr, amount);
+    tellIrritation(true);
+  }
+
+  /**
+   * Tell the controller the irritation level when it changed enough (or always, with force).
+   * @param {boolean} [force] tell even a small change
+   * @returns {void}
+   */
+  function tellIrritation(force = false) {
+    const lv = irr.level;
+    if (!force && Math.abs(lv - irrSent) < 0.01 && lv !== 0) return;
+    if (lv === irrSent && !force) return;
+    irrSent = lv;
+    try { o.onIrritation?.(lv); } catch (e) { console.warn('onIrritation failed:', e); }
+  }
+
+  /**
+   * A wrong-tool or rough press: no pressure and no pop; ouch lines, the "ow" sound, a buzz, and the controller is told.
+   * @param {object} p the bump
+   * @returns {void}
+   */
+  function ow(p) {
+    p.ouch = time;
+    raiseIrritation(IRRITATION.perOw);
+    play('ow_customer');
+    buzz([20, 40, 20]);
+    try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool }); } catch (e) { console.warn('onOw failed:', e); }
+    kick();
+  }
+
+  /**
+   * Tell the controller that a press did nothing useful (so it can show a hint).
+   * @param {string} n e.g. 'patchFirst'
+   * @returns {void}
+   */
+  const note = (n) => { try { o.onNote?.(n); } catch { /* optional */ } };
+
+  /**
+   * Stick a patch on the popped spot under a point.
+   * @param {{x: number, y: number}} pt the point
+   * @returns {boolean} true when a patch went on
+   */
+  function patchAt(pt) {
+    const m = findPatchSpot(marks, pt.x, pt.y);
+    if (!m) return false;
+    m.patched = true;
+    patches.push({ x: m.x, y: m.y, r: Math.max(9, m.r * 1.25) });
+    play('squish', { level: 0.2 });
+    buzz(10);
+    try { o.onPatch?.(patches.length); } catch (e) { console.warn('onPatch failed:', e); }
+    kick();
+    return true;
+  }
+
+  /**
+   * A press while popping, with the tool in hand: squeeze, pull, warm, stick or peel the strip, patch, or Ow.
+   * @param {PointerEvent} e the event
+   * @param {{x: number, y: number}} pt where, in scene px
+   * @returns {boolean} true when the press was used (the pointer is then captured)
+   */
+  function pressPop(e, pt) {
+    const use = toolInfo(tool)?.use;
+    const onStrip = strip && !strip.off && !strip.flying && inStripArea(strip, pt.x, pt.y);
+    if (onStrip && strip.stuck) { peel = { id: e.pointerId, x0: pt.x, q0: strip.q }; return true; } // any tool peels
+    if (use === 'warm') {
+      if (!onFace(face, pt.x, pt.y)) return false;
+      warmHold = { id: e.pointerId, x: pt.x, y: pt.y };
+      play('wipe');
+      return true;
+    }
+    if (use === 'patch') {
+      if (patchAt(pt)) return true;
+      if (hitTest(pimples, pt.x, pt.y)) note('patchFirst');
+      return false;
+    }
+    const p = hitTest(pimples, pt.x, pt.y);
+    if (use === 'strip') {
+      if (onStrip || (p && p.zone === 'nose' && strip && !strip.off)) { // stick the strip on the nose
+        strip.stuck = true;
+        play('peel');
+        buzz(10);
+        return true;
+      }
+      if (p) ow(p);
+      return false;
+    }
+    if (!p) return false;
+    const out = pressOutcome(tool, p.type);
+    if (out === 'ow') { ow(p); return false; }
+    if (out !== 'squeeze' && out !== 'pull') return false;
+    if (roll() < roughChance(tool, p.type, warmth, irr.level)) { ow(p); return false; } // a rough press on a cold bump
+    if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
+    hold = { p, id: e.pointerId, since: time };
+    play('squish', { level: 0.1 });
+    return true;
+  }
+
+  /** Finger or mouse down: use the tool in hand while popping, or start wiping. @param {PointerEvent} e event @returns {void} */
   function onDown(e) {
-    if (e.button > 0) return;
+    if (e.button > 0 || halted) return;
     const pt = local(e);
     if (step === 'pop') {
-      if (strip && !strip.off && !strip.flying && pt.x > strip.x - 14 && pt.x < strip.x + strip.w + 6 && pt.y > strip.y - 12 && pt.y < strip.y + strip.h + 12) {
-        peel = { id: e.pointerId, x0: pt.x, q0: strip.q };
-      } else {
-        const p = hitTest(pimples, pt.x, pt.y);
-        if (!p) return;
-        if (p.pressure < 0.05) p.axis = fingerAxis(p);
-        hold = { p, id: e.pointerId, since: time };
-        play('squish', { level: 0.1 });
-      }
+      if (!pressPop(e, pt)) return;
+    } else if (step === 'wipe' && toolInfo(tool)?.use === 'patch' && patchAt(pt)) {
+      // a patch went on a popped spot; no wiping with this press
     } else if (step === 'wipe' && wipe && !wipe.fade) {
       wipe.id = e.pointerId;
       wipe.auto = null;
@@ -768,9 +1017,13 @@ export function createPopScene(canvas, o) {
     kick();
   }
 
-  /** Finger moves: peel the strip further, or move the pad. @param {PointerEvent} e event @returns {void} */
+  /** Finger moves: peel the strip further, move the warm cloth, or move the pad. @param {PointerEvent} e event @returns {void} */
   function onMove(e) {
-    if (peel && e.pointerId === peel.id) {
+    if (warmHold && e.pointerId === warmHold.id) {
+      const pt = local(e);
+      if (onFace(face, pt.x, pt.y)) { warmHold.x = pt.x; warmHold.y = pt.y; } else warmHold = null; // slid off the face
+      kick();
+    } else if (peel && e.pointerId === peel.id) {
       const pt = local(e);
       strip.q = Math.max(strip.q, Math.min(1, peel.q0 + (pt.x - peel.x0) / strip.w));
       if (Math.floor(strip.q * 5) !== Math.floor((strip.q - 0.02) * 5)) buzz(4);
@@ -789,6 +1042,7 @@ export function createPopScene(canvas, o) {
       hold = null;
     }
     if (peel && e.pointerId === peel.id) peel = null;
+    if (warmHold && e.pointerId === warmHold.id) warmHold = null;
     if (wipe && wipe.id === e.pointerId) { wipe.id = null; wipe.last = null; }
     kick();
   }
@@ -798,14 +1052,17 @@ export function createPopScene(canvas, o) {
    * @returns {boolean} true when something happened
    */
   function keyPress() {
+    if (halted) return false;
     if (step === 'pop') {
       const p = pimples.find((q) => !q.popped);
-      if (p) {
+      if (p) { // the keyboard always uses the tool that suits the bump, so it never gives an Ow
+        if (p.pressure < 0.05) p.tool = bestToolFor(p.type, usable ?? undefined);
         keyHold = { p, until: time + 0.25, target: tapPressure(p.pressure) };
         play('squish', { level: keyHold.target });
         kick();
         return true;
       }
+      if (strip && !strip.off && !strip.stuck) { strip.stuck = true; play('peel'); kick(); return true; }
       if (strip && !strip.off) { strip.q = Math.min(1, strip.q + 0.34); kick(); return true; }
     }
     if (step === 'wipe') { autoWipe(); return true; }
@@ -820,6 +1077,9 @@ export function createPopScene(canvas, o) {
   canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type }));
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
   canvas.popStep = () => step;
+  canvas.popTool = () => tool;
+  canvas.popWarmth = () => warmth;
+  canvas.popIrritation = () => irr.level;
   render();
   kick();
 
@@ -851,11 +1111,37 @@ export function createPopScene(canvas, o) {
     /** The scene size now. @returns {{w: number, h: number}} CSS px */
     size: () => ({ w, h }),
     keyPress,
+    /**
+     * Pick up a tool (from the tool bar). Unknown or unbuilt tools are ignored.
+     * @param {string} id a tool id
+     * @returns {boolean} true when it is now in hand
+     */
+    setTool(id) {
+      if (!toolInfo(id)?.implemented) return false;
+      tool = id;
+      return true;
+    },
+    /** The tool in hand. @returns {string} a tool id */
+    tool: () => tool,
+    /** The warm meter now. @returns {number} 0..1 */
+    warmth: () => warmth,
+    /** The irritation meter now (T1.2b). @returns {number} 0..1 */
+    irritation: () => irr.level,
+    /** Stop all popping (the customer stormed off): let go of every press, ignore new ones. @returns {void} */
+    halt() {
+      halted = true;
+      hold = null;
+      keyHold = null;
+      warmHold = null;
+      for (const p of pimples) if (!p.popped) p.pressure = 0;
+      kick();
+    },
     /** Stop the loop and the listeners. @returns {void} */
     dispose() {
       disposed = true;
       if (raf) cancelAnimationFrame(raf);
       raf = 0;
+      if (quake >= 0) canvas.style.transform = ''; // stop a horn wobble half-way
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
