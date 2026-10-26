@@ -9,7 +9,8 @@ import { SOUND_TABLE } from './soundTable.js';
  * @param {{sfxOn?: boolean, musicOn?: boolean, onChange?: (s: {sfxOn: boolean, musicOn: boolean}) => void,
  *   table?: object, baseUrl?: string}} [opts] start state of the switches, a callback when a switch changes (to remember
  *   it), the sound table (for tests) and the folder that file urls are relative to
- * @returns {object} player: unlock(), play(name, o), isOn(), setOn(on), isMusicOn(), setMusicOn(on), has(name), dispose()
+ * @returns {object} player: unlock(), play(name, o), isOn(), setOn(on), isMusicOn(), setMusicOn(on), has(name), context(),
+ *   onUnlock(fn), dispose()
  */
 export function createSound({ sfxOn = true, musicOn = true, onChange, table = SOUND_TABLE, baseUrl } = {}) {
   let sfx = sfxOn;
@@ -17,6 +18,7 @@ export function createSound({ sfxOn = true, musicOn = true, onChange, table = SO
   let ctx = null;
   let master = null;
   let noise = null;
+  const unlockListeners = new Set(); // the music player waits here for the first tap (T6.1a)
   const buffers = new Map(); // url -> decoded audio, or null when it could not be loaded
   const loading = new Set();
   const base = baseUrl ?? (typeof document !== 'undefined' ? document.baseURI : undefined);
@@ -172,8 +174,22 @@ export function createSound({ sfxOn = true, musicOn = true, onChange, table = SO
   }
 
   return {
-    /** Wake the audio up; call from inside a tap. @returns {void} */
-    unlock() { if (sfx || music) ensure(); },
+    /** Wake the audio up; call from inside a tap. Tells the music player (onUnlock) that sound may start. @returns {void} */
+    unlock() {
+      if (!(sfx || music) || !ensure()) return;
+      for (const fn of unlockListeners) { try { fn(ctx); } catch { /* a listener must not break the tap */ } }
+    },
+    /** The shared audio context (null before the first tap), so the music plays through the same one. @returns {AudioContext|null} context */
+    context: () => ctx,
+    /**
+     * Be told every time unlock() has woken the audio (the music player starts then, never before a tap).
+     * @param {(ctx: AudioContext) => void} fn the listener
+     * @returns {() => void} call to stop listening
+     */
+    onUnlock(fn) {
+      unlockListeners.add(fn);
+      return () => unlockListeners.delete(fn);
+    },
     /** Whether a sound name exists in the table. @param {string} name sound name @returns {boolean} true if known */
     has: (name) => Object.prototype.hasOwnProperty.call(table, name),
     /** Whether the sound effects are on. @returns {boolean} on */

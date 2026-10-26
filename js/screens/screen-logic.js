@@ -13,12 +13,13 @@ export const SHOP_TABS = [
   { id: 'outfit', kind: 'outfit', labelKey: 'ui.shop.tab.outfit' },
 ];
 
-/** The settings switches in order: the settings field and its string key. */
+/** The settings switches in order: the settings field, its string key, and an optional hint line under it. */
 export const SETTING_TOGGLES = [
   { id: 'sound', labelKey: 'ui.settings.sound' },
   { id: 'music', labelKey: 'ui.settings.music' },
   { id: 'vibration', labelKey: 'ui.settings.vibration' },
   { id: 'reducedMotion', labelKey: 'ui.settings.reducedMotion' },
+  { id: 'squeeze', labelKey: 'ui.settings.squeeze', hintKey: 'ui.settings.squeezeHint' }, // T1.7
 ];
 
 /**

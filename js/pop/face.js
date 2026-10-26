@@ -3,9 +3,16 @@
 // (shape, skinTone, hair, hairColor, eyes, brows, mouth, accessories); the mood (grim, ow, relief, glowing) changes
 // the eyes, brows and mouth. Everything that lies on the face sits where faceGeometry (logic.js) says, so the bumps
 // from layoutFace always land on bare skin, never on an eye, brow, mouth, lens, moustache or clown nose.
+// Story characters (T2.4, pop/characters.js): `character: 'husband'` draws the husband as the comics show him (curl
+// of black hair, full black beard with a bare chin spot, ball nose, blue hoodie), and `armor` puts him in his knight's
+// helmet (visor up, plumes, shoulder plates, optional knitted hat and laser cracks).
 import { makeCanvas, paintSkin } from './art.js';
 import { rng } from './logic.js';
 import { FACE_PARTS, makeCustomer } from '../data/customers.js';
+import {
+  CHARACTER_FACES, PLUME_COLOURS, HELMET, BEARD_FUZZ, BEARD_DROP, CHIN_PATCH, resolveFaceSpec, armorOptions, beardTop,
+  guardEdge,
+} from './characters.js';
 
 /** Skin tones (FACE_PARTS.skinTone ids, plus two older names) -> the middle colour; lighter and shaded tones are mixed from it. */
 export const SKIN_TONES = {
@@ -87,7 +94,7 @@ function hashText(s) {
  *   brows: string, mouth: string, acc: string[], shirt: string, accent: string, accent2: string}} the look
  */
 export function faceLook(spec = DEFAULT_FACE_SPEC) {
-  const s = spec ?? DEFAULT_FACE_SPEC;
+  const s = resolveFaceSpec(spec ?? DEFAULT_FACE_SPEC); // a story character (characters.js) brings his own parts
   const isHex = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
   const part = (kind, v, dflt) => (FACE_PARTS[kind].includes(v) ? v : dflt);
   const acc = (Array.isArray(s.accessories) ? s.accessories : []).filter((a) => FACE_PARTS.accessories.includes(a));
@@ -103,13 +110,21 @@ export function faceLook(spec = DEFAULT_FACE_SPEC) {
     hairStyle: part('hair', s.hair, 'short'),
     hair: isHex(s.hair) ? s.hair : HAIR_COLOURS[s.hairColor] ?? HAIR_COLOURS.brown,
     eyes: part('eyes', s.eyes, 'round'),
-    eyeColour: isHex(s.eyes) ? s.eyes : pick(EYE_COLOURS),
+    eyeColour: isHex(s.eyes) ? s.eyes : isHex(s.eyeColour) ? s.eyeColour : pick(EYE_COLOURS),
     brows: part('brows', s.brows, 'flat'),
     mouth: part('mouth', s.mouth, 'smile'),
     acc,
     shirt: isHex(s.shirt) ? s.shirt : pick(SHIRT_COLOURS),
     accent,
     accent2: pick(ACCENTS.filter((c) => c !== accent)),
+    // Character extras (T2.4), all off for ordinary customers.
+    character: CHARACTER_FACES[s.character] ? s.character : null,
+    beard: s.beard === true,
+    tuft: s.tuft === true,
+    smoothHair: s.smoothHair === true,
+    roundNose: s.nose === 'round',
+    blush: s.blush === true,
+    armor: armorOptions(s.armor),
   };
 }
 
@@ -439,7 +454,7 @@ function drawFrontHair(ctx, f, look) {
       ctx.quadraticCurveTo(X(um), Y(hairline(f, um) + drop), X(u1), Y(hairline(f, u1)));
     }
   };
-  if (st === 'short') bulges(9, 0.07);
+  if (st === 'short' && !look.smoothHair) bulges(9, 0.07);
   else if (st === 'curly' || st === 'afro') bulges(st === 'afro' ? 9 : 12, 0.07);
   else if (st === 'bob') { // straight-cut bangs
     for (let i = 0; i <= 24; i += 1) {
@@ -468,7 +483,7 @@ function drawFrontHair(ctx, f, look) {
       const r = rx * (0.05 + rand() * 0.03);
       ctx.beginPath(); ctx.arc(X(u), Y(v), r, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
     }
-  } else {
+  } else if (!look.smoothHair) { // smooth hair (the husband's) only has the shine
     for (let i = 0; i < 9; i += 1) {
       const u = -0.7 + i * 0.175;
       const from = st === 'bun' || st === 'ponytail' ? -1.08 : -1.04;
@@ -494,6 +509,32 @@ function drawFrontHair(ctx, f, look) {
       fillHair(ctx, f, hair, -0.4);
     }
   }
+  if (look.tuft) drawTuft(ctx, f, hair);
+}
+
+/**
+ * The husband's curl: one hooked lock of hair standing up on top of the head, like the comic's.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {string} hair hair colour
+ * @returns {void}
+ */
+function drawTuft(ctx, f, hair) {
+  const X = (u) => f.cx + u * f.rx;
+  const Y = (v) => f.cy + v * f.ry;
+  ctx.beginPath();
+  ctx.moveTo(X(-0.1), Y(-1.08));
+  ctx.bezierCurveTo(X(-0.16), Y(-1.36), X(0.16), Y(-1.5), X(0.32), Y(-1.32));
+  ctx.bezierCurveTo(X(0.16), Y(-1.36), X(0.05), Y(-1.27), X(0.1), Y(-1.08));
+  ctx.closePath();
+  fillHair(ctx, f, hair, -1.3);
+  ctx.strokeStyle = shade(hair, 0.35, 0.6);
+  ctx.lineWidth = Math.max(1.2, f.rx * 0.014);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(X(-0.07), Y(-1.14));
+  ctx.quadraticCurveTo(X(-0.07), Y(-1.36), X(0.14), Y(-1.4));
+  ctx.stroke();
 }
 
 /**
@@ -1237,6 +1278,470 @@ function drawMoodExtras(ctx, f, mood) {
 }
 
 /**
+ * The beard (T2.4): from the sideburns round the jaw and chin, hanging a little below the chin, with a moustache over
+ * the upper lip and a wavy top edge. Its top edge is characters.js beardTop, the same line the bump layout keeps clear.
+ * A small bare patch round the mouth keeps the mouth readable in every mood, and a bare spot on the chin (characters.js
+ * CHIN_PATCH) holds his chin bump.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {object} look the face look
+ * @returns {void}
+ */
+function drawBeard(ctx, f, look) {
+  const { cx, cy, rx, ry, features: ft } = f;
+  const X = (u) => cx + u * rx;
+  const Y = (v) => cy + v * ry;
+  const hair = look.hair;
+  const end = 0.98; // where the sideburns meet the head outline beside the ears
+  /** The beard outline as the current path. @returns {void} */
+  const outline = () => {
+    ctx.beginPath();
+    ctx.moveTo(X(-end), Y(beardTop(-end)));
+    const n = 22;
+    for (let i = 0; i < n; i += 1) { // the top edge in little upward tufts
+      const u0 = -end + (2 * end * i) / n;
+      const u1 = -end + (2 * end * (i + 1)) / n;
+      const um = (u0 + u1) / 2;
+      ctx.quadraticCurveTo(X(um), Y(beardTop(um) - BEARD_FUZZ * 1.6), X(u1), Y(beardTop(u1)));
+    }
+    const t0 = Math.asin(Math.max(-0.99, Math.min(0.99, beardTop(end))));
+    for (let i = 0; i <= 40; i += 1) { // round the jaw, hanging below the chin
+      const t = t0 + ((Math.PI - 2 * t0) * i) / 40;
+      const [x, y] = headPoint(f, t, 1.03, 1.0);
+      const s = Math.max(0, Math.sin(t));
+      ctx.lineTo(x, y + BEARD_DROP * ry * s ** 6);
+    }
+    ctx.closePath();
+  };
+  outline();
+  const g = ctx.createLinearGradient(0, Y(0.2), 0, Y(1.2));
+  g.addColorStop(0, shade(hair, 0.16));
+  g.addColorStop(1, shade(hair, -0.1));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = shade(hair, -0.3, 0.6);
+  ctx.lineWidth = Math.max(1.2, rx * 0.012);
+  ctx.stroke();
+  // Texture: short curly strokes in a lighter shade, and a glossy shine on the chin.
+  ctx.save();
+  outline();
+  ctx.clip();
+  const rand = rng(41);
+  ctx.strokeStyle = shade(hair, 0.32, 0.45);
+  ctx.lineWidth = Math.max(1, rx * 0.012);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 26; i += 1) {
+    const u = -0.9 + rand() * 1.8;
+    const v = beardTop(u) + 0.06 + rand() * (1.05 - beardTop(u));
+    const r = rx * (0.04 + rand() * 0.03);
+    ctx.beginPath(); ctx.arc(X(u), Y(v), r, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  }
+  ctx.strokeStyle = shade(hair, 0.55, 0.35);
+  ctx.lineWidth = rx * 0.045;
+  ctx.beginPath();
+  ctx.ellipse(X(-0.05), Y(0.78), rx * 0.62, ry * 0.3, 0, Math.PI * 0.62, Math.PI * 0.82);
+  ctx.stroke();
+  ctx.restore();
+  // The bare patch round the mouth (lips and skin), so the mouth shows in every mood.
+  const hole = ctx.createRadialGradient(cx, Y(ft.mouthV), 0, cx, Y(ft.mouthV), rx * (ft.mouthW + 0.06));
+  hole.addColorStop(0, shade(look.skin, -0.04));
+  hole.addColorStop(0.7, shade(look.skin, -0.12));
+  hole.addColorStop(1, shade(look.skin, -0.3, 0));
+  ctx.fillStyle = hole;
+  ctx.beginPath();
+  ctx.ellipse(cx, Y(ft.mouthV + 0.01), rx * (ft.mouthW + 0.06), ry * 0.08, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // The bare spot on the chin where his chin bump sits (a squircle, so the layout's box fits inside it).
+  const { a, b, v: pv } = CHIN_PATCH;
+  ctx.beginPath();
+  for (let i = 0; i < 48; i += 1) {
+    const t = (i / 48) * Math.PI * 2;
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    const x = X(a * Math.sign(c) * Math.abs(c) ** 0.5);
+    const y = Y(pv + b * Math.sign(s) * Math.abs(s) ** 0.5);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  const spot = ctx.createRadialGradient(X(-0.04), Y(pv - 0.04), 0, cx, Y(pv), rx * a * 1.2);
+  spot.addColorStop(0, shade(look.skin, 0.04));
+  spot.addColorStop(0.75, shade(look.skin, -0.08));
+  spot.addColorStop(1, shade(look.skin, -0.25));
+  ctx.fillStyle = spot;
+  ctx.fill();
+  // Little tufts of beard round its edge, so it reads as a bare spot in the beard and not as a box.
+  ctx.fillStyle = shade(hair, 0.08);
+  for (let i = 0; i < 26; i += 1) {
+    const t = (i / 26) * Math.PI * 2;
+    /** A point on the spot's edge, pulled in by k. @param {number} tt angle @param {number} k scale @returns {number[]} px */
+    const at = (tt, k) => {
+      const c = Math.cos(tt);
+      const s = Math.sin(tt);
+      return [X(k * a * Math.sign(c) * Math.abs(c) ** 0.5), Y(pv + k * b * Math.sign(s) * Math.abs(s) ** 0.5)];
+    };
+    ctx.beginPath();
+    ctx.moveTo(...at(t - 0.11, 1.02));
+    ctx.lineTo(...at(t, 0.9));
+    ctx.lineTo(...at(t + 0.11, 1.02));
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/**
+ * A round ball nose like the comic's (soft shaded, with a light outline and a shine).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {string} base skin colour
+ * @returns {void}
+ */
+function drawRoundNose(ctx, f, base) {
+  const { cx, cy, rx, ry, features: ft } = f;
+  const x = cx;
+  const y = cy + ry * (ft.noseV - 0.02);
+  const w = rx * 0.15;
+  const h = ry * 0.1;
+  const g = ctx.createRadialGradient(x - w * 0.35, y - h * 0.4, w * 0.1, x, y, w * 1.1);
+  g.addColorStop(0, shade(base, 0.14));
+  g.addColorStop(1, shade(base, -0.14));
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = shade(base, -0.45, 0.55);
+  ctx.lineWidth = Math.max(1.2, rx * 0.016);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,245,235,0.6)';
+  ctx.beginPath();
+  ctx.ellipse(x - w * 0.35, y - h * 0.38, w * 0.28, h * 0.2, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * A glossy steel fill (light from the top left, a bright band and a darker lower edge), the game's shiny look.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x0 start x
+ * @param {number} y0 start y
+ * @param {number} x1 end x
+ * @param {number} y1 end y
+ * @returns {CanvasGradient} the gradient
+ */
+function steelFill(ctx, x0, y0, x1, y1) {
+  const g = ctx.createLinearGradient(x0, y0, x1, y1);
+  g.addColorStop(0, '#f4f7fb');
+  g.addColorStop(0.3, '#d3dbe5');
+  g.addColorStop(0.62, '#a9b4c2');
+  g.addColorStop(0.8, '#c9d3de');
+  g.addColorStop(1, '#8794a5');
+  return g;
+}
+
+/** The soft outline round steel parts. @param {CanvasRenderingContext2D} ctx the context @param {object} f the face geometry @returns {void} */
+function steelEdge(ctx, f) {
+  ctx.strokeStyle = 'rgba(62,72,88,0.8)';
+  ctx.lineWidth = Math.max(1.5, f.rx * 0.018);
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+/**
+ * A round rivet head on steel.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} r radius
+ * @returns {void}
+ */
+function rivet(ctx, x, y, r) {
+  const g = ctx.createRadialGradient(x - r * 0.4, y - r * 0.4, r * 0.1, x, y, r);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(1, '#7d8999');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+/**
+ * The armored body instead of the hoodie: neck, a steel collar (gorget), the breastplate and round shoulder plates
+ * (pauldrons) with two bands each.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {object} look the face look
+ * @returns {void}
+ */
+function drawArmorBody(ctx, f, look) {
+  const { cx, cy, rx, ry, height: h } = f;
+  const X = (u) => cx + u * rx;
+  const Y = (v) => cy + v * ry;
+  ctx.fillStyle = shade(look.skin, -0.12);
+  ctx.fillRect(X(-0.42), Y(0.6), rx * 0.84, ry * 0.5);
+  const top = Y(1.04);
+  // The breastplate (same outline as the hoodie), with a ridge down the middle.
+  ctx.beginPath();
+  ctx.moveTo(X(-1.9), h + 4);
+  ctx.bezierCurveTo(X(-1.85), top + ry * 0.12, X(-1.2), top, X(-0.5), top);
+  ctx.quadraticCurveTo(cx, top + ry * 0.25, X(0.5), top);
+  ctx.bezierCurveTo(X(1.2), top, X(1.85), top + ry * 0.12, X(1.9), h + 4);
+  ctx.closePath();
+  ctx.fillStyle = steelFill(ctx, X(-1.2), top, X(1.2), top + ry * 0.9);
+  ctx.fill();
+  steelEdge(ctx, f);
+  ctx.strokeStyle = 'rgba(62,72,88,0.5)';
+  ctx.lineWidth = Math.max(1.5, rx * 0.02);
+  ctx.beginPath(); ctx.moveTo(cx, top + ry * 0.3); ctx.lineTo(cx, h + 4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.moveTo(cx - rx * 0.03, top + ry * 0.32); ctx.lineTo(cx - rx * 0.03, h + 4); ctx.stroke();
+  // The collar: two overlapping steel rings round the neck.
+  for (const [v0, v1, w0, w1] of [[1.1, 1.3, 0.78, 0.9], [0.92, 1.14, 0.62, 0.8]]) {
+    ctx.beginPath();
+    ctx.moveTo(X(-w0), Y(v0));
+    ctx.quadraticCurveTo(cx, Y(v0 + 0.12), X(w0), Y(v0));
+    ctx.lineTo(X(w1), Y(v1));
+    ctx.quadraticCurveTo(cx, Y(v1 + 0.14), X(-w1), Y(v1));
+    ctx.closePath();
+    ctx.fillStyle = steelFill(ctx, X(-w1), Y(v0), X(w1), Y(v1 + 0.1));
+    ctx.fill();
+    steelEdge(ctx, f);
+  }
+  // The shoulder plates: a dome with two bands below it, and a rivet.
+  for (const s of [-1, 1]) {
+    const px = X(s * 1.4);
+    const py = top + ry * 0.2;
+    for (const [k, dy] of [[0.86, 0.3], [0.94, 0.16], [1, 0]]) {
+      ctx.beginPath();
+      ctx.ellipse(px, py + ry * dy, rx * 0.66 * k, ry * 0.36 * k, s * 0.18, Math.PI, Math.PI * 2);
+      ctx.closePath();
+      ctx.fillStyle = steelFill(ctx, px - rx * 0.5, py - ry * 0.35, px + rx * 0.4, py + ry * 0.4);
+      ctx.fill();
+      steelEdge(ctx, f);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = rx * 0.035;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.ellipse(px, py, rx * 0.5, ry * 0.26, s * 0.18, Math.PI * 1.2, Math.PI * 1.45);
+    ctx.stroke();
+    rivet(ctx, px - s * rx * 0.05, py - ry * 0.18, rx * 0.045);
+  }
+}
+
+/**
+ * One plume (a curved feather) standing on the helmet's crest, drawn from its base at the top of the helmet.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {string} colour the feather colour
+ * @param {number} side 1 = curls to the right, -1 = to the left
+ * @param {number} turn extra turn outwards and down, in radians
+ * @returns {void}
+ */
+function drawPlume(ctx, f, colour, side, turn) {
+  const { cx, cy, rx, ry } = f;
+  const bx = cx;
+  const by = cy - ry * 1.16;
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.scale(side, 1);
+  ctx.rotate(turn);
+  /** A point relative to the base, in face units. @param {number} u across @param {number} v down @returns {number[]} px */
+  const P = (u, v) => [u * rx, v * ry];
+  ctx.beginPath();
+  ctx.moveTo(...P(-0.04, 0));
+  ctx.bezierCurveTo(...P(-0.22, -0.34), ...P(0.3, -0.5), ...P(0.8, -0.36));
+  ctx.bezierCurveTo(...P(0.46, -0.32), ...P(0.3, -0.2), ...P(0.16, 0.02));
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, -ry * 0.45, rx * 0.3, 0);
+  g.addColorStop(0, shade(colour, 0.25));
+  g.addColorStop(1, shade(colour, -0.2));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = shade(colour, -0.45, 0.8);
+  ctx.lineWidth = Math.max(1.2, rx * 0.016);
+  ctx.stroke();
+  ctx.strokeStyle = shade(colour, 0.5, 0.7); // the feather's barbs
+  ctx.lineWidth = Math.max(1, rx * 0.012);
+  ctx.lineCap = 'round';
+  for (const k of [0.25, 0.45, 0.65]) {
+    ctx.beginPath();
+    ctx.moveTo(...P(0.02 + k * 0.5, -0.3 * k - 0.04));
+    ctx.quadraticCurveTo(...P(0.1 + k * 0.6, -0.36 * k - 0.1), ...P(0.18 + k * 0.7, -0.38 * k - 0.08));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The knitted hat pulled over the helmet (Greta's gift in the comics): a dome with knit rows, a ribbed band that
+ * stays above the helmet's brow edge, and a pompom.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {string} c the hat colour
+ * @returns {void}
+ */
+function drawCozyHat(ctx, f, c) {
+  const { cx, cy, rx, ry } = f;
+  const X = (u) => cx + u * rx;
+  const Y = (v) => cy + v * ry;
+  const bottom = (u) => hairline(f, u) - 0.04;
+  ctx.beginPath();
+  ctx.moveTo(X(1.16), Y(bottom(1.16) - 0.14));
+  topArc(ctx, f, bottom(1.16) - 0.14, 1.18, 1.24, -0.02);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, Y(-1.3), 0, Y(-0.6));
+  g.addColorStop(0, shade(c, 0.18));
+  g.addColorStop(1, shade(c, -0.12));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.strokeStyle = shade(c, -0.4, 0.7);
+  ctx.lineWidth = Math.max(1.2, rx * 0.014);
+  ctx.stroke();
+  ctx.strokeStyle = shade(c, -0.22, 0.6); // knit rows
+  ctx.lineWidth = Math.max(1, rx * 0.014);
+  for (const v of [-0.92, -1.06, -1.18]) {
+    const w = Math.sqrt(Math.max(0, 1 - ((v + 0.02) / 1.24) ** 2)) * 1.12;
+    ctx.beginPath(); ctx.moveTo(X(-w), Y(v + 0.06)); ctx.quadraticCurveTo(cx, Y(v - 0.06), X(w), Y(v + 0.06)); ctx.stroke();
+  }
+  // The ribbed band.
+  ctx.beginPath();
+  for (let i = 0; i <= 24; i += 1) { const u = -1.16 + (2.32 * i) / 24; ctx.lineTo(X(u), Y(bottom(u) - 0.16)); }
+  for (let i = 24; i >= 0; i -= 1) { const u = -1.16 + (2.32 * i) / 24; ctx.lineTo(X(u), Y(bottom(u))); }
+  ctx.closePath();
+  ctx.fillStyle = shade(c, 0.22);
+  ctx.fill();
+  ctx.strokeStyle = shade(c, -0.4, 0.7);
+  ctx.stroke();
+  ctx.strokeStyle = shade(c, -0.15, 0.6);
+  for (let i = 1; i < 16; i += 1) { const u = -1.16 + (2.32 * i) / 16; ctx.beginPath(); ctx.moveTo(X(u), Y(bottom(u) - 0.14)); ctx.lineTo(X(u), Y(bottom(u) - 0.02)); ctx.stroke(); }
+  // The pompom, off to the left so the plumes stay clear.
+  const px = X(-0.42);
+  const py = Y(-1.32);
+  ctx.fillStyle = shade(c, 0.45);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i += 1) { const a = (i / 10) * Math.PI * 2; ctx.moveTo(px + Math.cos(a) * rx * 0.2, py + Math.sin(a) * rx * 0.2); ctx.arc(px + Math.cos(a) * rx * 0.1, py + Math.sin(a) * rx * 0.1, rx * 0.08, 0, Math.PI * 2); }
+  ctx.fill();
+}
+
+/**
+ * The knight's helmet (T2.4), visor up: a steel dome with a ridge, the visor lifted onto the forehead, cheek guards
+ * down the sides, and an open front where the face shows (its edges are the same lines the bump layout uses:
+ * the brow edge is the hairline in faceGeometry, the cheek guards are characters.js guardEdge). Plumes on top, an
+ * optional knitted hat, and laser cracks for the last boss.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @param {{plumes: number, cozy: string|null, cracked: boolean}} armor the armor options
+ * @returns {void}
+ */
+function drawHelmet(ctx, f, armor) {
+  const { cx, cy, rx, ry } = f;
+  const X = (u) => cx + u * rx;
+  const Y = (v) => cy + v * ry;
+  const brow = (u) => hairline(f, u) + 0.03; // the brow edge of the opening
+  const top = HELMET.guardBottom;
+  const g0 = guardEdge(top);
+  const browU = HELMET.guard[0][1];
+  // Plumes behind first (extra ones fan out), the red one in front.
+  for (let i = armor.plumes - 1; i >= 1; i -= 1) {
+    drawPlume(ctx, f, PLUME_COLOURS[i % PLUME_COLOURS.length], i % 2 ? -1 : 1, 0.38 * Math.floor(i / 2) + (i % 2 ? 0.1 : 0.25));
+  }
+  if (armor.plumes > 0 && !armor.cozy) drawPlume(ctx, f, PLUME_COLOURS[0], 1, 0);
+  /** The inner edge of the opening, from the left guard's tip up, along the brow and down the right guard. @returns {void} */
+  const opening = () => {
+    for (let i = 0; i <= 20; i += 1) { const v = top - ((top - brow(browU)) * i) / 20; ctx.lineTo(X(-guardEdge(v)), Y(v)); }
+    for (let i = 0; i <= 24; i += 1) { const u = -browU + (2 * browU * i) / 24; ctx.lineTo(X(u), Y(brow(u))); }
+    for (let i = 0; i <= 20; i += 1) { const v = brow(browU) + ((top - brow(browU)) * i) / 20; ctx.lineTo(X(guardEdge(v)), Y(v)); }
+  };
+  // The shell: up the right side, over the dome, down the left, and back round the opening.
+  ctx.beginPath();
+  ctx.moveTo(X(1.16), Y(top - 0.04));
+  ctx.lineTo(X(1.2), Y(-0.2));
+  topArc(ctx, f, -0.2, 1.2, 1.18);
+  ctx.lineTo(X(-1.16), Y(top - 0.04));
+  ctx.quadraticCurveTo(X(-0.9), Y(top + 0.06), X(-g0), Y(top));
+  opening();
+  ctx.quadraticCurveTo(X(0.9), Y(top + 0.06), X(1.16), Y(top - 0.04));
+  ctx.closePath();
+  const g = ctx.createRadialGradient(X(-0.4), Y(-0.85), rx * 0.04, X(0), Y(-0.3), rx * 1.45);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.18, '#e4eaf1');
+  g.addColorStop(0.55, '#c0cad6');
+  g.addColorStop(0.85, '#96a2b1');
+  g.addColorStop(1, '#7b8797');
+  ctx.fillStyle = g;
+  ctx.fill();
+  steelEdge(ctx, f);
+  // A rolled rim round the opening: a darker band with a light line, so the face sits inside the helmet.
+  ctx.beginPath();
+  ctx.moveTo(X(-g0), Y(top));
+  opening();
+  ctx.strokeStyle = '#8692a2';
+  ctx.lineWidth = rx * 0.05;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = rx * 0.016;
+  ctx.stroke();
+  // The ridge over the top of the dome.
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(62,72,88,0.55)';
+  ctx.lineWidth = rx * 0.03;
+  ctx.beginPath(); ctx.moveTo(X(0.02), Y(-1.16)); ctx.lineTo(X(0.02), Y(brow(0) - 0.02)); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+  ctx.lineWidth = rx * 0.016;
+  ctx.beginPath(); ctx.moveTo(X(-0.02), Y(-1.15)); ctx.lineTo(X(-0.02), Y(brow(0) - 0.03)); ctx.stroke();
+  if (armor.cozy) {
+    drawCozyHat(ctx, f, armor.cozy);
+  } else {
+    // The visor, lifted up onto the forehead: a curved plate with a dark eye slit and a hinge rivet on each side.
+    ctx.beginPath();
+    ctx.moveTo(X(-1.1), Y(-0.6));
+    ctx.quadraticCurveTo(cx, Y(-1.08), X(1.1), Y(-0.6));
+    ctx.lineTo(X(1.12), Y(-0.74));
+    ctx.quadraticCurveTo(cx, Y(-1.26), X(-1.12), Y(-0.74));
+    ctx.closePath();
+    ctx.fillStyle = steelFill(ctx, X(-0.6), Y(-1.1), X(0.4), Y(-0.6));
+    ctx.fill();
+    steelEdge(ctx, f);
+    ctx.strokeStyle = '#2b2f3a';
+    ctx.lineWidth = ry * 0.035;
+    ctx.beginPath(); ctx.moveTo(X(-0.62), Y(-0.86)); ctx.quadraticCurveTo(cx, Y(-1.08), X(0.62), Y(-0.86)); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = rx * 0.022;
+    ctx.beginPath(); ctx.moveTo(X(-0.7), Y(-0.75)); ctx.quadraticCurveTo(X(-0.4), Y(-0.92), X(-0.1), Y(-0.95)); ctx.stroke();
+    for (const s of [-1, 1]) rivet(ctx, X(s * 1.08), Y(-0.66), rx * 0.06);
+  }
+  if (armor.plumes > 0 && armor.cozy) drawPlume(ctx, f, PLUME_COLOURS[0], 1, 0); // poking out of the hat
+  // Rivets down the cheek guards.
+  for (const s of [-1, 1]) for (const v of [-0.1, 0.25, 0.6]) rivet(ctx, X(s * (guardEdge(v) + 0.2)), Y(v), rx * 0.04);
+  if (armor.cracked) drawCracks(ctx, f);
+}
+
+/**
+ * Laser cracks in the steel (the last boss, chapter 11): dark zigzags with a light edge, on the dome and both guards.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @returns {void}
+ */
+function drawCracks(ctx, f) {
+  const X = (u) => f.cx + u * f.rx;
+  const Y = (v) => f.cy + v * f.ry;
+  const cracks = [
+    [[-0.55, -1.0], [-0.42, -0.86], [-0.5, -0.76], [-0.38, -0.62]],
+    [[0.6, -0.95], [0.5, -0.82], [0.62, -0.72], [0.55, -0.6]],
+    [[-1.12, 0.1], [-0.98, 0.2], [-1.06, 0.32], [-0.92, 0.42]],
+    [[1.14, 0.3], [1.0, 0.4], [1.08, 0.52], [0.94, 0.62]],
+  ];
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const [col, w, dx] of [['rgba(255,255,255,0.7)', 0.014, 0.012], ['#2b2f3a', 0.018, 0]]) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = Math.max(1.2, f.rx * w);
+    for (const c of cracks) {
+      ctx.beginPath();
+      c.forEach(([u, v], i) => (i ? ctx.lineTo(X(u + dx), Y(v + dx)) : ctx.moveTo(X(u + dx), Y(v + dx))));
+      ctx.stroke();
+    }
+  }
+}
+
+/**
  * Draw the whole person into a context: background, veil and back hair, shoulders and neckwear, ears, skin with angry
  * red patches that calm down as bumps are cleared, front hair, headwear, brows, eyes, nose, mouth and face-wear.
  * @param {CanvasRenderingContext2D} ctx where to draw (CSS pixel units)
@@ -1254,11 +1759,12 @@ export function drawFace(ctx, face, spec = DEFAULT_FACE_SPEC, o = {}) {
   const { cx, cy, rx, ry } = f;
   const look = faceLook(spec);
   const base = look.skin;
+  const armor = look.armor; // the husband in his knight's helmet: no hair or ears show, steel round the face
   drawBackground(ctx, f.width, f.height);
-  drawBackHair(ctx, f, look);
-  drawShoulders(ctx, f, look);
+  if (!armor) drawBackHair(ctx, f, look);
+  if (armor) drawArmorBody(ctx, f, look); else drawShoulders(ctx, f, look);
   drawNeckwear(ctx, f, look);
-  drawEars(ctx, f, look);
+  if (!armor) drawEars(ctx, f, look);
   // The skin inside the head outline.
   ctx.save();
   headPath(ctx, f);
@@ -1289,13 +1795,13 @@ export function drawFace(ctx, face, spec = DEFAULT_FACE_SPEC, o = {}) {
   round.addColorStop(1, 'rgba(90,40,30,0.32)');
   ctx.fillStyle = round;
   ctx.fillRect(cx - rx * 1.3, cy - ry * 1.3, rx * 2.6, ry * 2.6);
-  // Rosy cheeks when things get better.
-  if (mood === 'relief' || mood === 'glowing') {
+  // Rosy cheeks when things get better (always a little for a character with blush, like the comic).
+  if (mood === 'relief' || mood === 'glowing' || look.blush) {
     for (const s of [-1, 1]) {
       const x = cx + s * rx * 0.55;
       const y = cy + ry * 0.22;
       const g = ctx.createRadialGradient(x, y, 0, x, y, rx * 0.24);
-      g.addColorStop(0, `rgba(255,120,140,${mood === 'glowing' ? 0.45 : 0.32})`);
+      g.addColorStop(0, `rgba(255,120,140,${mood === 'glowing' ? 0.45 : mood === 'relief' ? 0.32 : 0.2})`);
       g.addColorStop(1, 'rgba(255,130,145,0)');
       ctx.fillStyle = g;
       ctx.fillRect(x - rx * 0.3, y - rx * 0.3, rx * 0.6, rx * 0.6);
@@ -1314,15 +1820,17 @@ export function drawFace(ctx, face, spec = DEFAULT_FACE_SPEC, o = {}) {
   ctx.strokeStyle = shade(base, -0.4, 0.45);
   ctx.lineWidth = Math.max(1.2, rx * 0.012);
   ctx.stroke();
-  drawFrontHair(ctx, f, look);
+  if (look.beard) drawBeard(ctx, f, look);
+  if (!armor) drawFrontHair(ctx, f, look);
   drawHeadwear(ctx, f, look);
   drawEarrings(ctx, f, look);
   drawBrows(ctx, f, look, mood);
   const ft = f.features;
   for (const s of [-1, 1]) drawEye(ctx, cx + s * rx * ft.eyeU, cy + ry * ft.eyeV, rx * ft.eyeS, look.eyes, mood, s, look.eyeColour, shade(base, -0.06));
-  drawNose(ctx, f, base);
+  if (look.roundNose) drawRoundNose(ctx, f, base); else drawNose(ctx, f, base);
   drawMouth(ctx, f, look, mood);
   drawFaceWear(ctx, f, look);
+  if (armor) drawHelmet(ctx, f, armor);
   drawMoodExtras(ctx, f, mood);
 }
 

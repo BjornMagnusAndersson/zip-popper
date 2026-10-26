@@ -17,6 +17,8 @@
   td { padding: 2px; }
   canvas { display: block; width: 117px; height: 240px; border-radius: 6px; }
   body.one canvas { width: 195px; height: 400px; }
+  body.wide canvas { width: 240px; height: 117px; }
+  body.wide.one canvas { width: 400px; height: 195px; }
 </style>
 </head>
 <body>
@@ -29,16 +31,23 @@ import { faceGeometry, layoutFace } from './js/pop/logic.js';
 import { makeFaceTexture, MOODS } from './js/pop/face.js';
 import { drawPimple } from './js/pop/art.js';
 import { REGULARS, makeCustomer } from './js/data/customers.js';
+import { HUSBAND, HUSBAND_ARMOR } from './js/data/chapters.js';
 
-const W = 390;
-const H = 800;
 const params = new URLSearchParams(location.search);
+const W = Number(params.get('w')) || 390; // ?w=800&h=390 = a landscape phone
+const H = Number(params.get('h')) || 800;
 let showBumps = params.has('bumps');
 let only = MOODS.includes(params.get('mood')) ? params.get('mood') : null;
-const people = [
+const everyone = [
+  // The husband (T2.4): at home (chapter 0), in armor (chapter 2), and a preview of the last boss (hat, plumes, cracks).
+  { name: 'husband', face: HUSBAND.face, bumps: HUSBAND.bumps, seed: 31 },
+  { name: 'armor', face: HUSBAND_ARMOR.face, bumps: HUSBAND_ARMOR.bumps, seed: 32 },
+  { name: 'boss', face: { character: 'husband', armor: { plumes: 4, cozy: true, cracked: true }, accessories: [] }, bumps: 2, seed: 33 },
   ...REGULARS.map((c) => ({ name: c.id, face: c.face, bumps: c.bumps, seed: c.id.length * 977 + c.chapter })),
   ...[11, 22, 33, 44].map((seed, i) => { const c = makeCustomer(seed, { chapter: 2 + i }); return { name: `gen ${seed}`, face: c.face, bumps: c.bumps, seed }; }),
 ];
+const who = params.get('who')?.split(',') ?? null; // ?who=husband,armor shows only these
+const people = who ? everyone.filter((p) => who.includes(p.name)) : everyone;
 
 /**
  * Draw one person in one mood into a new canvas (with bumps and keep-out boxes when asked).
@@ -63,6 +72,7 @@ function faceCanvas(p, mood) {
 /** Fill the table: one row per mood (or only the chosen one), one column per person. @returns {void} */
 function render() {
   document.body.classList.toggle('one', Boolean(only));
+  document.body.classList.toggle('wide', W > H);
   const head = document.getElementById('head');
   const grid = document.getElementById('grid');
   head.replaceChildren();

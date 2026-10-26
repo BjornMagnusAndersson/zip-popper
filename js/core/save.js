@@ -26,8 +26,10 @@ export function defaultSave(now = Date.now()) {
     studioLayers: [],
     outfitTier: 1,
     stats: { pops: 0, stars: 0, bestCombo: 0 },
-    settings: { sound: true, music: true, vibration: true, reducedMotion: false, lang: 'en' },
+    // squeeze (T1.7): two fingers round a bump squeeze it (off by default; old saves load with it off)
+    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, lang: 'en' },
     seenComics: [],
+    squeezeHintSeen: false, // the one-time "squeeze between two fingers" hint was shown (T1.7)
     // Economy fields (T3.2, docs/ECONOMY.md section 8). Added without a version bump: older saves simply get these defaults.
     reputation: 0,
     skipStreak: 0, // "Next customer" after a fail, in a row; a finished customer resets it
@@ -127,9 +129,11 @@ export function normalizeSave(raw, now = Date.now()) {
       music: flag(se.music, d.settings.music),
       vibration: flag(se.vibration, d.settings.vibration),
       reducedMotion: flag(se.reducedMotion, d.settings.reducedMotion),
+      squeeze: flag(se.squeeze, d.settings.squeeze),
       lang: typeof se.lang === 'string' && se.lang.length <= 8 ? se.lang : d.settings.lang,
     },
     seenComics: words(s.seenComics, d.seenComics),
+    squeezeHintSeen: flag(s.squeezeHintSeen, d.squeezeHintSeen),
     reputation: count(s.reputation, d.reputation),
     skipStreak: count(s.skipStreak, d.skipStreak),
     mastery: countTable(s.mastery),

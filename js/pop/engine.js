@@ -12,6 +12,10 @@
 // cotton pad squeeze, tweezers pull blackheads, the nose strip sticks on the dotty nose and is peeled off, the warm
 // cloth held on the face fills a warm meter (bumps pop faster for a while), the patch sticks on popped spots. The wrong
 // tool on a bump is an "Ow": no pressure, no pop, ouch lines, and onOw tells the controller (wince, counter).
+// Two-finger squeeze (T1.7, option squeeze: true, the Settings switch): two fingers put down close round a bump
+// squeeze it (fingers tool only); closing them builds the bump's normal press progress (squeeze-logic.js), so every
+// rule of a hold still applies. Ghost finger pads show where the fingers are, the dents follow them, a squeak rises
+// and tiny buzz pulses quicken; the goo squirts across the squeeze. Two fingers anywhere else zoom as before.
 import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius } from './logic.js';
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
@@ -20,6 +24,10 @@ import {
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
+import {
+  canSqueeze, squeezeCandidate, classifyStart, graceDecision, closeAmount, startDrive, stepDrive, squeezeProgress,
+  squeezeEnd, gooDirection, squeakGap, buzzGap, SQUEEZE,
+} from './squeeze-logic.js';
 import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
   drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
@@ -102,6 +110,7 @@ function affine(s, d) {
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
  *   irritation?: {rise: number, drain: number} (how touchy the customer is, T3.1b; 1 and 1 = normal),
+ *   squeeze?: boolean (two fingers round a bump squeeze it, T1.7; off = two fingers always zoom),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
@@ -195,6 +204,11 @@ export function createPopScene(canvas, o) {
   let pinch = null; // {a, b, a0, b0, start}: two fingers zooming and panning
   let pending = null; // {ev, timer}: a first finger waiting PINCH_WAIT_MS to see whether a second one follows
   let mousePan = null; // {id, x, y}: a mouse dragging the zoomed view from a spot where the press did nothing
+  // Two-finger squeeze (T1.7, squeeze-logic.js). Only with o.squeeze on and fingers in hand.
+  const squeezeOn = Boolean(o.squeeze);
+  let maybe = null; // {a, b, a0, b0, cand, timer}: two fingers landed round a bump, waiting to see squeeze or zoom
+  let squeeze = null; // {a, b, p, d0, drive, nextSqueak, nextBuzz, last}: two fingers squeezing bump p
+  let stale = false; // a squeeze ended with fingers still down: they do nothing more until all are lifted
 
   /**
    * Turn a pointer event into screen px on the canvas (CSS px from its top left, before the view).
@@ -254,7 +268,7 @@ export function createPopScene(canvas, o) {
     const bulge = 0.6 * a * Math.exp(-((d / (p.r * 1.7)) ** 2));
     let dx = vx * bulge;
     let dy = vy * bulge;
-    const reach = p.r * 1.9 * (1 - 0.2 * Math.max(0, a));
+    const reach = (p.sqReach ?? p.r * 1.9) * (1 - 0.2 * Math.max(0, a)); // a two-finger squeeze dents where the fingers are
     for (const side of [-1, 1]) {
       const fx = p.x + ax * side * reach;
       const fy = p.y + ay * side * reach;
@@ -331,7 +345,7 @@ export function createPopScene(canvas, o) {
     // Finger dents (soft shadows), fingertips pressing, and the stretched shine in the middle.
     const ax = Math.cos(p.axis);
     const ay = Math.sin(p.axis);
-    const reach = p.r * 1.9 * (1 - 0.2 * a);
+    const reach = (p.sqReach ?? p.r * 1.9) * (1 - 0.2 * a);
     const k = Math.min(1, a);
     // Bunched-up skin between the fingers and the pimple: a dark fold with a light ridge on each side.
     for (const side of [-1, 1]) {
@@ -353,8 +367,9 @@ export function createPopScene(canvas, o) {
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(fx, fy, p.r * 1.5, 0, Math.PI * 2); ctx.fill();
     }
-    // Two fingertips pressing in from both sides (drawn after the dents so they sit on top).
-    for (const side of [-1, 1]) {
+    // Two fingertips pressing in from both sides (drawn after the dents so they sit on top). A two-finger squeeze
+    // shows ghost pads at the real fingers instead (drawGhostPads).
+    for (const side of p.sqReach ? [] : [-1, 1]) {
       const fx = p.x + ax * side * (reach + p.r * 0.1);
       const fy = p.y + ay * side * (reach + p.r * 0.1);
       drawFinger(ctx, fx, fy, p.axis + (side < 0 ? Math.PI : 0), Math.max(18, p.r * 1.7), Math.min(1, a * 3));
@@ -366,7 +381,7 @@ export function createPopScene(canvas, o) {
       }
     }
     const shine = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.2);
-    shine.addColorStop(0, `rgba(255,236,228,${0.22 * Math.min(1, a)})`);
+    shine.addColorStop(0, `rgba(255,236,228,${(p.sqReach ? 0.36 : 0.22) * Math.min(1, a)})`); // a squeeze shines more
     shine.addColorStop(1, 'rgba(255,236,228,0)');
     ctx.fillStyle = shine;
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.2, 0, Math.PI * 2); ctx.fill();
@@ -410,8 +425,9 @@ export function createPopScene(canvas, o) {
     const look = gooLook(goo);
     const big = p.type === 'big';
     const count = big ? 2 : 1;
+    const aimed = Number.isFinite(p.gooDir); // a two-finger squeeze aims the goo across the squeeze (T1.7)
     for (let i = 0; i < count; i += 1) {
-      const ang = -Math.PI / 2 + (rand() - 0.5) * 2.6;
+      const ang = aimed ? p.gooDir + (i ? Math.PI : 0) + (rand() - 0.5) * 0.7 : -Math.PI / 2 + (rand() - 0.5) * 2.6;
       const max = p.r * look.reach * (big ? 2.6 + rand() * 1.8 : 2 + rand() * 1.4);
       strands.push({
         x: p.x, y: p.y, ang, curl: (rand() - 0.5) * 0.05 / scale, sag: (0.006 + rand() * 0.008) * look.sag, len: 0, max,
@@ -421,8 +437,8 @@ export function createPopScene(canvas, o) {
     capList(strands, MAX_STRANDS);
     const n = info?.drops ?? 4;
     for (let i = 0; i < n; i += 1) {
-      const a = rand() * Math.PI * 2;
-      const v = (30 + rand() * 110) * scale * look.speed;
+      const a = aimed ? p.gooDir + (rand() - 0.5) * 1.5 + (rand() < 0.25 ? Math.PI : 0) : rand() * Math.PI * 2;
+      const v = (30 + rand() * 110) * scale * look.speed * (aimed ? 1.25 : 1);
       drops.push({ x: p.x, y: p.y, z: 0.1, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: (120 + rand() * 160) / Math.sqrt(look.width), r: (1.2 + rand() * (big ? 3 : 2)) * scale * Math.sqrt(look.width), gold, goo });
     }
     capList(drops, MAX_DROPS);
@@ -462,6 +478,7 @@ export function createPopScene(canvas, o) {
    * @returns {void}
    */
   function pop(p) {
+    if (squeeze?.p === p) { p.gooDir = gooDirection(p.axis); endSqueeze(); } // squeezed out: the goo squirts across
     if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
       raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth) * (p.roughMul ?? 1));
       if (p.tool === 'cottonPad') irr = irritationSoothe(irr, 'pad');
@@ -611,6 +628,7 @@ export function createPopScene(canvas, o) {
     if (face) Object.assign(face, { cx: face.cx * s + tx, cy: face.cy * s + ty, rx: face.rx * s, ry: face.ry * s });
     setView(refitView(view, oldW, oldH, m, w, h, face)); // keep the zoom on the same spot of the face (T1.4)
     if (pinch) pinch = null; // a pinch across a turn starts over
+    if (squeeze || maybe) { resetSqueeze(); stale = touches.size > 0; } // so does a squeeze (it springs back)
     if (warmHold) mv(warmHold, []);
     for (const st of strands) {
       mv(st, ['len', 'max', 'speed', 'w']);
@@ -717,9 +735,10 @@ export function createPopScene(canvas, o) {
         busy = true;
       }
       if (!p.popped) {
-        const held = hold?.p === p || (keyHold?.p === p && time < keyHold.until);
+        const held = hold?.p === p || squeeze?.p === p || (keyHold?.p === p && time < keyHold.until);
         const before = p.pressure;
-        if (keyHold?.p === p && time < keyHold.until) p.pressure = Math.min(keyHold.target, p.pressure + dt * 2.4);
+        if (squeeze?.p === p) p.pressure = squeezeTick(p, dt); // two fingers squeezing (T1.7)
+        else if (keyHold?.p === p && time < keyHold.until) p.pressure = Math.min(keyHold.target, p.pressure + dt * 2.4);
         else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, warmth));
         for (const th of [0.3, 0.6, 0.85]) {
           const key = `${p.id}:${th}`;
@@ -820,7 +839,7 @@ export function createPopScene(canvas, o) {
       }
       if (strip.flying || (!peel && strip.q > 0.6 && strip.q < 1)) busy = true;
     }
-    if (hold || peel) busy = true;
+    if (hold || peel || squeeze) busy = true;
     if (wipe) {
       if (wipe.auto) {
         busy = true;
@@ -984,6 +1003,7 @@ export function createPopScene(canvas, o) {
         ctx.fillRect(0, 0, w, h);
       }
     }
+    if (squeeze) drawGhostPads(squeeze); // where the two squeezing fingers are (screen px, over everything but splats)
     if (splats.length) { // the lens is in front of the zoom: splats are drawn in screen px
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const s of splats) if (time >= s.born) drawSplat(ctx, s);
@@ -1172,6 +1192,7 @@ export function createPopScene(canvas, o) {
     if (out !== 'squeeze' && out !== 'pull') return false;
     if (roll() < roughChance(tool, p.type, warmth, irr.level) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it)
     if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
+    delete p.sqReach; // a one-finger hold uses the drawn fingers again (not a two-finger squeeze's ghost pads)
     hold = { p, id: e.pointerId, since: time };
     play('squish', { level: 0.1 });
     return true;
@@ -1209,6 +1230,8 @@ export function createPopScene(canvas, o) {
   // finger ends the pinch; the other then does nothing until it is lifted. A mouse (no second finger) drags the view
   // from a spot where the press did nothing, only when zoomed in; the wheel zooms. Double-tap is never used (it would
   // fight quick popping taps). Buttons and keys (pop-mode.js) do the same through zoomBy, panBy and resetView.
+  // With the squeeze switch on (T1.7) and fingers in hand, two fingers that land round a bump wait SQUEEZE.graceMs:
+  // closing = a squeeze, spreading or sliding together = the pinch above; a third finger or a lift ends a squeeze.
   const PINCH_WAIT_MS = 60;
 
   /** Let go of everything a finger was doing, because a pinch takes over (nothing pops). @returns {void} */
@@ -1237,13 +1260,245 @@ export function createPopScene(canvas, o) {
     kick();
   }
 
+  // ---- Two-finger squeeze (T1.7). The rules are in squeeze-logic.js; this is only the glue to the fingers. ----
+
+  /**
+   * A finger in scene px (through the zoom view).
+   * @param {{x: number, y: number}|undefined} s the finger in screen px
+   * @returns {{x: number, y: number}|null} scene point, or null for a lifted finger
+   */
+  const sceneOf = (s) => (s ? screenToScene(view, s.x, s.y) : null);
+
+  /**
+   * Two fingers just landed: when the squeeze switch is on, fingers are in hand and they are round a bump (or a mole),
+   * wait a blink to tell a squeeze from a zoom (decideSqueeze). A waiting or holding first finger lets go (no pop).
+   * @returns {boolean} true when the pair now waits; false = not a squeeze, pinch as before
+   */
+  function twoDown() {
+    if (!squeezeOn || !canSqueeze(tool) || step !== 'pop' || halted) return false;
+    const [a, b] = [...touches.keys()];
+    const a0 = touches.get(a);
+    const b0 = touches.get(b);
+    const cand = squeezeCandidate(pimples, decoys, sceneOf(a0), sceneOf(b0), view.z);
+    if (!cand) return false;
+    if (pending) { clearTimeout(pending.timer); pending = null; }
+    letGo();
+    maybe = { a, b, a0: { ...a0 }, b0: { ...b0 }, cand, timer: setTimeout(() => decideSqueeze(true), SQUEEZE.graceMs) };
+    kick();
+    return true;
+  }
+
+  /**
+   * The waiting pair shows what it is: closing round the bump = squeeze; spreading or sliding together = zoom (the
+   * pinch starts from where they landed, so no movement is lost). When the grace time is over (timeUp) a still pair
+   * squeezes.
+   * @param {boolean} timeUp the grace time is over
+   * @returns {void}
+   */
+  function decideSqueeze(timeUp) {
+    const m = maybe;
+    if (!m || disposed) return;
+    const a1 = touches.get(m.a);
+    const b1 = touches.get(m.b);
+    if (!a1 || !b1) { clearTimeout(m.timer); maybe = null; return; }
+    const moved = classifyStart(m.a0, m.b0, a1, b1);
+    if (!moved && !timeUp) return;
+    clearTimeout(m.timer);
+    maybe = null;
+    if (graceDecision(moved) === 'zoom') {
+      pinch = { a: m.a, b: m.b, a0: m.a0, b0: m.b0, start: { ...view } };
+      setView(pinchView(pinch.start, m.a0, m.b0, a1, b1, w, h, face));
+      return;
+    }
+    startSqueeze(m);
+  }
+
+  /**
+   * Start squeezing the pair's bump: the same checks as a one-finger press (a mole or the wrong bump is an Ow, a cold
+   * bump may be a rough press), then the pressure follows the fingers. After an Ow the fingers do nothing more.
+   * @param {{a: number, b: number, a0: {x: number, y: number}, b0: {x: number, y: number}, cand: {target: object, decoy: boolean}}} m the pair
+   * @returns {void}
+   */
+  function startSqueeze(m) {
+    const p = m.cand.target;
+    stale = true; // unless the squeeze really starts below
+    if (m.cand.decoy) { ow(p); return; }
+    if (p.popped || step !== 'pop' || halted) return;
+    const out = pressOutcome(tool, p.type);
+    if (out === 'ow') { ow(p); return; }
+    if (out !== 'squeeze' && out !== 'pull') return;
+    if (roll() < roughChance(tool, p.type, warmth, irr.level) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
+    stale = false;
+    p.tool = tool;
+    squeeze = {
+      a: m.a, b: m.b, p, d0: Math.max(1, Math.hypot(m.a0.x - m.b0.x, m.a0.y - m.b0.y)), drive: startDrive(p.pressure),
+      nextSqueak: time, nextBuzz: time + 0.08, last: p.pressure,
+    };
+    aimSqueeze(squeeze);
+    play('squish', { level: 0.1 });
+    buzz(8);
+    kick();
+  }
+
+  /**
+   * Point the bump's squeeze at the real fingers: the dents sit on the line between them, as far out as they are.
+   * @param {object} sq the squeeze
+   * @returns {void}
+   */
+  function aimSqueeze(sq) {
+    const a = sceneOf(touches.get(sq.a));
+    const b = sceneOf(touches.get(sq.b));
+    if (!a || !b) return;
+    const p = sq.p;
+    p.axis = Math.atan2(b.y - a.y, b.x - a.x);
+    p.sqReach = Math.max(p.r * 1.3, Math.min(p.r * 2.8, Math.hypot(b.x - a.x, b.y - a.y) / 2));
+  }
+
+  /**
+   * One frame of a squeeze: the fingers' closing and the time held become the bump's press progress (never faster
+   * than a hold), the dents follow the fingers, and a squeak and tiny buzz pulses come quicker as it rises.
+   * @param {object} p the squeezed bump
+   * @param {number} dt seconds since the last frame
+   * @returns {number} the new press progress, 0..1
+   */
+  function squeezeTick(p, dt) {
+    const sq = squeeze;
+    const a = touches.get(sq.a);
+    const b = touches.get(sq.b);
+    if (!a || !b) return p.pressure;
+    const hold = effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, warmth);
+    sq.drive = stepDrive(sq.drive, dt, closeAmount(sq.d0, Math.hypot(a.x - b.x, a.y - b.y), p.r * view.z), hold);
+    const next = squeezeProgress(p.pressure, sq.drive.level, dt, hold);
+    aimSqueeze(sq);
+    if (next > 0.04 && next >= sq.last - 1e-4 && time >= sq.nextSqueak) { // the squeak only while it holds or rises
+      play('squeeze', { level: next });
+      sq.nextSqueak = time + squeakGap(next);
+    }
+    if (next > 0.06 && time >= sq.nextBuzz) {
+      buzz(next > 0.7 ? 9 : 5);
+      sq.nextBuzz = time + buzzGap(next);
+    }
+    sq.last = next;
+    return next;
+  }
+
+  /**
+   * Stop squeezing (a finger left, a third came, it popped...). A bump that did not pop springs back with a small
+   * jiggle and no Ow; fingers still down do nothing more until all are lifted.
+   * @returns {void}
+   */
+  function endSqueeze() {
+    const sq = squeeze;
+    if (!sq) return;
+    squeeze = null;
+    stale = touches.size > 0;
+    if (!sq.p.popped && !reduced) sq.p.wobV -= 3.5 * sq.p.pressure;
+    kick();
+  }
+
+  /** Forget any squeeze or waiting pair at once (a new first finger, a turn of the phone, halt). @returns {void} */
+  function resetSqueeze() {
+    if (maybe) clearTimeout(maybe.timer);
+    maybe = null;
+    endSqueeze();
+    stale = false;
+  }
+
+  /**
+   * More than one finger is down after a finger landed: a third finger ends a squeeze (or a waiting pair) cleanly;
+   * two fingers round a bump may squeeze; otherwise the first two pinch, as before.
+   * @returns {void}
+   */
+  function moreFingers() {
+    if (squeeze || maybe) { // a third finger: stop, nothing pops, the fingers do nothing until lifted
+      if (maybe) clearTimeout(maybe.timer);
+      maybe = null;
+      endSqueeze();
+      stale = true;
+      return;
+    }
+    if (stale || pinch) return;
+    if (touches.size === 2 && twoDown()) return;
+    startPinch();
+  }
+
+  /**
+   * A finger moved while two fingers squeeze or wait: decide squeeze or zoom, or end a squeeze whose fingers drifted
+   * off the bump (they then pinch from where they are, so a zoom that started near a bump still works).
+   * @returns {void}
+   */
+  function squeezeMove() {
+    if (maybe) { decideSqueeze(false); return; }
+    if (!squeeze) return;
+    const { a, b, p } = squeeze;
+    const why = squeezeEnd({ fingers: touches.size, a: sceneOf(touches.get(a)), b: sceneOf(touches.get(b)), bump: p, z: view.z });
+    if (why === 'drift') {
+      endSqueeze();
+      stale = false;
+      pinch = { a, b, a0: touches.get(a), b0: touches.get(b), start: { ...view } };
+    } else if (why) endSqueeze();
+    kick();
+  }
+
+  /**
+   * Two soft see-through finger pads where the squeezing fingers touch, pressing towards each other (flatter and
+   * a little closer as the pressure rises). Drawn in screen px, over the face.
+   * @param {object} sq the squeeze
+   * @returns {void}
+   */
+  function drawGhostPads(sq) {
+    const a = touches.get(sq.a);
+    const b = touches.get(sq.b);
+    if (!a || !b) return;
+    const pr = Math.max(0, Math.min(1, sq.p.pressure));
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const R = 15;
+    const mid = sceneToScreen(view, sq.p.x, sq.p.y); // the bump on screen
+    const keep = sq.p.r * view.z * (1 + 0.25 * pr) + R * 0.6; // a pad never covers the bump: it presses on its edge
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (const [pt, dir] of [[a, 1], [b, -1]]) {
+      const vx = pt.x - mid.x;
+      const vy = pt.y - mid.y;
+      const len = Math.hypot(vx, vy);
+      const out = Math.max(len, keep);
+      const ux = len > 1 ? vx / len : -dir * Math.cos(ang);
+      const uy = len > 1 ? vy / len : -dir * Math.sin(ang);
+      ctx.save();
+      ctx.translate(mid.x + ux * out, mid.y + uy * out);
+      ctx.rotate(ang);
+      ctx.translate(dir * 3 * pr, 0); // nudged towards the other finger
+      const squash = 1 - 0.28 * pr;
+      const g = ctx.createRadialGradient(dir * R * 0.35, 0, 1, 0, 0, R);
+      g.addColorStop(0, `rgba(255,242,234,${0.16 + 0.14 * pr})`);
+      g.addColorStop(0.65, `rgba(255,220,204,${0.3 + 0.16 * pr})`);
+      g.addColorStop(1, 'rgba(255,212,192,0.1)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, R * squash, R * (1 + 0.1 * pr), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255,255,255,${0.5 + 0.35 * pr})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(150,70,55,${0.25 + 0.35 * pr})`; // the pressing edge, on the side facing the bump
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      const edge = dir > 0 ? 0 : Math.PI;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, R * squash * 0.72, R * 0.8, 0, edge - 0.7, edge + 0.7);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   /** Finger, pen or mouse down: a first finger waits a blink (see the gesture rule), others press now. @param {PointerEvent} e event @returns {void} */
   function onDown(e) {
     if (e.pointerType === 'touch') {
-      if (e.isPrimary) { touches.clear(); pinch = null; } // a new first finger: forget fingers whose "up" got lost
+      if (e.isPrimary) { touches.clear(); pinch = null; resetSqueeze(); } // a new first finger: forget fingers whose "up" got lost
       touches.set(e.pointerId, screenPt(e));
       e.preventDefault();
-      if (touches.size >= 2) { if (!pinch) startPinch(); return; }
+      if (touches.size >= 2) { moreFingers(); return; } // pinch, or a two-finger squeeze (T1.7)
       if (e.button > 0 || halted) return;
       const ev = { pointerId: e.pointerId, button: 0, clientX: e.clientX, clientY: e.clientY, preventDefault() {} };
       pending = { ev, timer: setTimeout(firePending, PINCH_WAIT_MS) };
@@ -1264,6 +1519,8 @@ export function createPopScene(canvas, o) {
   function viewMove(e) {
     if (e.pointerType === 'touch' && touches.has(e.pointerId)) {
       touches.set(e.pointerId, screenPt(e));
+      if (maybe || squeeze) { squeezeMove(); if (!pinch) return true; }
+      if (stale) return true; // after a squeeze: these fingers do nothing until lifted
       if (pinch) {
         const a1 = touches.get(pinch.a);
         const b1 = touches.get(pinch.b);
@@ -1291,6 +1548,14 @@ export function createPopScene(canvas, o) {
   function viewUp(e) {
     if (e.pointerType === 'touch') {
       touches.delete(e.pointerId);
+      if (maybe && (e.pointerId === maybe.a || e.pointerId === maybe.b)) { // lifted before it was clear: nothing happens
+        clearTimeout(maybe.timer);
+        maybe = null;
+        stale = touches.size > 0;
+        return true;
+      }
+      if (squeeze && (e.pointerId === squeeze.a || e.pointerId === squeeze.b)) { endSqueeze(); return true; } // springs back, no Ow
+      if (stale) { if (!touches.size) stale = false; return true; }
       if (pinch && (e.pointerId === pinch.a || e.pointerId === pinch.b)) { pinch = null; return true; }
       if (pending && pending.ev.pointerId === e.pointerId) {
         if (e.type === 'pointercancel') { clearTimeout(pending.timer); pending = null; return true; }
@@ -1351,6 +1616,7 @@ export function createPopScene(canvas, o) {
       const p = pimples.find((q) => !q.popped);
       if (p) { // the keyboard always uses the tool that suits the bump, so it never gives an Ow
         if (p.pressure < 0.05) p.tool = bestToolFor(p.type, usable ?? undefined);
+        delete p.sqReach; // drawn fingers, not a two-finger squeeze's pads
         keyHold = { p, until: time + 0.25, target: tapPressure(p.pressure) };
         play('squish', { level: keyHold.target });
         kick();
@@ -1374,6 +1640,9 @@ export function createPopScene(canvas, o) {
   canvas.popDecoys = () => decoys.map((d) => ({ x: d.x, y: d.y, r: d.r, kind: d.kind })); // for browser checks, like popTargets
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
   canvas.popStep = () => step;
+  // For browser checks (T1.7): the two-finger squeeze now ('wait' while deciding, the bump's progress while squeezing).
+  canvas.popSqueeze = () => (squeeze ? { pressure: squeeze.p.pressure, x: squeeze.p.x, y: squeeze.p.y } : maybe ? 'wait' : stale ? 'stale' : null);
+  canvas.popPressures = () => pimples.map((p) => ({ x: p.x, y: p.y, pressure: p.pressure, popped: p.popped }));
   canvas.popTool = () => tool;
   canvas.popWarmth = () => warmth;
   canvas.popIrritation = () => irr.level;
@@ -1439,6 +1708,7 @@ export function createPopScene(canvas, o) {
       halted = true;
       hold = null;
       keyHold = null;
+      resetSqueeze();
       warmHold = null;
       for (const p of pimples) if (!p.popped) p.pressure = 0;
       kick();
@@ -1456,6 +1726,9 @@ export function createPopScene(canvas, o) {
       canvas.removeEventListener('wheel', onWheel);
       if (pending) clearTimeout(pending.timer);
       pending = null;
+      if (maybe) clearTimeout(maybe.timer);
+      maybe = null;
+      squeeze = null;
     },
     /** The zoom view now (T1.4): z = zoom, x, y = the scene point at the top left. @returns {{z: number, x: number, y: number}} view */
     view: () => ({ ...view }),

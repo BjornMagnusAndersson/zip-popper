@@ -10,6 +10,16 @@ export const VOICES = {
     k.hiss(t, 0.14, { freq: 260 + lv * 520, to: 420 + lv * 700, q: 5, vol: 0.1 + lv * 0.06 });
     k.tone(110 + lv * 60, t, 0.1, { type: 'triangle', vol: 0.05, slideTo: 90 + lv * 40 });
   },
+  /**
+   * One rubbery squeak of a two-finger squeeze (played again and again while squeezing, so the pitch follows the
+   * pressure and it stops when the fingers let go). @param {object} k kit @param {number} t start @param {{level?: number}} o pressure 0..1
+   */
+  squeak(k, t, o) {
+    const lv = Math.max(0, Math.min(1, o?.level ?? 0.3));
+    const f = 300 + lv * 640;
+    k.vowel(f, t, 0.1, { slideTo: f * 1.14, formants: [800 + lv * 900, 2300], vol: 0.05 + lv * 0.06 });
+    k.hiss(t, 0.06, { freq: 900 + lv * 1300, q: 7, vol: 0.03 + lv * 0.03 });
+  },
   /** The wet pop. @param {object} k kit @param {number} t start */
   pop(k, t) {
     k.tone(420, t, 0.08, { vol: 0.45, slideTo: 115 });

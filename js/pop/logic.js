@@ -4,6 +4,7 @@
 // how squeezing builds pressure, which bump a finger touches, and the face's mood. No DOM, no audio, no timers here.
 // The kinds of bump (hold time, size, goo, tools, pay) live in data/bumps.js.
 import { BUMP_IDS, bumpInfo, isImplemented, DECOYS } from '../data/bumps.js';
+import { resolveFaceSpec, characterLayout } from './characters.js';
 
 const POP_SOUND_KEY = 'popper.popSound'; // "on" or "off"; nothing stored = on
 
@@ -117,28 +118,35 @@ export const FACE_FIT = {
  * @param {number} height scene height in CSS px
  * @param {{size?: number, shape?: string, hair?: string, eyes?: string, mouth?: string, accessories?: string[]}} [spec]
  *   the face spec (face part ids from data/customers.js FACE_PARTS); size scales the head (0.7 .. 1.15, 1 = as big as
- *   fits). Unknown or missing ids fall back to an oval head, short hair, round eyes and a smile.
+ *   fits). Unknown or missing ids fall back to an oval head, short hair, round eyes and a smile. A spec with
+ *   `character` (pop/characters.js, e.g. the husband) gets that character's parts, beard and armor: keep-out boxes over
+ *   the beard and the helmet's cheek guards, the helmet's brow edge as the hairline, and room above for the plumes.
  * @returns {{width: number, height: number, cx: number, cy: number, rx: number, ry: number, unit: number,
  *   features: object, keepOut: {x: number, y: number, w: number, h: number}[]}} the face geometry in CSS px
  *   (cx, cy = face centre, rx, ry = half-width and half-height of the bare-skin oval, unit = bump size factor,
  *   features = FACE_FEATURES adjusted for this face's parts, keepOut = boxes around the eyes, brows, mouth and any
- *   accessory lying on the face (glasses, moustache, clown nose, flower) where no bump may sit)
+ *   accessory lying on the face (glasses, moustache, clown nose, flower) where no bump may sit; a character also gets
+ *   zones = his own bump zones in fill order, which layoutFace uses instead of ZONES)
  */
-export function faceGeometry(width, height, spec = {}) {
+export function faceGeometry(width, height, spec0 = {}) {
+  const spec = resolveFaceSpec(spec0); // a story character (T2.4) brings his own parts
+  const extra = characterLayout(spec);
   const size = clamp(Number(spec.size) || 1, 0.7, 1.15);
   const shape = SHAPE_ASPECT[spec.shape] ? spec.shape : 'oval';
   const aspect = SHAPE_ASPECT[shape];
   const F = FACE_FIT;
+  const crown = extra.crown ?? 1.12; // how far the hair (or a helmet with plumes) reaches above the face centre, in ry
   const byWidth = Math.max(width * F.widthPart, Math.min(width * 0.4, F.smallRx)) * aspect;
-  const ry = Math.min(Math.min(byWidth, height * F.heightPart) * size, height * F.maxRy, width * 0.41 * aspect);
+  const ry = Math.min(Math.min(byWidth, height * F.heightPart) * size, height * F.maxRy, width * 0.41 * aspect,
+    (height * (F.chinMax - F.topRoom)) / (crown + 1)); // tall headwear: a smaller head, so it never clips at the top
   const rx = ry / aspect;
   const cx = width / 2;
   // Room for the hair above and some shoulders below; otherwise near the middle.
-  const lo = ry * 1.12 + height * F.topRoom;
+  const lo = ry * crown + height * F.topRoom;
   const hi = Math.min(height - ry * 1.2, height * F.chinMax - ry);
   const cy = clamp(height * F.centre, lo, Math.max(lo, hi));
   const acc = Array.isArray(spec.accessories) ? spec.accessories : [];
-  const [hairTop0, hairCurve] = HAIRLINES[spec.hair] ?? HAIRLINES.short;
+  const [hairTop0, hairCurve] = extra.hairline ?? HAIRLINES[spec.hair] ?? HAIRLINES.short; // a helmet's brow edge counts as the hairline
   // A hat, cap or band hides the hair line; its lower edge then counts as the hairline.
   const hairTop = Math.max(hairTop0, ...acc.map((a) => HEADWEAR_LINES[a] ?? -9));
   const f = {
@@ -166,7 +174,10 @@ export function faceGeometry(width, height, spec = {}) {
     keepOut.push({ x: cx - n * rx, y: cy + f.noseV * ry - n * rx, w: 2 * n * rx, h: 2 * n * rx });
   }
   if (acc.includes('flower')) keepOut.push(box(0.56, -1.05, 1.05, -0.58)); // tucked in the hair above the right temple
-  return { width, height, cx, cy, rx, ry, unit: rx / FACE_UNIT, features: f, keepOut };
+  for (const [u0, v0, u1, v1] of extra.boxes) keepOut.push(box(u0, v0, u1, v1)); // a character's beard and helmet (T2.4)
+  const out = { width, height, cx, cy, rx, ry, unit: rx / FACE_UNIT, features: f, keepOut };
+  if (extra.zones) out.zones = extra.zones; // a character's own bump zones (the husband: his chin spot first)
+  return out;
 }
 
 /**
@@ -370,8 +381,9 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allo
   const box = strip ? noseStrip(face, seed) : null;
   const templeSide = rand() < 0.5 ? -1 : 1;
   const zones = [];
+  const list = face.zones?.length ? face.zones : ZONES; // a story character brings his own zone order (T2.4)
   for (let i = 0; i < count; i += 1) {
-    const z = ZONES[i % ZONES.length];
+    const z = list[i % list.length];
     zones.push(z.name === 'temple' ? { ...z, u: [z.u[0] * templeSide, z.u[1] * templeSide].sort((a, b) => a - b) } : z);
   }
   const types = typesFor(zones.map((z) => z.name), rand, Array.isArray(allowed) ? allowed : null);

@@ -2,6 +2,8 @@
 // tier 0 = "dingy and dank" (grimy tiles, cracked and peeling paint, a flickering bare bulb, a bucket and an old sink),
 // tier 1 = a bit better, tier 2 = clean, sparkly and spa-like. Tiers 1 and 2 are only a recolour of tier 0 for now;
 // task T5.1 gives them their own drawings (add them as new cases in drawRoom).
+// Before the studio (chapters 0 to 4, SPEC D19) the pop scene is at home instead: room 'home' paints the couple's
+// living room in the comics' colours, with a floor lamp whose warm light breathes gently (steady with reduced motion).
 // Cartoon only: stains are olive and brown water marks, never anything like blood.
 // The still room is painted once per size and tier into an offscreen canvas (cheap on phones); only the lamp's light
 // is drawn on top each time it changes. With reduced motion the lamp never flickers.
@@ -31,7 +33,30 @@ const PALETTES = {
     stain: '0,0,0', peel: '#ffffff', crack: '#bfe0da', pipe: '#d8e6e3', metal: '#e4ecea', bucket: '#f6a6c1',
     sink: '#ffffff', shelf: '#e8c9a8', light: '255,250,235', bulb: '#ffffff', vignette: 'rgba(120,150,150,0.12)', grime: 0, flicker: false,
   },
+  // Their living room at home (SPEC D19: chapters 0 to 4 happen at home). The same colours as the comics' 'living'
+  // room (comic-art.js ROOMS.living): peach striped wallpaper, wooden floor, the teal sofa, the yellow floor lamp,
+  // the coral plant pot. pulse: the lamp's warm light breathes gently (never flickers).
+  home: {
+    wallTop: '#fde3c8', wallBottom: '#f1c19c', stripes: '#f9d2ae', dots: '#eeb48a', skirting: '#fff3e3', floor: '#c98f6b',
+    boards: '#a8724f', sofa: '#3fae8c', rug: '#e8735a', rugBand: '#ffd25a', frame: '#b07a4a', shelf: '#b07a4a',
+    shade: '#ffd25a', wood: '#6e4528', ink: '#2a211d', light: '255,214,140', vignette: 'rgba(96,52,30,0.34)',
+    grime: 0, flicker: false, pulse: true,
+  },
 };
+
+/** The rooms the pop scene can show: the studio (with its tiers) or the couple's living room at home (SPEC D19). */
+export const BACKDROP_ROOMS = ['studio', 'home'];
+
+/**
+ * Which backdrop to paint: 'home' for the home room, else the studio tier (unknown tiers fall back to 0).
+ * @param {string} [room] 'studio' (default) or 'home'
+ * @param {number} [tier] studio tier 0..2
+ * @returns {number|string} 0, 1, 2 or 'home'
+ */
+export function backdropKind(room, tier) {
+  if (room === 'home') return 'home';
+  return BACKDROP_TIERS.includes(tier) ? tier : 0;
+}
 
 /**
  * A repeatable random number 0..1 for a whole number (the same input always gives the same output).
@@ -44,17 +69,22 @@ function hash(n) {
 }
 
 /**
- * The palette for a tier (unknown tiers fall back to tier 0).
- * @param {number} tier 0, 1 or 2
+ * The palette for a backdrop kind (unknown kinds fall back to the dingy studio, tier 0).
+ * @param {number|string} kind 0, 1, 2 or 'home'
  * @returns {object} the colours
  */
-function paletteFor(tier) {
-  return PALETTES[tier] ?? PALETTES[0];
+export function backdropPalette(kind) {
+  return Object.hasOwn(PALETTES, String(kind)) ? PALETTES[kind] : PALETTES[0];
 }
+
+/** Short name used inside this file. @param {number|string} kind backdrop kind @returns {object} the colours */
+const paletteFor = backdropPalette;
 
 const BURST_EVERY = 4.5; // seconds: at most one flicker burst in each stretch this long
 const BURST_LEN = 0.6; // seconds a burst lasts
 const BURST_STEPS = 16; // light changes per second during a burst
+const PULSE_SPEED = (Math.PI * 2) / 4.2; // the home lamp breathes once every 4.2 seconds
+const PULSE_STEP = 0.1; // seconds between repaints of the home lamp's glow (small steps, so it looks smooth)
 
 /**
  * When the flicker burst in a stretch of time starts, or null when that stretch has none.
@@ -69,13 +99,16 @@ function burstStart(k) {
 /**
  * How bright the room's bare bulb is at a moment: steady (1) most of the time, with a short buzzy flicker now and
  * then in the dingy tier. Never flickers with reduced motion or in the better tiers.
+ * At home the floor lamp's light breathes slowly between about 0.88 and 1 instead (never a flicker).
  * @param {number} time seconds since the scene started
- * @param {number} [tier] studio tier 0..2
+ * @param {number|string} [tier] studio tier 0..2, or 'home' (see backdropKind)
  * @param {boolean} [reduced] reduced motion is on
  * @returns {number} 0..1 (1 = fully lit)
  */
 export function lampLevel(time, tier = 0, reduced = false) {
-  if (reduced || !paletteFor(tier).flicker || !Number.isFinite(time)) return 1;
+  if (reduced || !Number.isFinite(time)) return 1;
+  if (paletteFor(tier).pulse) return 0.94 + 0.045 * Math.sin(time * PULSE_SPEED) + 0.015 * Math.sin(time * PULSE_SPEED * 2.3 + 1);
+  if (!paletteFor(tier).flicker) return 1;
   const k = Math.floor(time / BURST_EVERY);
   const start = burstStart(k);
   if (start === null || time < start || time >= start + BURST_LEN) return 1;
@@ -86,12 +119,14 @@ export function lampLevel(time, tier = 0, reduced = false) {
 /**
  * How long until the backdrop looks different (so the page only redraws it when needed).
  * @param {number} time seconds since the scene started
- * @param {number} [tier] studio tier 0..2
+ * @param {number|string} [tier] studio tier 0..2, or 'home' (see backdropKind)
  * @param {boolean} [reduced] reduced motion is on
  * @returns {number} seconds (Infinity = it never changes)
  */
 export function nextBackdropChange(time, tier = 0, reduced = false) {
-  if (reduced || !paletteFor(tier).flicker) return Infinity;
+  if (reduced) return Infinity;
+  if (paletteFor(tier).pulse) return PULSE_STEP;
+  if (!paletteFor(tier).flicker) return Infinity;
   const k = Math.floor(time / BURST_EVERY);
   const start = burstStart(k);
   if (start !== null && time >= start && time < start + BURST_LEN) {
@@ -399,17 +434,379 @@ function cobweb(ctx, x, y, s, dir) {
   }
 }
 
+// ---- The living room at home (SPEC D19) ----
+// Drawn like the comics: flat warm colours with a soft ink outline. The face covers the middle, so the pieces sit
+// where they show: the lamp and the picture above and beside the head, the sofa back behind the shoulders, the
+// bookshelf at the side. Sizes go by u = 1% of the short side so phones and desktops look alike.
+
+/**
+ * Where the floor lamp's shade is: beside the head, next to the sofa arm.
+ * @param {number} w width
+ * @param {number} h height
+ * @returns {{x: number, y: number, s: number}} centre of the shade and its size in CSS px
+ */
+function homeLampSpot(w, h) {
+  const s = Math.max(26, Math.min(64, Math.min(w, h) * 0.11));
+  return w > h ? { x: w * 0.165, y: h * 0.24, s } : { x: w * 0.11, y: h * 0.1, s };
+}
+
+/**
+ * Fill and outline the path just built, comic style (a soft ink line).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {string} fill fill colour
+ * @param {number} lw outline width
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function inked(ctx, fill, lw, pal) {
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = pal.ink;
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = lw;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * A rounded box path (no fill yet).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x left
+ * @param {number} y top
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} r corner radius
+ * @returns {void}
+ */
+function box(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2)));
+}
+
+/**
+ * The wallpaper: a peach gradient, soft vertical stripes and little four-dot flowers between them.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} floorY where the floor starts
+ * @param {number} u size unit
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function homeWall(ctx, w, floorY, u, pal) {
+  const g = ctx.createLinearGradient(0, 0, 0, floorY);
+  g.addColorStop(0, pal.wallTop);
+  g.addColorStop(1, pal.wallBottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, floorY);
+  const step = u * 11;
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = pal.stripes;
+  for (let x = u * 3; x < w; x += step) ctx.fillRect(x, 0, u * 4.2, floorY);
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = pal.dots;
+  const d = Math.max(1.2, u * 0.45);
+  for (let x = u * 3 + u * 4.2 + (step - u * 4.2) / 2, col = 0; x < w + step; x += step, col += 1) {
+    for (let y = (col % 2) * u * 6 + u * 4; y < floorY - u * 4; y += u * 12) {
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        ctx.beginPath(); ctx.arc(x + dx * d * 1.6, y + dy * d * 1.6, d, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The wooden floor with boards, the skirting board, and the edge of a coral rug with a yellow band and fringe.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} floorY where the floor starts
+ * @param {number} u size unit
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function homeFloor(ctx, w, h, floorY, u, pal) {
+  ctx.fillStyle = pal.floor;
+  ctx.fillRect(0, floorY, w, h - floorY);
+  ctx.strokeStyle = pal.boards;
+  ctx.lineWidth = Math.max(1.5, u * 0.5);
+  const fh = h - floorY;
+  for (const f of [0.22, 0.5, 0.8]) { ctx.beginPath(); ctx.moveTo(0, floorY + fh * f); ctx.lineTo(w, floorY + fh * f); ctx.stroke(); }
+  for (let x = u * 8; x < w; x += u * 26) {
+    ctx.beginPath();
+    ctx.moveTo(x, floorY + fh * 0.22); ctx.lineTo(x, floorY + fh * 0.5);
+    ctx.moveTo(x + u * 13, floorY + fh * 0.5); ctx.lineTo(x + u * 13, floorY + fh * 0.8);
+    ctx.stroke();
+  }
+  // The rug in front of the sofa (its far edge shows; the rest runs out of the picture).
+  const ry = floorY + fh * 0.38;
+  box(ctx, w * 0.12, ry, w * 0.76, h, u * 1.5);
+  inked(ctx, pal.rug, Math.max(1.2, u * 0.4), pal);
+  ctx.fillStyle = pal.rugBand;
+  ctx.fillRect(w * 0.12 + u * 2, ry + u * 1.6, w * 0.76 - u * 4, Math.max(2, u * 0.9));
+  ctx.strokeStyle = '#fff3e3';
+  ctx.lineWidth = Math.max(1, u * 0.3);
+  for (let x = w * 0.12 + u; x < w * 0.88 - u * 0.5; x += u * 1.6) { ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry - u * 1.1); ctx.stroke(); }
+  // Skirting board along the bottom of the wall.
+  box(ctx, -4, floorY - u * 2.4, w + 8, u * 2.6, 0);
+  inked(ctx, pal.skirting, Math.max(1.2, u * 0.4), pal);
+}
+
+/**
+ * A framed picture of green hills and a sun (the same picture as in the comics' living room).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} cx centre x
+ * @param {number} cy centre y
+ * @param {number} pw picture width (the frame goes around it)
+ * @param {number} u size unit
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function homePicture(ctx, cx, cy, pw, u, pal) {
+  const ph = pw * 0.75;
+  const x = cx - pw / 2;
+  const y = cy - ph / 2;
+  const f = Math.max(4, pw * 0.07);
+  const lw = Math.max(1.2, u * 0.4);
+  ctx.fillStyle = 'rgba(96,52,30,0.18)'; // a soft shadow on the wall
+  ctx.fillRect(x - f + u, y - f + u * 1.2, pw + f * 2, ph + f * 2);
+  box(ctx, x - f, y - f, pw + f * 2, ph + f * 2, 2);
+  inked(ctx, pal.frame, lw, pal);
+  ctx.save();
+  box(ctx, x, y, pw, ph, 0);
+  ctx.fillStyle = '#cfeefa';
+  ctx.fill();
+  ctx.clip();
+  ctx.beginPath();
+  ctx.moveTo(x, y + ph);
+  ctx.lineTo(x + pw * 0.35, y + ph * 0.47);
+  ctx.lineTo(x + pw * 0.6, y + ph * 0.8);
+  ctx.lineTo(x + pw * 0.75, y + ph * 0.6);
+  ctx.lineTo(x + pw, y + ph);
+  ctx.closePath();
+  inked(ctx, '#59b85f', lw, pal);
+  ctx.beginPath(); ctx.arc(x + pw * 0.75, y + ph * 0.27, pw * 0.1, 0, Math.PI * 2);
+  inked(ctx, '#ffd25a', lw, pal);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = Math.max(1, f * 0.3);
+  ctx.beginPath(); ctx.moveTo(x - f * 0.6, y + ph * 0.6); ctx.lineTo(x - f * 0.6, y - f * 0.6); ctx.lineTo(x + pw * 0.4, y - f * 0.6); ctx.stroke();
+}
+
+/**
+ * The plant from the comics (green leaves in a coral pot), standing with its pot bottom at (x, y).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y bottom of the pot
+ * @param {number} s pot height
+ * @param {object} pal palette
+ * @param {number} lw outline width
+ * @returns {void}
+ */
+function homePlant(ctx, x, y, s, pal, lw) {
+  for (const [a, len] of [[-60, 0.75], [55, 0.7], [-40, 1], [35, 0.95], [-15, 1.25], [10, 1.15]]) {
+    ctx.save();
+    ctx.translate(x, y - s * 0.85);
+    ctx.rotate((a * Math.PI) / 180);
+    ctx.beginPath(); ctx.ellipse(0, -len * s * 0.6, s * 0.17, len * s * 0.6, 0, 0, Math.PI * 2);
+    inked(ctx, a % 20 ? '#3fae8c' : '#59b85f', lw, pal);
+    ctx.restore();
+  }
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.5, y - s);
+  ctx.lineTo(x + s * 0.5, y - s);
+  ctx.lineTo(x + s * 0.38, y);
+  ctx.lineTo(x - s * 0.38, y);
+  ctx.closePath();
+  inked(ctx, '#e8735a', lw, pal);
+}
+
+/**
+ * A bookshelf against the wall: wooden case, shelves of coloured books (some leaning), a little vase, and the plant
+ * on top.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x left
+ * @param {number} top top of the case
+ * @param {number} bw case width
+ * @param {number} floorY floor (bottom of the case)
+ * @param {number} u size unit
+ * @param {object} pal palette
+ * @param {() => number} rand random numbers
+ * @returns {void}
+ */
+function homeBookshelf(ctx, x, top, bw, floorY, u, pal, rand) {
+  const lw = Math.max(1.2, u * 0.4);
+  const side = Math.max(4, u * 1.4);
+  box(ctx, x, top, bw, floorY - top, u * 0.8);
+  inked(ctx, pal.shelf, lw, pal);
+  ctx.fillStyle = '#7d5232'; // the dark inside of the case
+  ctx.fillRect(x + side, top + side, bw - side * 2, floorY - top - side * 2);
+  const books = ['#e8735a', '#4f86e8', '#ffd25a', '#7b6ad8', '#3fae8c', '#f08cbf', '#fff3e3', '#d0672e'];
+  const rows = Math.max(3, Math.round((floorY - top) / (u * 15)));
+  const rh = (floorY - top - side * 2) / rows;
+  for (let r = 0; r < rows; r += 1) {
+    const base = top + side + rh * (r + 1);
+    let bx = x + side + u * 0.6;
+    const end = x + bw - side - u * 0.6;
+    while (bx < end - u * 1.5) {
+      const bwid = Math.min(end - bx, u * (1.8 + rand() * 1.6));
+      const bh = rh * (0.55 + rand() * 0.33);
+      if (rand() < 0.12 && end - bx > u * 6) { // a little round vase instead of a book
+        ctx.beginPath(); ctx.ellipse(bx + u * 2.2, base - bh * 0.35, u * 1.8, bh * 0.35, 0, 0, Math.PI * 2);
+        inked(ctx, '#bfe4fb', lw, pal);
+        bx += u * 5;
+        continue;
+      }
+      box(ctx, bx, base - bh, bwid, bh, u * 0.3);
+      inked(ctx, books[Math.floor(rand() * books.length)], lw * 0.8, pal);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; // a band on the spine
+      ctx.fillRect(bx + bwid * 0.2, base - bh * 0.78, bwid * 0.6, Math.max(1, u * 0.4));
+      bx += bwid + u * 0.15;
+    }
+    box(ctx, x + side * 0.6, base - u * 0.3, bw - side * 1.2, Math.max(3, u * 1.1), 1); // the shelf plank
+    inked(ctx, pal.shelf, lw * 0.8, pal);
+  }
+  homePlant(ctx, x + bw * 0.32, top, Math.max(16, u * 7), pal, lw);
+}
+
+/**
+ * The floor lamp's stand and shade (its light is drawn on top each time, see drawHomeLight).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, y: number, s: number}} L the shade (homeLampSpot)
+ * @param {number} floorY floor
+ * @param {number} u size unit
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function homeLamp(ctx, L, floorY, u, pal) {
+  const lw = Math.max(1.2, u * 0.45);
+  ctx.strokeStyle = pal.ink;
+  ctx.lineWidth = Math.max(2.5, L.s * 0.09);
+  ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(L.x, floorY + u * 1.5); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(L.x, floorY + u * 1.5, L.s * 0.5, L.s * 0.13, 0, 0, Math.PI * 2);
+  inked(ctx, pal.wood, lw, pal);
+  ctx.beginPath();
+  ctx.moveTo(L.x - L.s * 0.5, L.y - L.s * 0.45);
+  ctx.lineTo(L.x + L.s * 0.5, L.y - L.s * 0.45);
+  ctx.lineTo(L.x + L.s * 0.85, L.y + L.s * 0.42);
+  ctx.lineTo(L.x - L.s * 0.85, L.y + L.s * 0.42);
+  ctx.closePath();
+  inked(ctx, pal.shade, lw, pal);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; // a shine stripe on the shade
+  ctx.beginPath();
+  ctx.moveTo(L.x - L.s * 0.32, L.y - L.s * 0.4); ctx.lineTo(L.x - L.s * 0.2, L.y - L.s * 0.4);
+  ctx.lineTo(L.x - L.s * 0.42, L.y + L.s * 0.36); ctx.lineTo(L.x - L.s * 0.58, L.y + L.s * 0.36);
+  ctx.closePath(); ctx.fill();
+}
+
+/**
+ * The back of the teal sofa he sits on: a long padded back with cushions, and a round arm at each end.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x0 left end
+ * @param {number} x1 right end
+ * @param {number} top top of the back
+ * @param {number} armTop top of the arms
+ * @param {number} floorY floor
+ * @param {number} u size unit
+ * @param {object} pal palette
+ * @returns {void}
+ */
+function homeSofa(ctx, x0, x1, top, armTop, floorY, u, pal) {
+  const lw = Math.max(1.4, u * 0.5);
+  const armW = Math.max(u * 9, (x1 - x0) * 0.13);
+  ctx.fillStyle = 'rgba(96,52,30,0.2)'; // shadow on the floor
+  ctx.beginPath(); ctx.ellipse((x0 + x1) / 2, floorY + u * 1.5, (x1 - x0) * 0.52, u * 3, 0, 0, Math.PI * 2); ctx.fill();
+  box(ctx, x0 + armW * 0.4, top, x1 - x0 - armW * 0.8, floorY - top, u * 6);
+  inked(ctx, '#36997b', lw, pal);
+  const n = 3;
+  const cw = (x1 - x0 - armW * 2) / n;
+  for (let i = 0; i < n; i += 1) {
+    box(ctx, x0 + armW + i * cw + u * 0.6, top + u * 2.4, cw - u * 1.2, (floorY - top) * 0.62, u * 4);
+    inked(ctx, '#4cbb98', lw * 0.85, pal);
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.ellipse(x0 + armW + i * cw + cw * 0.35, top + u * 5, cw * 0.18, u * 1.2, -0.2, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const ax of [x0, x1 - armW]) {
+    box(ctx, ax, armTop, armW, floorY - armTop, u * 4.5);
+    inked(ctx, pal.sofa, lw, pal);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath(); ctx.ellipse(ax + armW * 0.5, armTop + u * 2.2, armW * 0.3, u * 1.1, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/**
+ * Paint the whole still living room: wall, floor and rug, picture, bookshelf with the plant, the floor lamp and the
+ * sofa behind him, then a soft warm vignette so the face stays the brightest thing.
+ * @param {CanvasRenderingContext2D} ctx where to paint (CSS px)
+ * @param {number} w width
+ * @param {number} h height
+ * @param {object} pal palette (PALETTES.home)
+ * @returns {void}
+ */
+function drawHome(ctx, w, h, pal) {
+  const rand = rng(5521);
+  const land = w > h;
+  const u = Math.min(w, h) / 100;
+  const floorY = h * (land ? 0.86 : 0.9);
+  homeWall(ctx, w, floorY, u, pal);
+  homeFloor(ctx, w, h, floorY, u, pal);
+  const L = homeLampSpot(w, h);
+  if (land) {
+    homePicture(ctx, w * 0.715, h * 0.3, Math.max(70, Math.min(150, w * 0.14)), u, pal);
+    homeBookshelf(ctx, w * 0.85, h * 0.2, w * 0.13, floorY, u, pal, rand);
+    homeLamp(ctx, L, floorY, u, pal);
+    homeSofa(ctx, w * 0.235, w * 0.765, h * 0.56, h * 0.67, floorY, u, pal);
+  } else {
+    homePicture(ctx, w * 0.6, h * 0.095, Math.max(60, Math.min(150, w * 0.24)), u, pal);
+    homeBookshelf(ctx, w * 0.83, h * 0.17, w * 0.22, floorY, u, pal, rand);
+    homeLamp(ctx, L, floorY, u, pal);
+    homeSofa(ctx, -w * 0.06, w * 1.06, h * 0.6, h * 0.7, floorY, u, pal);
+  }
+  const v = ctx.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.38, w / 2, h * 0.45, Math.hypot(w, h) * 0.62);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, pal.vignette);
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, w, h);
+}
+
+/**
+ * The floor lamp's light at home: a big soft warm pool on the wall and a glow under the shade, at this brightness.
+ * @param {CanvasRenderingContext2D} ctx where to draw (CSS px)
+ * @param {number} w width
+ * @param {number} h height
+ * @param {object} pal palette (PALETTES.home)
+ * @param {number} level brightness 0..1 (lampLevel)
+ * @returns {void}
+ */
+function drawHomeLight(ctx, w, h, pal, level) {
+  const L = homeLampSpot(w, h);
+  const R = Math.min(w, h) * 0.62;
+  const g = ctx.createRadialGradient(L.x, L.y, L.s * 0.4, L.x, L.y, R);
+  g.addColorStop(0, `rgba(${pal.light},${0.5 * level})`);
+  g.addColorStop(0.45, `rgba(${pal.light},${0.18 * level})`);
+  g.addColorStop(1, `rgba(${pal.light},0)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(L.x - R, L.y - R, R * 2, R * 2);
+  const by = L.y + L.s * 0.42; // the bright rim under the shade where the bulb peeks out
+  ctx.fillStyle = `rgba(255,246,200,${0.85 * level})`;
+  ctx.beginPath(); ctx.ellipse(L.x, by, L.s * 0.8, L.s * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = `rgba(255,255,240,${0.6 * level})`;
+  ctx.beginPath(); ctx.ellipse(L.x, by, L.s * 0.3, L.s * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+}
+
 /**
  * Paint the still part of the room (everything but the lamp's light) for a tier.
  * Tiers 1 and 2: the same room recoloured and cleaned up for now (T5.1 adds their own pieces here).
  * @param {CanvasRenderingContext2D} ctx where to paint (CSS px)
  * @param {number} w width
  * @param {number} h height
- * @param {number} tier 0, 1 or 2
+ * @param {number|string} tier 0, 1 or 2, or 'home' for the living room
  * @returns {void}
  */
 function drawRoom(ctx, w, h, tier) {
   const pal = paletteFor(tier);
+  if (pal.pulse) { drawHome(ctx, w, h, pal); return; }
   const rand = rng(9173 + tier);
   const land = w > h;
   const floorY = h * (land ? 0.86 : 0.9);
@@ -493,12 +890,13 @@ function drawRoom(ctx, w, h, tier) {
  * @param {CanvasRenderingContext2D} ctx where to draw (CSS px)
  * @param {number} w width
  * @param {number} h height
- * @param {number} tier 0..2
+ * @param {number|string} tier 0..2, or 'home'
  * @param {number} level brightness 0..1 (lampLevel)
  * @returns {void}
  */
 function drawLight(ctx, w, h, tier, level) {
   const pal = paletteFor(tier);
+  if (pal.pulse) { drawHomeLight(ctx, w, h, pal, level); return; }
   const L = lampSpot(w, h);
   if (level < 1) {
     ctx.fillStyle = `rgba(10,16,12,${(1 - level) * 0.3})`;
@@ -542,16 +940,18 @@ function roomCanvas(w, h, tier, dpr) {
 }
 
 /**
- * Draw the studio room behind the face: the cached still room, then the lamp light for this moment.
+ * Draw the room behind the face (the studio, or the living room at home): the cached still room, then the lamp
+ * light for this moment.
  * @param {CanvasRenderingContext2D} ctx where to draw (already scaled so 1 unit = 1 CSS px)
  * @param {number} w width in CSS px
  * @param {number} h height in CSS px
- * @param {{tier?: number, time?: number, reduced?: boolean, dpr?: number}} [o] studio tier 0..2 (SPEC D11), seconds
- *   since the scene started (for the flicker), reduced motion (steady light), pixel ratio (read from ctx when left out)
+ * @param {{room?: string, tier?: number, time?: number, reduced?: boolean, dpr?: number}} [o] room 'studio'
+ *   (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), seconds since the scene started (for the flicker or
+ *   the home lamp's breathing), reduced motion (steady light), pixel ratio (read from ctx when left out)
  * @returns {void}
  */
 export function drawBackdrop(ctx, w, h, o = {}) {
-  const tier = BACKDROP_TIERS.includes(o.tier) ? o.tier : 0;
+  const tier = backdropKind(o.room, o.tier);
   const dpr = o.dpr ?? (ctx.getTransform?.().a || 1);
   ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr), 0, 0, w, h);
   drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));

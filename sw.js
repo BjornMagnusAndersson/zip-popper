@@ -35,6 +35,11 @@ const PRECACHE = [
   './js/core/soundTable.js',
   './js/core/strings.js',
   './js/core/synthVoices.js',
+  './js/core/music.js',
+  './js/core/music-logic.js',
+  './js/core/music-voices.js',
+  './js/data/music-data.js',
+  './music-test.html',
   './js/core/pwa.js',
   './js/data/bumps.js',
   './js/data/chapters.js',
@@ -69,18 +74,20 @@ const PRECACHE = [
   './js/data/comics/strip-scare.js',
   './js/pop/art.js',
   './js/pop/backdrop.js',
+  './js/pop/characters.js',
   './js/pop/engine.js',
   './js/pop/face.js',
   './js/pop/logic.js',
   './js/pop/pop-mode.js',
   './js/pop/round-logic.js',
+  './js/pop/squeeze-logic.js',
   './js/pop/tool-logic.js',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache.

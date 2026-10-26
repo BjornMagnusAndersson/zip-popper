@@ -105,10 +105,11 @@ function intOrNull(v) {
 }
 
 /**
- * Reads the testing flags from the page address (?test, ?chapter=N, ?customer=M, ?money=, ?rep=, ?seed=, ?name=, ?demo).
+ * Reads the testing flags from the page address (?test, ?chapter=N, ?customer=M, ?money=, ?rep=, ?seed=, ?name=, ?demo,
+ * ?squeeze = the two-finger squeeze switch on, T1.7).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
- *   rep: number|null, seed: number|null, name: string|null}} the flags
+ *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean}} the flags
  */
 export function parseFlags(search) {
   const p = new URLSearchParams(search ?? '');
@@ -116,7 +117,7 @@ export function parseFlags(search) {
   return {
     test: p.has('test'), demo: p.has('demo'), chapter: intOrNull(p.get('chapter')), customer: intOrNull(p.get('customer')),
     money: intOrNull(p.get('money')), rep: intOrNull(p.get('rep')), seed: seed !== null && seed > 0 ? seed : null,
-    name: p.has('name') ? sanitizeName(p.get('name')) : null,
+    name: p.has('name') ? sanitizeName(p.get('name')) : null, squeeze: p.has('squeeze'),
   };
 }
 
@@ -144,6 +145,7 @@ export function applyTestFlags(save, flags, now = Date.now()) {
   }
   if (flags.money !== null) s.money = Math.max(0, flags.money);
   if (flags.rep !== null) s.reputation = Math.max(0, flags.rep);
+  if (flags.squeeze) s.settings = { ...s.settings, squeeze: true }; // ?squeeze: the two-finger squeeze on (T1.7)
   return normalizeSave(s, now);
 }
 
@@ -186,7 +188,10 @@ export function markSeen(save, id) {
 export function finishStep(save, step) {
   // A chapter strip counts as passed once it is in seenComics (progressFromSave reads it there), so marking it seen is
   // all there is to do; this also makes it safe when the comic player already marked it seen.
-  if (step.type === 'strip') return markSeen(save, step.stripId);
+  if (step.type === 'strip') {
+    const seen = markSeen(save, step.stripId);
+    return { ...seen, ...progressToSave(progressFromSave(seen)) }; // a strip-only chapter moves on at once
+  }
   let s = save;
   if (step.type === 'teaser') s = markSeen(s, step.stripId);
   if (step.type === 'scare') {
@@ -239,8 +244,19 @@ export function backdropTier(save) {
 }
 
 /**
+ * Which room the pop scene shows for a chapter (SPEC D19): the career chapter (5) is in her studio; the home
+ * chapters before it (0 to 4: she pops her husband) are in their living room.
+ * @param {number} chapter chapter id
+ * @returns {'home'|'studio'} the room
+ */
+export function backdropRoom(chapter) {
+  return getChapter(chapter)?.kind === 'career' ? 'studio' : 'home';
+}
+
+/**
  * Everything pop-mode.js startRound needs for a story customer (all but onFinish): the customer and their bumps
- * (chapter-logic.js customerSpec), the owned tools, mastery, the studio room, decoys (career customers from number 4,
+ * (chapter-logic.js customerSpec), the owned tools, mastery, the room (home or studio, backdropRoom) and studio
+ * tier, decoys (career customers from number 4,
  * ECONOMY.md section 6) and the request (requests.js pickRequest; the hurry limit uses the mastery-scaled hold times,
  * estimated as bumpCount times the average hold of the allowed kinds because the real face is laid out later).
  * @param {object} save the save
@@ -260,7 +276,7 @@ export function roundArgs(save, step, forcedSeed = null) {
   return {
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
     seed, holdFactors, roughReductions, unlockedTools: [...economyFromSave(save).unlockedTools],
-    request: pickRequest(spec, holds, seed + 101, step.n), tier: backdropTier(save), career: true,
+    request: pickRequest(spec, holds, seed + 101, step.n), room: backdropRoom(step.chapter), tier: backdropTier(save), career: true,
     decoys: career && step.n >= 4,
   };
 }
@@ -274,7 +290,7 @@ export function roundArgs(save, step, forcedSeed = null) {
 export function freeArgs(save, forcedSeed = null) {
   const { holdFactors, roughReductions } = masteryTables(save);
   return {
-    unlockedTools: [...economyFromSave(save).unlockedTools], tier: backdropTier(save), holdFactors, roughReductions,
+    unlockedTools: [...economyFromSave(save).unlockedTools], room: 'studio', tier: backdropTier(save), holdFactors, roughReductions,
     ...(Number.isFinite(forcedSeed) && forcedSeed > 0 ? { seed: forcedSeed } : {}),
   };
 }
@@ -387,13 +403,29 @@ export function pendingScrub(save) {
 /**
  * Changes one Settings switch.
  * @param {object} save the save
- * @param {string} key sound, music, vibration or reducedMotion
+ * @param {string} key sound, music, vibration, reducedMotion or squeeze (two-finger squeeze, T1.7)
  * @param {boolean} value on or off
  * @returns {object} new save
  */
 export function setSetting(save, key, value) {
-  if (!['sound', 'music', 'vibration', 'reducedMotion'].includes(key)) return save;
+  if (!['sound', 'music', 'vibration', 'reducedMotion', 'squeeze'].includes(key)) return save;
   return { ...save, settings: { ...save.settings, [key]: Boolean(value) } };
+}
+
+/**
+ * Which music plays (SPEC D18): 'off' when the music switch is off; 'hectic' in a competition or timed event, and in a
+ * customer round while its hurry or combo request is still open; 'calm' everywhere else (menus, comics, shop, free
+ * play, normal customers). Later competition modes only need to pass competition: true.
+ * @param {{musicOn?: boolean, screen?: string, request?: {type: string}|null, requestOpen?: boolean,
+ *   competition?: boolean}} [context] musicOn = the saved music switch; screen = 'menu', 'comic', 'shop', 'free',
+ *   'round' and so on; request = the round's request; requestOpen = false once it is done or missed
+ * @returns {'calm'|'hectic'|'off'} the mood
+ */
+export function musicMoodFor({ musicOn = true, screen = 'menu', request = null, requestOpen = true, competition = false } = {}) {
+  if (!musicOn) return 'off';
+  if (competition) return 'hectic';
+  const busy = request?.type === 'hurry' || request?.type === 'combo';
+  return screen === 'round' && busy && requestOpen ? 'hectic' : 'calm';
 }
 
 /**

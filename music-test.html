@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music test</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #f8f5ef; color: #2b2b2b; padding: 16px; max-width: 520px; }
+  h1 { font-size: 1.3rem; margin: 0 0 8px; }
+  p { margin: 6px 0 14px; line-height: 1.4; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  button { font: inherit; padding: 14px 16px; border-radius: 12px; border: 1px solid #ccc; background: #fff; min-width: 96px; flex: 1 1 auto; }
+  button[aria-pressed="true"] { background: #ffe3b3; border-color: #e0a040; font-weight: 600; }
+  label { display: block; margin: 14px 0 4px; }
+  input[type="range"] { width: 100%; }
+  #status { margin-top: 16px; padding: 12px; border-radius: 12px; background: #fff; border: 1px solid #e3ddd2; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<!-- Developer page (T6.1a), not part of the game: try the two music moods, the crossfade and the volume on a phone.
+     Serve with: npx serve src (ES modules need http, not file://). All text comes from strings/en.json (music.*). -->
+<h1 id="title"></h1>
+<p id="intro"></p>
+<div class="row">
+  <button type="button" id="calm"></button>
+  <button type="button" id="hectic"></button>
+  <button type="button" id="off"></button>
+</div>
+<div class="row"><button type="button" id="swap"></button></div>
+<label for="vol" id="volLabel"></label>
+<input type="range" id="vol" min="0" max="100" step="1">
+<div id="status" role="status"></div>
+<script type="module">
+import { loadStrings, t } from './js/core/strings.js';
+import { createSound } from './js/core/sound.js';
+import { createMusic } from './js/core/music.js';
+
+await loadStrings('en');
+const $ = (id) => document.getElementById(id);
+const sound = createSound({ sfxOn: false, musicOn: true });
+const music = createMusic({ sound });
+
+document.title = t('music.test.title');
+$('title').textContent = t('music.test.title');
+$('intro').textContent = t('music.test.intro');
+$('calm').textContent = t('music.mood.calm');
+$('hectic').textContent = t('music.mood.hectic');
+$('off').textContent = t('music.mood.off');
+$('swap').textContent = t('music.test.swap');
+$('volLabel').textContent = t('music.test.volume');
+$('vol').value = String(Math.round(music.volume() * 100));
+
+/** Ask for a mood (inside the tap, so the sound may start) and mark the pressed button. */
+function choose(mood) {
+  sound.unlock();
+  music.setMood(mood);
+  for (const id of ['calm', 'hectic', 'off']) $(id).setAttribute('aria-pressed', String(id === mood));
+}
+for (const id of ['calm', 'hectic', 'off']) $(id).addEventListener('click', () => choose(id));
+$('swap').addEventListener('click', () => choose(music.mood() === 'calm' ? 'hectic' : 'calm'));
+$('vol').addEventListener('input', () => music.setVolume(Number($('vol').value) / 100));
+
+/** Show the mood and where the tune is (bar, part, loop). */
+function showStatus() {
+  const p = music.position();
+  $('status').textContent = p
+    ? t('music.test.status', { mood: t(`music.mood.${p.mood}`), bar: p.bar, bars: p.bars, section: p.section, pass: p.pass + 1 })
+    : t(music.mood() === 'off' ? 'music.test.silent' : 'music.test.waiting');
+}
+setInterval(showStatus, 250);
+showStatus();
+</script>
+</body>
+</html>

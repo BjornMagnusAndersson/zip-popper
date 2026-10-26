@@ -14,6 +14,7 @@
 import { t } from '../core/strings.js';
 import { createSaveStore } from '../core/save.js';
 import { createSound } from '../core/sound.js';
+import { createMusic } from '../core/music.js';
 import { createPopMode } from '../pop/pop-mode.js';
 import { faceGeometry } from '../pop/logic.js';
 import { makeFaceTexture } from '../pop/face.js';
@@ -79,6 +80,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   let screen = null; // the screen on show ({node, dispose})
   let pop = null; // the pop scene while a round or free play is on
   const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music }); // comics and menus
+  const music = createMusic({ sound }); // background music (T6.1a), on the same audio as the sounds
+  let hurryTimer = 0; // ends the hectic music when a hurry request's time is up
+  // Browsers only allow sound after a tap: the first tap anywhere wakes the audio, and the music starts then.
+  for (const type of ['click', 'touchend', 'keydown']) (root.ownerDocument ?? root).addEventListener(type, () => sound.unlock(), { passive: true });
   installVibrationSwitch();
 
   /**
@@ -96,6 +101,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   const still = () => Boolean(save.settings.reducedMotion);
   /** The player's name for {name} in texts. @returns {string} the name (the default name when empty) */
   const playerName = () => save.playerName || t('name.default');
+  /**
+   * The pop scene's two-finger squeeze options (T1.7): the Settings switch, and the one-time hint (remembered once shown).
+   * @returns {{squeeze: boolean, squeezeHint: boolean, onSqueezeHint: () => void}} createPopMode options
+   */
+  const squeezeOptions = () => ({
+    squeeze: Boolean(save.settings.squeeze),
+    squeezeHint: Boolean(save.settings.squeeze) && !save.squeezeHintSeen,
+    onSqueezeHint: () => persist({ ...save, squeezeHintSeen: true }),
+  });
 
   /**
    * Keep a new save and write it to storage.
@@ -121,6 +135,29 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     } catch { /* cannot wrap here: vibration then always follows the phone */ }
   }
 
+  /**
+   * Play the music that fits what is on show (app-logic.js musicMoodFor; the saved music switch decides first).
+   * @param {{screen: string, request?: object|null, requestOpen?: boolean}} context what is on show
+   * @returns {void}
+   */
+  function setMusic(context) {
+    clearTimeout(hurryTimer);
+    music.setMood(L.musicMoodFor({ musicOn: save.settings.music, ...context }));
+  }
+
+  /**
+   * Music for a customer round: hectic while a hurry or combo request is open. A hurry request is over when its time
+   * is up; a combo request counts as open until the round ends (the pop scene does not report it earlier).
+   * @param {object|null} request the round's request
+   * @returns {void}
+   */
+  function roundMusic(request) {
+    setMusic({ screen: 'round', request });
+    if (request?.type === 'hurry' && Number.isFinite(request.timeLimit)) {
+      hurryTimer = setTimeout(() => setMusic({ screen: 'round', request, requestOpen: false }), request.timeLimit * 1000);
+    }
+  }
+
   /** Take the screen or the pop scene that is on show away. @returns {void} */
   function clear() {
     screen?.dispose();
@@ -136,6 +173,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function show(next) {
     clear();
+    setMusic({ screen: 'menu' });
     screen = next;
     root.append(next.node);
     return next;
@@ -152,6 +190,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     if (!strip) { then(); return; }
     clear();
     sound.unlock();
+    setMusic({ screen: 'comic' });
     playComic(strip, {
       name: playerName(), reducedMotion: still() || undefined, sound, arts: ARTS,
       onSeen: (sid) => persist(L.markSeen(save, sid)),
@@ -280,13 +319,13 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playRound(step, args) {
     clear();
-    pop = createPopMode({ t, storage: popStorage, reducedMotion: still() });
+    pop = createPopMode({ t, storage: popStorage, reducedMotion: still(), ...squeezeOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     sound.unlock();
     pop.unlock();
     /** Start (or start again) the round. @returns {void} */
-    const start = () => pop.startRound({ ...args, onFinish: (payload) => finishRound(step, payload, start) });
+    const start = () => { roundMusic(args.request); pop.startRound({ ...args, onFinish: (payload) => finishRound(step, payload, start) }); };
     start();
   }
 
@@ -313,11 +352,12 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   /** Free play (SPEC section 6): random faces, the owned tools, never fails, changes no money or stats. @returns {void} */
   function startFreePlay() {
     clear();
-    pop = createPopMode({ t, storage: popStorage, reducedMotion: still() });
+    pop = createPopMode({ t, storage: popStorage, reducedMotion: still(), ...squeezeOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     sound.unlock();
     pop.unlock();
+    setMusic({ screen: 'free' });
     pop.startFree(L.freeArgs(save, flags.seed));
   }
 
@@ -393,7 +433,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       onToggle: (key, value) => {
         persist(L.setSetting(save, key, value));
         if (key === 'sound') sound.setOn(value);
-        if (key === 'music') sound.setMusicOn(value);
+        if (key === 'music') { sound.setMusicOn(value); sound.unlock(); setMusic({ screen: 'menu' }); }
         if (key === 'reducedMotion') s.node.classList.toggle('app-still', value);
       },
       onExport: () => { download(store.exportText(save)); s.update({ notice: { key: 'ui.settings.exported' } }); },
@@ -403,6 +443,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
           save = result.save;
           sound.setOn(save.settings.sound);
           sound.setMusicOn(save.settings.music);
+          setMusic({ screen: 'menu' });
         }
         s.update({ notice: { key: importNoticeKey(result) }, playerName: save.playerName, settings: save.settings });
       },

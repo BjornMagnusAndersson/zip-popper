@@ -1,5 +1,5 @@
 // The settings screen (T3.1a): the player's name (the same field as the first start), switches for sound, music,
-// vibration and reduced motion, export and import of the save file, and "Start over" with a confirm step.
+// vibration, reduced motion and the two-finger squeeze (T1.7, with a hint line), export and import of the save file, and "Start over" with a confirm step.
 // Nothing is saved here: every change is reported (onName, onToggle, onExport, onImport, onReset) and the game saves.
 
 import { el, button, icon, header, screenShell } from './dom.js';
@@ -22,7 +22,7 @@ export function createSettingsScreen({
   t, playerName = '', settings = {}, onName, onToggle, onExport, onImport, onReset, onBack, reducedMotion = false,
 }) {
   const shell = screenShell('settings', { label: t('ui.settings.title'), reducedMotion });
-  let values = { sound: true, music: true, vibration: true, reducedMotion: false, ...settings };
+  let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, ...settings };
   const head = header(t, t('ui.settings.title'), onBack, shell.signal);
   const body = el('div', 'app-body app-settings');
   const notice = el('p', 'app-notice');
@@ -48,7 +48,12 @@ export function createSettingsScreen({
   const switchCard = el('section', 'app-card app-setcard');
   const switches = SETTING_TOGGLES.map((tog) => {
     const row = el('div', 'app-switchrow');
-    const label = el('span', 'app-switchrow__label', t(tog.labelKey));
+    let label = el('span', 'app-switchrow__label', t(tog.labelKey));
+    if (tog.hintKey) { // a switch with a short explanation under its name (the two-finger squeeze, T1.7)
+      const text = el('div', 'app-switchrow__text');
+      text.append(label, el('span', 'app-switchrow__hint', t(tog.hintKey)));
+      label = text;
+    }
     const sw = el('button', 'app-switch');
     sw.type = 'button';
     sw.setAttribute('role', 'switch');

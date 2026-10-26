@@ -17,6 +17,9 @@
 // "whole face" buttons, the mouse wheel, or the keys + - 0 and arrows (engine.js has the gesture rule). The room
 // behind zooms along. Every new customer starts at the whole face again.
 // Keyboard: Tab to the face, Enter or Space squeezes the next bump, peels or wipes. All text comes from t().
+// Two-finger squeeze (T1.7): with the Settings switch on (squeeze: true) the scene lets two fingers round a bump
+// squeeze it (engine.js); the fingers' hint line then adds a short squeeze tip, and the very first time a one-time
+// hint says how (until the first pop).
 // Three ways to play (T3.1b):
 // - the demo (the old path, what index.html uses today): random faces, every built tool, "New face" button.
 // - startRound(...): ONE customer driven by the game: exactly their bumps and bump kinds, only the tools the player
@@ -31,8 +34,9 @@ import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
 import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
-import { drawBackdrop, nextBackdropChange } from './backdrop.js';
+import { drawBackdrop, nextBackdropChange, backdropKind } from './backdrop.js';
 import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
+import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
 import {
   applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
@@ -100,7 +104,7 @@ function buzz(pattern) {
  * Create the pop scene.
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
  *   count?: number, tier?: number, career?: boolean, onReputationHit?: (amount: number) => void,
- *   reducedMotion?: boolean}} o the text lookup
+ *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
  *   bumps per face, the studio tier for the room behind (0..2), career = a Story/Career round that can fail (free play
@@ -113,8 +117,11 @@ function buzz(pattern) {
  */
 export function createPopMode({
   t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, career = false,
-  onReputationHit = () => {}, reducedMotion = false,
+  onReputationHit = () => {}, reducedMotion = false, squeeze = false, squeezeHint = false, onSqueezeHint = () => {},
 }) {
+  // Two-finger squeeze (T1.7): squeeze = the Settings switch; squeezeHint = show "squeeze between two fingers" until
+  // the first pop of this scene (onSqueezeHint is told once, so the game shows it only once ever).
+  let squeezeHintOn = Boolean(squeeze && squeezeHint);
   /** Calm version: the player's own setting (reducedMotion, T3.1c) or the phone's. @returns {boolean} true = less motion */
   const still = () => reducedMotion === true || prefersReducedMotion();
   const results = []; // every finished or failed customer's round data (game/scoring.js), newest last
@@ -125,6 +132,7 @@ export function createPopMode({
   let disposed = false;
   let ready = false; // mounted and measured: faces can be laid out
   let tier = firstTier;
+  let room = 'studio'; // the room behind the face: 'studio' or 'home' (startRound's room, SPEC D19)
   // How faces are made now: 'demo' (the old path), 'round' (one customer, startRound) or 'free' (startFree).
   // round: {customer, setup, holdFactors, roughReductions, irritation, request, onFinish, failMode, seed}
   let cfg = { kind: 'demo', failMode: career ? 'career' : 'free', unlockedTools: null };
@@ -316,6 +324,10 @@ export function createPopMode({
   function hintFor(step) {
     if (step === 'wipe') return t('pop.hint.wipe');
     if (step === 'cream' || step === 'done') return t('pop.hint.cream');
+    if (squeeze && canSqueeze(toolId)) { // T1.7: the squeeze switch is on and fingers are in hand
+      if (squeezeHintOn) return t('round.squeezeHint');
+      return t('pop.squeezeTip'); // a short fingers hint with the squeeze in it (keeps the hint line short)
+    }
     return t(`tool.${toolId}.hint`);
   }
 
@@ -519,8 +531,8 @@ export function createPopMode({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const reduced = still();
     const time = (performance.now() - back.start) / 1000;
-    drawBackdrop(ctx, w, h, { tier, time, reduced, dpr });
-    const next = nextBackdropChange(time, tier, reduced);
+    drawBackdrop(ctx, w, h, { room, tier, time, reduced, dpr });
+    const next = nextBackdropChange(time, backdropKind(room, tier), reduced);
     if (Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
   }
 
@@ -621,7 +633,7 @@ export function createPopMode({
     current = c;
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
-      width: w, height: h, dpr, reduced: still(), sound, buzz,
+      width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze,
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
@@ -636,6 +648,11 @@ export function createPopMode({
       onPatch: (n) => { c.patches = n; }, // the tip bonus for patches comes with the tips system
       onNote: (n) => { if (n === 'patchFirst' && current === c) hint.textContent = t('tool.patch.notYet'); },
       onPop: (p) => {
+        if (squeezeHintOn) { // the one-time squeeze hint has done its job: back to the tool's hint
+          squeezeHintOn = false;
+          try { onSqueezeHint(); } catch (e) { console.warn('onSqueezeHint failed:', e); }
+          if (c.scene?.step() === 'pop') hint.textContent = hintFor('pop');
+        }
         const clean = !c.owed.has(p.id); // clean = no Ow on this bump (counts for mastery and pay)
         c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean });
         c.popTypes.push(p.type);
@@ -713,11 +730,12 @@ export function createPopMode({
      * for "Try again", with the same seed for the same face). Before mount() it waits for the mount.
      * @param {{customer: {face: object}, bumpCount: number, allowedTypes: string[], difficulty?: number, seed?: number,
      *   holdFactors?: Object<string, number>, roughReductions?: Object<string, number>, unlockedTools?: string[],
-     *   request?: object|null, tier?: number, career?: boolean, decoys?: boolean,
+     *   request?: object|null, room?: string, tier?: number, career?: boolean, decoys?: boolean,
      *   onFinish: (result: object) => void}} o customer = chapter-logic.js customerSpec customer; difficulty =
      *   customerSpec difficulty (1 = normal); seed = the face (random when left out); holdFactors / roughReductions =
      *   per bump kind from economy.js holdFactor / roughReduction; unlockedTools = owned tools; request = requests.js
-     *   pickRequest result or null; tier = studio room 0..2; career = false makes a round that cannot fail (default
+     *   pickRequest result or null; room = 'home' (living room, SPEC D19) or 'studio' (default); tier = studio
+     *   room 0..2; career = false makes a round that cannot fail (default
      *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload
      * @returns {void}
      */
@@ -731,7 +749,9 @@ export function createPopMode({
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
       };
       buildToolBar(tools);
-      if (Number.isFinite(o.tier)) { tier = o.tier; paintBackdrop(); }
+      room = o.room === 'home' ? 'home' : 'studio';
+      if (Number.isFinite(o.tier)) tier = o.tier;
+      paintBackdrop();
       startNow(true);
     },
     /**
@@ -749,7 +769,9 @@ export function createPopMode({
       };
       if (Number.isFinite(o.seed) && o.seed > 0) { seed = Math.floor(o.seed); freshSeed = true; }
       buildToolBar(roundTools(cfg.unlockedTools));
-      if (Number.isFinite(o.tier)) { tier = o.tier; paintBackdrop(); }
+      room = 'studio'; // free play is always in the studio
+      if (Number.isFinite(o.tier)) tier = o.tier;
+      paintBackdrop();
       startNow(true);
     },
     /**

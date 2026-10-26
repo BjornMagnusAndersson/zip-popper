@@ -17,13 +17,30 @@ export const HUSBAND = {
   introKey: 'chapter.0.husband.intro',
   resultKeys: { happy: 'chapter.0.husband.happy', ok: 'chapter.0.husband.ok', ow: 'chapter.0.husband.ow' },
   deadlineKey: 'chapter.0.husband.deadline',
-  face: {
-    shape: 'square', skinTone: 'light', hair: 'short', hairColor: 'brown',
-    eyes: 'round', brows: 'thick', mouth: 'flat', accessories: [],
-  },
+  // His own look from the comics (pop/characters.js): tan skin, black hair with a curl, black beard, blue hoodie.
+  face: { character: 'husband', accessories: [] },
   bumps: 3,
   bumpTypes: ['whitehead'],
   chapter: 0,
+};
+
+/**
+ * The husband in his armor for chapter 2 (Sir Zitsalot): the only customer of that chapter, a small pop through the
+ * gap in the armor. Two whitehead bumps. His lines are chapter keys (chapter.2.husband.*). The pop scene draws him
+ * in his helmet (T2.4); the same armor option (plumes, cozy hat, cracks) serves the last boss later.
+ */
+export const HUSBAND_ARMOR = {
+  id: 'husbandArmor',
+  regular: true,
+  nameKey: 'chapter.2.husband.name',
+  introKey: 'chapter.2.husband.intro',
+  resultKeys: { happy: 'chapter.2.husband.happy', ok: 'chapter.2.husband.ok', ow: 'chapter.2.husband.ow' },
+  deadlineKey: 'chapter.2.husband.deadline',
+  // His comic look in his knight's helmet, visor up, one red plume (as in strip 2); the bumps sit in the open front.
+  face: { character: 'husband', armor: { plumes: 1 }, accessories: [] },
+  bumps: 2,
+  bumpTypes: ['whitehead'],
+  chapter: 2,
 };
 
 /**
@@ -45,7 +62,7 @@ export const CAREER_SHOP_TOOLS = ['cottonPad', 'tweezers', 'noseStrip', 'patch',
 
 /**
  * A roster entry says who customer number n of a chapter is:
- * - {who: 'husband'}: the tutorial husband (HUSBAND above)
+ * - {who: 'husband'}: the tutorial husband (HUSBAND above); {who: 'husbandArmor'}: the husband in armor (chapter 2)
  * - {who: 'regular', id}: a named regular from data/customers.js
  * - {who: 'generic', seed}: a face built by the seeded generator makeCustomer(seed, {chapter})
  * @param {number} count how many customers
@@ -83,11 +100,11 @@ export const CHAPTERS = [
   },
   {
     id: 2, titleKey: 'chapter.2.title', strip: 'strip2', kind: 'armor',
-    customers: makeRoster(3, 200, { 1: 'pete', 2: 'nils' }), difficulty: 1.0, after: [], shop: [],
+    customers: [{ who: 'husbandArmor' }], difficulty: 0.8, after: [], shop: [],
   },
   {
     id: 3, titleKey: 'chapter.3.title', strip: 'strip3', kind: 'support',
-    customers: makeRoster(3, 300, { 1: 'cora', 2: 'greta' }), difficulty: 1.0, after: [], shop: [],
+    customers: [], difficulty: 1.0, after: [], shop: [],
   },
   {
     id: 4, titleKey: 'chapter.4.title', strip: 'strip4', kind: 'special', special: 'phoneScroll',

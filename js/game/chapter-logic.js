@@ -10,7 +10,7 @@
 // The wiring job copies { chapter, customersDone } back into the save and adds the strip id to seenComics.
 
 import { REGULARS, makeCustomer, makeRng } from '../data/customers.js';
-import { CHAPTERS, HUSBAND, LAST_CHAPTER, getChapter, careerBand } from '../data/chapters.js';
+import { CHAPTERS, HUSBAND, HUSBAND_ARMOR, LAST_CHAPTER, getChapter, careerBand } from '../data/chapters.js';
 
 /** What `advance` accepts as the outcome of a step: finished, skipped on purpose (D15 "Next customer"), or try again. */
 export const OUTCOMES = ['done', 'skip', 'retry'];
@@ -44,10 +44,18 @@ export function normalizeProgress(raw) {
  */
 export function progressFromSave(save) {
   const s = save && typeof save === 'object' ? save : {};
-  const base = normalizeProgress({ chapter: s.chapter, customersDone: s.customersDone });
+  let base = normalizeProgress({ chapter: s.chapter, customersDone: s.customersDone });
   const seen = Array.isArray(s.seenComics) ? s.seenComics : [];
-  const strip = getChapter(base.chapter)?.strip;
-  return { ...base, stripSeen: base.stripSeen || (strip !== undefined && seen.includes(strip)) };
+  const stripSeenFor = (p) => {
+    const strip = getChapter(p.chapter)?.strip;
+    return { ...p, stripSeen: p.stripSeen || (strip !== undefined && seen.includes(strip)) };
+  };
+  base = stripSeenFor(base);
+  // A chapter that is only its comic strip (chapter 3) is over as soon as the strip is seen: move on to the next one.
+  while (base.stripSeen && chapterSteps(base.chapter).length === 1 && base.chapter < LAST_CHAPTER) {
+    base = stripSeenFor({ chapter: base.chapter + 1, customersDone: 0, stripSeen: false });
+  }
+  return base;
 }
 
 /**
@@ -119,7 +127,11 @@ export function advance(progress, outcome = 'done') {
   const p = normalizeProgress(progress);
   const result = typeof outcome === 'string' ? outcome : outcome?.result;
   if (result === 'retry' || isFinished(p)) return p;
-  if (!p.stripSeen) return { ...p, stripSeen: true };
+  if (!p.stripSeen) {
+    // A chapter that is only its comic strip (chapter 3) moves straight on to the next chapter.
+    if (chapterSteps(p.chapter).length === 1 && p.chapter < LAST_CHAPTER) return { chapter: p.chapter + 1, customersDone: 0, stripSeen: false };
+    return { ...p, stripSeen: true };
+  }
   const total = chapterSteps(p.chapter).length - 1;
   const done = p.customersDone + 1;
   if (done >= total && p.chapter < LAST_CHAPTER) return { chapter: p.chapter + 1, customersDone: 0, stripSeen: false };
@@ -153,6 +165,7 @@ export function customerSpec(chapterId, n) {
   if (!entry) return null;
   let base;
   if (entry.who === 'husband') base = HUSBAND;
+  else if (entry.who === 'husbandArmor') base = HUSBAND_ARMOR;
   else if (entry.who === 'regular') base = REGULARS.find((r) => r.id === entry.id);
   else base = makeCustomer(entry.seed, { chapter: Math.min(5, Math.max(2, ch.id)) });
   if (!base) return null;

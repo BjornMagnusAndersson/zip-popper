@@ -16,6 +16,7 @@ export const SOUND_TABLE = {
   pop_big: { type: 'synth', voice: 'bigpop', category: 'sfx' },
   pop_gold: { type: 'synth', voice: 'goldpop', category: 'sfx' },
   squish: { type: 'synth', voice: 'squish', category: 'sfx' },
+  squeeze: { type: 'synth', voice: 'squeak', category: 'sfx' }, // two-finger squeeze (T1.7): a short squeak, higher with {level}
   squelch: { type: 'synth', voice: 'squelch', category: 'sfx' },
   splat: { type: 'synth', voice: 'splat', category: 'sfx' },
   creak: { type: 'synth', voice: 'creak', category: 'sfx' }, // the Evil Horn creaking out (T1.3)
