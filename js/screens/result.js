@@ -10,16 +10,18 @@ import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-l
  * @param {{t: (key: string, vars?: object) => string, stars?: number, failed?: boolean,
  *   payout?: {popCoins?: number, tip?: number, combo?: number, requestBonus?: number, total?: number},
  *   reputationChange?: number, skipPenalty?: number, factKey?: string, reactionKey?: string, playerName?: string,
- *   onContinue?: () => void, onShop?: () => void, onTryAgain?: () => void, onNext?: () => void, reducedMotion?: boolean}} opts
+ *   onContinue?: () => void, onShop?: () => void, onTryAgain?: () => void, onNext?: () => void, reducedMotion?: boolean,
+ *   tagKey?: string|null, tagVars?: object|null}} opts
  *   t = string function; stars = 0 to 3; failed = the customer stormed off; payout = from roundPayout; reputationChange =
  *   points earned (not failed); skipPenalty = reputation "Next customer" costs (failed); factKey = info-card string key;
  *   reactionKey = what the customer says (a resultKeys string key); playerName = for the {name} in that line;
- *   onContinue = Continue; onShop = an optional "Shop" button beside Continue; onTryAgain / onNext = the two fail choices
+ *   onContinue = Continue; onShop = an optional "Shop" button beside Continue; onTryAgain / onNext = the two fail choices;
+ *   tagKey + tagVars = an optional small line under the stars (Keep working's reduced pay, T5.4)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
-  onContinue, onShop, onTryAgain, onNext, reducedMotion = false,
+  onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null,
 }) {
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
@@ -38,6 +40,7 @@ export function createResultScreen({
     starRow.append(s);
   });
   top.append(starRow);
+  if (tagKey) top.append(el('p', 'app-result__tag', t(tagKey, tagVars ?? {}))); // e.g. "Keep working pay: 60%" (T5.4)
 
   const left = el('div', 'app-result__left');
   const main = el('div', 'app-result__right');

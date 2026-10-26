@@ -1,5 +1,5 @@
-// The main menu (T3.1a): Continue (shows the current chapter's title), Free play, Comics, Shop, Your studio (T5.1c),
-// Settings, About.
+// The main menu (T3.1a): Continue (shows the current chapter's title), Keep working (T5.4, only after the ending),
+// Free play, Comics, Field guide (T6.5, when the game passes onGuide), Shop, Your studio (T5.1c), Settings, About.
 // State comes in, every tap goes out through a callback. update({playerName, chapterTitleKey}) refreshes the greeting
 // and the Continue line when the save changes.
 
@@ -9,18 +9,19 @@ import { mascotArt } from './mascot.js';
 /**
  * Build the main menu.
  * @param {{t: (key: string, vars?: object) => string, playerName?: string, chapterTitleKey?: string,
- *   onContinue?: () => void, onFreePlay?: () => void, onComics?: () => void, onShop?: () => void,
+ *   onContinue?: () => void, onFreePlay?: () => void, onComics?: () => void, onGuide?: () => void, onShop?: () => void,
  *   onStudio?: () => void, onSettings?: () => void, onAbout?: () => void, showShop?: boolean, showStudio?: boolean,
- *   reducedMotion?: boolean}} opts
+ *   reducedMotion?: boolean, showKeepWorking?: boolean, onKeepWorking?: () => void, keepWorkingPercent?: number}} opts
  *   t = string function; playerName = the player's name (plain text); chapterTitleKey = string key of the current chapter's
  *   title; the on... callbacks report which button was tapped; showShop = false leaves the Shop button out (the
  *   shop opens with the career chapter); showStudio = true adds the "Your studio" button (the studio view, T5.1c;
- *   the game shows it where the shop is open)
+ *   the game shows it where the shop is open); showKeepWorking = true adds "Keep working" under Continue (T5.4, after
+ *   the ending), with keepWorkingPercent (its pay) on its second line; onKeepWorking = its tap
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void, dispose: () => void}} the screen
  */
 export function createMenuScreen({
-  t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onShop, onStudio, onSettings, onAbout, showShop = true,
-  showStudio = false, reducedMotion = false,
+  t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
+  showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60,
 }) {
   const shell = screenShell('menu', { label: t('ui.menu.title'), reducedMotion });
   const body = el('div', 'app-body app-menu');
@@ -39,6 +40,13 @@ export function createMenuScreen({
   cont.append(contLabel, contSub);
   cont.addEventListener('click', () => onContinue?.(), { signal: shell.signal });
   list.append(cont);
+  if (showKeepWorking) { // Keep working (T5.4): after the ending, random customers at lower pay
+    const work = el('button', 'app-menubtn app-menubtn--work');
+    work.type = 'button';
+    work.append(el('span', 'app-menubtn__label', t('ui.menu.keepWorking')), el('span', 'app-menubtn__sub', t('ui.menu.keepWorkingSub', { pct: keepWorkingPercent })));
+    work.addEventListener('click', () => onKeepWorking?.(), { signal: shell.signal });
+    list.append(work);
+  }
 
   /** Add one menu button. @param {string} key label string key @param {(() => void)|undefined} fn tap callback @returns {void} */
   const add = (key, fn) => {
@@ -49,6 +57,7 @@ export function createMenuScreen({
   };
   add('ui.menu.freePlay', onFreePlay);
   add('ui.menu.comics', onComics);
+  if (onGuide) add('ui.menu.guide', onGuide); // the Field guide (T6.5): always there, like Comics (unmet cards are locked)
   if (showShop) add('ui.menu.shop', onShop);
   if (showStudio) add('ui.menu.studio', onStudio);
   add('ui.menu.settings', onSettings);

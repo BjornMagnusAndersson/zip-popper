@@ -41,6 +41,9 @@ export function defaultSave(now = Date.now()) {
     threeStarDone: false, // a 3-star customer has happened (for the `mstar` strip)
     requestsDone: 0,
     pendingStrips: [], // milestone strips earned by the last customer, not yet played (B4: they survive closing the app on the result screen)
+    endingSeen: false, // the "To be continued" ending was reached: the menu shows Keep working (T5.4, SPEC D23)
+    keepWorkingDone: 0, // Keep working customers finished or skipped (its own count; story progress never moves in it)
+    seenKinds: [], // Field guide (T6.5): the bump kinds, dotty nose and decoys she has met in a pop scene (old saves load [])
   };
 }
 
@@ -157,6 +160,9 @@ export function normalizeSave(raw, now = Date.now()) {
     threeStarDone: flag(s.threeStarDone, d.threeStarDone),
     requestsDone: count(s.requestsDone, d.requestsDone),
     pendingStrips: words(s.pendingStrips, d.pendingStrips),
+    endingSeen: flag(s.endingSeen, d.endingSeen),
+    keepWorkingDone: count(s.keepWorkingDone, d.keepWorkingDone),
+    seenKinds: words(s.seenKinds, d.seenKinds),
   };
 }
 

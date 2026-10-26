@@ -3,7 +3,9 @@
 // Flow: first start = name screen, then the menu; later starts = title, then the menu. Continue plays the next story
 // step (chapter-logic.js): a chapter strip, a special mode (torchlight, T4.5; phone scroll, T4.6), a customer (intro, pop
 // round, result), the hygiene scare strip (gloves), the teaser strip and the "To be continued" screen. Free play,
-// Comics, Shop (with the wipe-and-scrub job for studio upgrades, T5.1b), Settings and About hang off the menu.
+// Comics, the Field guide (T6.5; also over the pop scene from its "?" button), Shop (with the wipe-and-scrub job for
+// studio upgrades, T5.1b), Settings and About hang off the menu; after the ending also Keep working (T5.4: random
+// customers at lower pay through the same customer flow, no story).
 // The save is written after every customer, purchase, scrub job, comic seen and setting change, so a reload goes on
 // exactly where the player was. All the rules are pure helpers in app-logic.js (tested in Node); this file only shows
 // screens and passes what happened back to those helpers. All text comes from the string table (t).
@@ -41,6 +43,8 @@ import { createPhoneScrollScreen } from '../screens/phone-scroll.js';
 import { createScrubScreen } from '../screens/scrub.js';
 import { createEndScreen } from '../screens/end.js';
 import { createStudioScreen } from '../screens/studio.js';
+import { createGuideScreen } from '../screens/guide.js';
+import { guideCards, metKinds, addSeenKinds } from '../screens/guide-logic.js';
 import * as L from './app-logic.js';
 
 /** Which shop tab shows an item kind (to come back to the same tab after a purchase). */
@@ -83,6 +87,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
   let screen = null; // the screen on show ({node, dispose})
   let pop = null; // the pop scene while a round or free play is on
+  let guideOverlay = null; // the Field guide over the pop scene (T6.5), while it is open
   const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music, sfxVolume: save.settings.sfxVolume }); // comics and menus
   const music = createMusic({ sound, volume: save.settings.musicVolume }); // background music (T6.1a), on the same audio as the sounds
   let hurryTimer = 0; // ends the hectic music when a hurry request's time is up
@@ -114,6 +119,18 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     squeezeHint: Boolean(save.settings.squeeze) && !save.squeezeHintSeen,
     onSqueezeHint: () => persist({ ...save, squeezeHintSeen: true }),
   });
+  /**
+   * The pop scene's Field guide options (T6.5): the "?" button, the kinds she has met (for the first-time hints) and
+   * where newly met kinds go (saved at once).
+   * @returns {{onGuide: () => void, seenKinds: string[], onSeenKinds: (kinds: string[]) => void}} createPopMode options
+   */
+  const guideOptions = () => ({
+    onGuide: openGuideOverlay,
+    seenKinds: metKinds(save),
+    onSeenKinds: (kinds) => persist(addSeenKinds(save, kinds)),
+  });
+  /** The Field guide's cards for the save as it is now. @returns {object[]} cards (guide-logic.js guideCards) */
+  const currentGuideCards = () => guideCards({ seenKinds: metKinds(save), ownedTools: economyFromSave(save).unlockedTools });
 
   /**
    * Keep a new save and write it to storage.
@@ -164,6 +181,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
 
   /** Take the screen or the pop scene that is on show away. @returns {void} */
   function clear() {
+    closeGuideOverlay(false);
     screen?.dispose();
     screen = null;
     pop?.dispose();
@@ -223,7 +241,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     b.type = 'button';
     b.className = 'pop-btn pop-menu';
     b.textContent = t('ui.pop.menu');
-    b.addEventListener('click', onClick);
+    // Ignored in the short pause after a finished customer (the button is hidden then too), so the pay is never lost.
+    b.addEventListener('click', () => { if (!pop?.ending?.()) onClick(); });
     pop?.node.querySelector('.pop-head')?.prepend(b);
   }
 
@@ -262,10 +281,62 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function showMenu() {
     show(createMenuScreen({
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
-      onContinue: () => { sound.unlock(); continueStory(); }, onFreePlay: startFreePlay, onComics: showComics,
+      onContinue: () => { sound.unlock(); continueStory(); }, onFreePlay: startFreePlay, onComics: showComics, onGuide: () => showGuide(showMenu),
       onShop: () => showShop(showMenu), onStudio: () => showStudio(showMenu), onSettings: showSettings,
       onAbout: () => showAbout(showMenu), showShop: L.shopOpen(save), showStudio: L.shopOpen(save),
+      showKeepWorking: L.keepWorkingOpen(save), keepWorkingPercent: L.KEEP_WORKING_PERCENT,
+      onKeepWorking: () => { sound.unlock(); keepWorking(); },
     }));
+  }
+
+  /**
+   * Keep working (T5.4, SPEC D23): the next random customer after the ending, through the same intro, round and
+   * result as the career. Waiting milestone strips and a studio scrub job come first, as in continueStory. The story
+   * never moves here; Menu leaves at any time (the save is written after every customer).
+   * @returns {void}
+   */
+  function keepWorking() {
+    const lost = L.pendingStrips(save);
+    if (lost.length) { playStrips(lost, () => { persist(L.clearPendingStrips(save)); keepWorking(); }); return; }
+    const waiting = L.pendingScrub(save);
+    if (waiting) { runScrub(waiting, keepWorking); return; }
+    showIntro(L.keepWorkingStep(save));
+  }
+
+  /**
+   * The Field guide from the menu (T6.5).
+   * @param {() => void} back where Back goes
+   * @returns {void}
+   */
+  function showGuide(back) {
+    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), onBack: back }));
+  }
+
+  /**
+   * The Field guide over the pop scene (T6.5, its "?" button): the scene stays as it is underneath and takes no taps
+   * or keys while the guide is open (hurry rounds have no "?" button, so no clock runs out meanwhile).
+   * @returns {void}
+   */
+  function openGuideOverlay() {
+    if (!pop || guideOverlay) return;
+    guideOverlay = createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), overlay: true, onBack: () => closeGuideOverlay(true) });
+    pop.node.inert = true;
+    root.append(guideOverlay.node);
+    guideOverlay.focus();
+  }
+
+  /**
+   * Close the Field guide over the pop scene, if it is open, and give the scene its taps back.
+   * @param {boolean} refocus true = put keyboard focus back on the "?" button
+   * @returns {void}
+   */
+  function closeGuideOverlay(refocus) {
+    if (!guideOverlay) return;
+    guideOverlay.dispose();
+    guideOverlay = null;
+    if (!pop) return;
+    pop.node.inert = false;
+    if (refocus) pop.node.querySelector('.pop-guide')?.focus({ preventScroll: true });
   }
 
   /**
@@ -298,7 +369,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const step = L.nextStep(save);
     /** Finish this step, save, and play the next. @returns {void} */
     const done = () => { persist(L.finishStep(save, step)); continueStory(); };
-    if (step.type === 'strip' || step.type === 'teaser') playStrip(step.stripId, done);
+    if (step.type === 'strip' || step.type === 'teaser' || step.type === 'bridge') playStrip(step.stripId, done);
     else if (step.type === 'scare') playStrip(L.SCARE_STRIP, done);
     else if (step.type === 'special' && getChapter(step.chapter)?.special === 'torchlight') playTorchlight(step, done);
     else if (step.type === 'special' && getChapter(step.chapter)?.special === 'phoneScroll') playPhoneScroll(done);
@@ -323,7 +394,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     sound.unlock();
     const tl = show(createTorchlightScreen({
       t, reducedMotion: still(), roundArgs: L.torchlightArgs(save, step.chapter, flags.seed),
-      popOptions: { storage: popStorage, ...squeezeOptions() }, onContinue: done, onMenu: showMenu,
+      popOptions: { storage: popStorage, sfxVolume: save.settings.sfxVolume, ...squeezeOptions() }, onContinue: done, onMenu: showMenu,
     }));
     tl.unlock();
   }
@@ -346,10 +417,11 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function showIntro(step) {
     const args = L.roundArgs(save, step, flags.seed);
+    if (!args && step.keepWorking) { showMenu(); return; } // never happens: every Keep working number has a customer
     if (!args) { persist(L.finishStep(save, step)); continueStory(); return; } // no such customer: never in v1 data
     show(createCustomerIntroScreen({
       t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: describeRequest(args.request),
-      step: step.total > 1 ? { n: step.n, total: step.total } : null,
+      step: step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
       portrait: facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
       hintKey: L.introHintKey(save, step), onStart: () => playRound(step, args), onMenu: showMenu,
     }));
@@ -363,7 +435,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playRound(step, args) {
     clear();
-    pop = createPopMode({ t, storage: popStorage, reducedMotion: still(), ...squeezeOptions() });
+    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     sound.unlock();
@@ -386,19 +458,21 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     persist(out.save); // the save also lists the milestone strips still to play (B4), so closing the app now loses none
     /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */
     const playWaiting = (then) => playStrips(L.pendingStrips(save), () => { persist(L.clearPendingStrips(save)); then(); });
-    if (out.failed) { playWaiting(continueStory); return; } // "Next customer": on with the story
+    const onward = step.keepWorking ? keepWorking : continueStory; // Keep working goes on to its next customer (T5.4)
+    if (out.failed) { playWaiting(onward); return; } // "Next customer": on with the story
     show(createResultScreen({
       t, reducedMotion: still(), stars: out.stars, payout: out.payout, reputationChange: out.reputationChange,
       factKey: out.factKey, reactionKey: out.reactionKey, playerName: playerName(),
-      onContinue: () => playWaiting(continueStory),
-      onShop: L.shopOpen(save) ? () => playWaiting(() => showShop(continueStory)) : undefined,
+      tagKey: step.keepWorking ? 'ui.keepWorking.pay' : null, tagVars: { pct: L.KEEP_WORKING_PERCENT },
+      onContinue: () => playWaiting(onward),
+      onShop: L.shopOpen(save) ? () => playWaiting(() => showShop(onward)) : undefined,
     }));
   }
 
   /** Free play (SPEC section 6): random faces, the owned tools, never fails, changes no money or stats. @returns {void} */
   function startFreePlay() {
     clear();
-    pop = createPopMode({ t, storage: popStorage, reducedMotion: still(), ...squeezeOptions() });
+    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     sound.unlock();
@@ -502,7 +576,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         }
         s.update({ notice: { key: importNoticeKey(result) }, playerName: save.playerName, settings: save.settings });
       },
-      onReset: () => { save = store.reset(); sound.setVolume(save.settings.sfxVolume); music.setVolume(save.settings.musicVolume); boot(); },
+      onReset: () => { // a fresh save: bring the live sound and music switches in line with it too
+        save = store.reset();
+        sound.setOn(save.settings.sound);
+        sound.setMusicOn(save.settings.music);
+        sound.setVolume(save.settings.sfxVolume);
+        music.setVolume(save.settings.musicVolume);
+        setMusic({ screen: 'menu' });
+        boot();
+      },
       onBack: showMenu,
     }));
   }

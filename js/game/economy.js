@@ -11,7 +11,7 @@ import { outfitTier } from './studio.js';
 import {
   STAR_TIPS, REQUEST_BONUS, REQUEST_BONUS_DEFAULT, REPUTATION_PER_STAR, SKIP_PENALTIES, TIER_THRESHOLDS,
   SCRUB_REPUTATION, SHOP_ITEMS, MASTERY_LEVELS, MASTERY_STRIP_LEVEL, DIFFICULTY_BANDS,
-  STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY,
+  STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, KEEP_WORKING_PAY,
 } from '../data/economy-data.js';
 
 // The economy state is this part of the save object (see economyFromSave / economyToSave):
@@ -76,6 +76,31 @@ export function roundPayout(roundState, bumpTypesPopped, requestDone = false, bu
   const requestBonus = requestBonusFor(requestDone);
   const total = popCoins + toolBonus + patchTips + stripBonus + tip + combo + requestBonus;
   return { popCoins, toolBonus, patchTips, stripBonus, tip, combo, requestBonus, total };
+}
+
+/**
+ * The Keep working pay (T5.4, SPEC D23): every coin line of a payout times the factor (KEEP_WORKING_PAY, 0.6), each
+ * rounded to whole coins (half rounds up). The pops line never drops below 1 coin per clean pop (and never above what
+ * it paid before). The total is the sum of the new lines. A failed customer stays 0.
+ * @param {{popCoins:number, toolBonus:number, patchTips:number, stripBonus:number, tip:number, combo:number,
+ *   requestBonus:number, total:number}} payout from roundPayout
+ * @param {number} cleanPops how many bumps were popped clean
+ * @param {number} [factor] the pay factor
+ * @returns {{popCoins:number, toolBonus:number, patchTips:number, stripBonus:number, tip:number, combo:number,
+ *   requestBonus:number, total:number}} the reduced payout
+ */
+export function keepWorkingPayout(payout, cleanPops, factor = KEEP_WORKING_PAY) {
+  const p = payout ?? {};
+  // One coin line times the factor, rounded; anything that is not a positive number is 0.
+  const cut = (v) => (Number.isFinite(v) && v > 0 ? Math.round(v * factor) : 0);
+  const pops = Number.isFinite(p.popCoins) && p.popCoins > 0 ? p.popCoins : 0;
+  const floor = Math.min(pops, Math.max(0, Math.floor(cleanPops ?? 0)));
+  const out = {
+    popCoins: Math.max(cut(pops), floor), toolBonus: cut(p.toolBonus), patchTips: cut(p.patchTips), stripBonus: cut(p.stripBonus),
+    tip: cut(p.tip), combo: cut(p.combo), requestBonus: cut(p.requestBonus),
+  };
+  out.total = out.popCoins + out.toolBonus + out.patchTips + out.stripBonus + out.tip + out.combo + out.requestBonus;
+  return out;
 }
 
 /**

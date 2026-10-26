@@ -50,12 +50,21 @@ export const HUSBAND_ARMOR = {
  * pop adds to the irritation meter. requests = whether a customer may ask for a request (from customer 4).
  */
 export const CAREER_BANDS = [
-  { from: 1, to: 3, bumps: [5, 6], types: ['whitehead', 'red'], newTypes: ['whitehead', 'red'], difficulty: 0.6, requests: false },
-  { from: 4, to: 6, bumps: [6, 7], types: ['whitehead', 'red', 'blackhead'], newTypes: ['blackhead'], difficulty: 0.8, requests: true },
-  { from: 7, to: 9, bumps: [7, 8], types: ['whitehead', 'red', 'blackhead', 'big', 'gold'], newTypes: ['big', 'gold'], difficulty: 1.0, requests: true },
-  { from: 10, to: 12, bumps: [8, 9], types: ['whitehead', 'red', 'blackhead', 'big', 'gold', 'hair', 'horn'], newTypes: ['hair', 'horn'], difficulty: 1.15, requests: true },
-  { from: 13, to: 15, bumps: [9, 10], types: ['whitehead', 'red', 'blackhead', 'big', 'gold', 'hair', 'horn'], newTypes: [], difficulty: 1.3, requests: true },
+  { from: 1, to: 3, bumps: [5, 6], types: ['whitehead', 'red'], newTypes: ['whitehead', 'red'], difficulty: 0.8, requests: false },
+  { from: 4, to: 6, bumps: [6, 7], types: ['whitehead', 'red', 'blackhead'], newTypes: ['blackhead'], difficulty: 1.0, requests: true },
+  { from: 7, to: 9, bumps: [7, 8], types: ['whitehead', 'red', 'blackhead', 'big', 'gold'], newTypes: ['big', 'gold'], difficulty: 1.2, requests: true },
+  { from: 10, to: 12, bumps: [8, 9], types: ['whitehead', 'red', 'blackhead', 'big', 'gold', 'hair', 'horn'], newTypes: ['hair', 'horn'], difficulty: 1.35, requests: true },
+  { from: 13, to: 15, bumps: [9, 10], types: ['whitehead', 'red', 'blackhead', 'big', 'gold', 'hair', 'horn'], newTypes: [], difficulty: 1.5, requests: true },
 ];
+
+/**
+ * Who walks in during Keep working (T5.4, SPEC D23), the endless side mode after the ending:
+ * - regularChance: the chance a customer comes up as a named regular (data/customers.js), the rest are strangers;
+ *   a regular never follows a regular (so the same face never comes twice in a row), which leaves about 1 customer
+ *   in 5 a regular.
+ * - seedBase: strangers get the seeded face seedBase + customer number (far from the career roster's 1000 + n).
+ */
+export const KEEP_WORKING_ROSTER = { regularChance: 0.3, seedBase: 50000 };
 
 /** The shop items that open when the career starts (ECONOMY.md section 3); gloves are NOT here, they are free at the end. */
 export const CAREER_SHOP_TOOLS = ['cottonPad', 'tweezers', 'noseStrip', 'patch', 'warmCloth'];
@@ -85,8 +94,9 @@ function makeRoster(count, baseSeed, regulars) {
  * - special: for kind 'special', the id of the small special mode played after the strip (no customers).
  * - customers: roster (see makeRoster); empty for special chapters.
  * - difficulty: the irritation difficulty of every customer (career chapters use CAREER_BANDS instead).
- * - after: steps that come after the last customer (only chapter 5): the hygiene scare (gloves unlock), the teaser
- *   strip, then the "To be continued" screen.
+ * - after: steps that come after the last customer or the special mode. Chapter 4: the bridge strip "The plan" (type
+ *   'bridge', STORY.md strip 4b: she finds and rents the place between "I will do it for a living!" and opening day).
+ *   Chapter 5: the hygiene scare (gloves unlock), the teaser strip, then the "To be continued" screen.
  * - shop: tool ids that become buyable when the chapter starts.
  */
 export const CHAPTERS = [
@@ -108,7 +118,9 @@ export const CHAPTERS = [
   },
   {
     id: 4, titleKey: 'chapter.4.title', strip: 'strip4', kind: 'special', special: 'phoneScroll',
-    customers: [], difficulty: 1.0, after: [], shop: [],
+    // After the phone scroll: the bridge strip "The plan" (a save already in chapter 5 never gets it in the story;
+    // it can be replayed from the Comics list).
+    customers: [], difficulty: 1.0, after: [{ type: 'bridge', strip: 'plan' }], shop: [],
   },
   {
     id: 5, titleKey: 'chapter.5.title', strip: 'strip5', kind: 'career',

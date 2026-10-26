@@ -7,10 +7,12 @@ import { el, button, icon, screenShell } from './dom.js';
 /**
  * Build the customer intro.
  * @param {{t: (key: string, vars?: object) => string, customer: {nameKey: string, introKey: string, deadlineKey?: string},
- *   playerName?: string, request?: {key: string, vars?: object}|null, step?: {n: number, total: number}|null,
+ *   playerName?: string, request?: {key: string, vars?: object}|null,
+ *   step?: {n: number, total?: number, key?: string, vars?: object}|null,
  *   portrait?: HTMLElement|null, hintKey?: string|null, onStart?: () => void, onMenu?: () => void, reducedMotion?: boolean}} opts
  *   t = string function; customer = the customer's string keys; playerName = for the {name} in the story; request = what
- *   they ask for, or null; step = "customer n of total" or null; portrait = an optional picture (a canvas, say) the game
+ *   they ask for, or null; step = "customer n of total" or null (step.key + step.vars = another line in that pill,
+ *   such as Keep working's "Keep working: customer n", T5.4); portrait = an optional picture (a canvas, say) the game
  *   draws for the customer; hintKey = an optional tip line (a string key, such as the "buy tweezers" hint);
  *   onStart = the Start button; onMenu = an optional small "Menu" button (back to the main menu)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
@@ -22,7 +24,7 @@ export function createCustomerIntroScreen({
   const shell = screenShell('intro', { label: name, reducedMotion });
   const body = el('div', 'app-body app-intro');
   const left = el('div', 'app-intro__who');
-  if (step) left.append(el('p', 'app-intro__step', t('ui.intro.step', { n: step.n, total: step.total })));
+  if (step) left.append(el('p', 'app-intro__step', t(step.key ?? 'ui.intro.step', { n: step.n, total: step.total, ...(step.vars ?? {}) })));
   if (portrait) {
     const frame = el('div', 'app-intro__portrait');
     frame.append(portrait);

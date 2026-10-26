@@ -3,15 +3,15 @@
 // playthrough. game/app.js is the DOM glue that shows the screens and calls these.
 // Every helper returns a NEW save object and never changes the one it is given.
 
-import { currentStep, progressFromSave, progressToSave, advance, customerSpec } from './chapter-logic.js';
-import { CHAPTERS, getChapter, HUSBAND } from '../data/chapters.js';
+import { currentStep, progressFromSave, progressToSave, advance, customerSpec, keepWorkingSpec, isFinished } from './chapter-logic.js';
+import { CHAPTERS, CAREER_BANDS, getChapter, HUSBAND } from '../data/chapters.js';
 import { TORCHLIGHT_ROUND } from './torchlight-logic.js';
 import {
   economyFromSave, economyToSave, holdFactor, roughReduction, buildRoundResult, applyRoundResult, recordCleanPop,
-  milestoneStripsToPlay, buy, canBuy, grantItem, finishScrub, needsScrub, masteryLevel,
+  milestoneStripsToPlay, buy, canBuy, grantItem, finishScrub, needsScrub, masteryLevel, keepWorkingPayout,
 } from './economy.js';
 import {
-  SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL,
+  SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL, KEEP_WORKING_PAY,
 } from '../data/economy-data.js';
 import { pickRequest } from './requests.js';
 import { STUDIO_LAYERS, studioTier, studioLayersShown, heroOutfit, OUTFIT_TIERS, OUTFIT_ITEMS } from './studio.js';
@@ -19,11 +19,13 @@ import { faceBumpHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
+import { GUIDE_KINDS } from '../screens/guide-logic.js';
 import { STRIP as strip0 } from '../data/comics/strip-0.js';
 import { STRIP as strip1 } from '../data/comics/strip-1.js';
 import { STRIP as strip2 } from '../data/comics/strip-2.js';
 import { STRIP as strip3 } from '../data/comics/strip-3.js';
 import { STRIP as strip4 } from '../data/comics/strip-4.js';
+import { STRIP as plan } from '../data/comics/strip-plan.js';
 import { STRIP as strip5 } from '../data/comics/strip-5.js';
 import { STRIP as scare } from '../data/comics/strip-scare.js';
 import { STRIP as books } from '../data/comics/strip-books.js';
@@ -36,13 +38,16 @@ import { STRIP as mmastery } from '../data/comics/strip-mmastery.js';
 
 /** Every strip of version 1 in the order the Comics screen lists them, with its kind (chapter, teaser or milestone). */
 export const STRIP_LIST = [
-  [strip0, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'],
+  [strip0, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'], [plan, 'chapter'],
   [strip5, 'chapter'], [scare, 'chapter'], [books, 'teaser'], [mlamp, 'milestone'], [mplant, 'milestone'],
   [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'],
 ].map(([strip, kind]) => ({ strip, id: strip.id, titleKey: strip.title, kind }));
 
 /** The career chapter (5): the shop opens and the milestone strips (set in her studio) start playing there. */
 export const CAREER_CHAPTER = CHAPTERS.find((c) => c.kind === 'career')?.id ?? 5;
+
+/** Keep working's pay as a whole percent (60), for the line on its intro and result screens (T5.4). */
+export const KEEP_WORKING_PERCENT = Math.round(KEEP_WORKING_PAY * 100);
 
 /** The strip played for the chapter 5 hygiene scare step. */
 export const SCARE_STRIP = 'scare';
@@ -110,11 +115,12 @@ function intOrNull(v) {
  * Reads the testing flags from the page address (?test, ?chapter=N, ?customer=M, ?money=, ?rep=, ?seed=, ?name=, ?demo,
  * ?squeeze = the two-finger squeeze switch on, T1.7; ?layers=lamp,plant or ?layers=all = these studio upgrades
  * owned and scrubbed, T5.1a, so the studio tiers and layers can be looked at; ?outfit=everyday|apron|scrubs = her
- * outfit tier, T5.2: the outfit items up to that tier owned, so the studio view and the comics show it).
+ * outfit tier, T5.2: the outfit items up to that tier owned, so the studio view and the comics show it; ?seen=all =
+ * every Field guide card open, T6.5).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
  *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null,
- *   outfit: string|null}} the flags
+ *   outfit: string|null, seenAll: boolean}} the flags
  */
 export function parseFlags(search) {
   const p = new URLSearchParams(search ?? '');
@@ -126,6 +132,7 @@ export function parseFlags(search) {
     name: p.has('name') ? sanitizeName(p.get('name')) : null, squeeze: p.has('squeeze'),
     layers: lay === null ? null : lay === 'all' ? [...STUDIO_LAYERS] : studioLayersShown(lay.split(',')),
     outfit: OUTFIT_TIERS.includes(p.get('outfit')) ? p.get('outfit') : null,
+    seenAll: p.get('seen') === 'all', // ?seen=all: every Field guide kind met (T6.5)
   };
 }
 
@@ -176,6 +183,8 @@ export function applyTestFlags(save, flags, now = Date.now()) {
       s.seenComics = [getChapter(ch).strip];
     }
     s = { ...s, ...progressToSave(progressFromSave(s)) };
+    // The ending is next (chapter 5, customer 18): count it as reached, so the menu already shows Keep working (T5.4).
+    if (nextStep(s).type === 'end') s.endingSeen = true;
   }
   if (flags.money !== null) s.money = Math.max(0, flags.money);
   if (flags.rep !== null) s.reputation = Math.max(0, flags.rep);
@@ -188,6 +197,7 @@ export function applyTestFlags(save, flags, now = Date.now()) {
     s.items = { ...s.items, ...Object.fromEntries(outfitTestItems(flags.outfit).map((id) => [id, { needsScrub: false }])) };
     s.outfitTier = OUTFIT_TIERS.indexOf(flags.outfit) + 1;
   }
+  if (flags.seenAll) s.seenKinds = [...GUIDE_KINDS]; // ?seen=all: every Field guide card open (T6.5)
   return normalizeSave(s, now);
 }
 
@@ -243,8 +253,8 @@ export function clearPendingStrips(save) {
 }
 
 /**
- * Finishes a step that is not a customer: a chapter strip (seen), a special mode, the hygiene scare (its strip is
- * seen and the gloves are given), the teaser (seen) or the end screen. Moves the progress one step on.
+ * Finishes a step that is not a customer: a chapter strip (seen), a special mode, the bridge strip (seen), the hygiene
+ * scare (its strip is seen and the gloves are given), the teaser (seen) or the end screen. Moves the progress one step on.
  * @param {object} save the save
  * @param {object} step the step that was just played (from nextStep)
  * @returns {object} new save
@@ -257,14 +267,57 @@ export function finishStep(save, step) {
     return { ...seen, ...progressToSave(progressFromSave(seen)) }; // a strip-only chapter moves on at once
   }
   let s = save;
-  if (step.type === 'teaser') s = markSeen(s, step.stripId);
+  if (step.type === 'teaser' || step.type === 'bridge') s = markSeen(s, step.stripId);
   if (step.type === 'scare') {
     s = markSeen(s, SCARE_STRIP);
     let eco = economyFromSave(s);
     for (const id of step.unlocks ?? []) eco = grantItem(eco, id);
     s = economyToSave(s, eco);
   }
+  if (step.type === 'end') s = { ...s, endingSeen: true }; // the ending was shown: Keep working opens (T5.4)
   return { ...s, ...progressToSave(advance(progressFromSave(save), 'done')) };
+}
+
+/**
+ * Whether the menu shows Keep working (T5.4, SPEC D23): once the "To be continued" ending has been reached. A save
+ * from before this field that already finished the story counts too.
+ * @param {object} save the save
+ * @returns {boolean} true = the Keep working button shows
+ */
+export function keepWorkingOpen(save) {
+  return save?.endingSeen === true || isFinished(progressFromSave(save));
+}
+
+/**
+ * The next Keep working customer as a customer step: chapter 5 (her studio, the career rules), numbered by Keep
+ * working's own count (save.keepWorkingDone + 1), marked keepWorking so roundArgs and applyRound use its rules.
+ * @param {object} save the save
+ * @returns {{type: 'customer', keepWorking: true, n: number, chapter: number}} the step
+ */
+export function keepWorkingStep(save) {
+  const done = Number.isInteger(save?.keepWorkingDone) && save.keepWorkingDone >= 0 ? save.keepWorkingDone : 0;
+  return { type: 'customer', keepWorking: true, n: done + 1, chapter: CAREER_CHAPTER };
+}
+
+/**
+ * The face seed of Keep working customer k: its own seed every time (so a reload shows the same face, and the next
+ * customer always has another one), unless the page gave ?seed=.
+ * @param {number} k Keep working customer number, 1 based
+ * @param {number|null} [forced] the ?seed= flag
+ * @returns {number} seed, at least 1
+ */
+export function keepWorkingSeed(k, forced = null) {
+  if (Number.isFinite(forced) && forced > 0) return Math.floor(forced);
+  return 1 + ((7_000_000 + k) * 7919) % 2000000000;
+}
+
+/**
+ * The customer spec of a customer step: Keep working's random customer, or the story's customer.
+ * @param {{chapter: number, n: number, keepWorking?: boolean}} step a customer step
+ * @returns {object|null} the spec (chapter-logic.js customerSpec shape)
+ */
+function stepSpec(step) {
+  return step?.keepWorking ? keepWorkingSpec(step.n) : customerSpec(step.chapter, step.n);
 }
 
 /**
@@ -340,27 +393,31 @@ export function backdropRoom(chapter) {
  * tier, decoys (career customers from number 4,
  * ECONOMY.md section 6) and the request (requests.js pickRequest; the hurry limit uses the mastery-scaled hold times
  * of the real bumps of the face, round-logic.js faceBumpHolds), the customer's name key (the scene header, B5) and
- * what "Next customer" would cost now (skipCost, B3).
+ * what "Next customer" would cost now (skipCost, B3). A Keep working step (T5.4) takes its customer from
+ * chapter-logic.js keepWorkingSpec and its face seed from keepWorkingSeed, always has decoys, and its combo requests
+ * are as long as at the career's end.
  * @param {object} save the save
  * @param {{chapter: number, n: number}} step a customer step (from nextStep)
  * @param {number|null} [forcedSeed] the ?seed= flag
  * @returns {object|null} startRound arguments, or null when the chapter has no such customer
  */
 export function roundArgs(save, step, forcedSeed = null) {
-  const spec = customerSpec(step.chapter, step.n);
+  const kw = Boolean(step.keepWorking); // Keep working (T5.4): random customer, career rules, its own seeds
+  const spec = stepSpec(step);
   if (!spec) return null;
   const { holdFactors, roughReductions } = masteryTables(save);
   const career = getChapter(step.chapter)?.kind === 'career';
-  const seed = roundSeed(step.chapter, step.n, forcedSeed);
+  const seed = kw ? keepWorkingSeed(step.n, forcedSeed) : roundSeed(step.chapter, step.n, forcedSeed);
   const unlockedTools = [...economyFromSave(save).unlockedTools];
-  const decoys = career && step.n >= 4;
+  const decoys = career && (kw || step.n >= 4);
+  const requestNumber = kw ? CAREER_BANDS[CAREER_BANDS.length - 1].to : step.n; // Keep working combos are as long as at the career's end
   const holds = faceBumpHolds({
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: spec.allowedTypes, unlockedTools, decoys, seed, holdFactors,
   });
   return {
     customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
     seed, holdFactors, roughReductions, unlockedTools,
-    request: pickRequest(spec, holds, seed + 101, step.n), room: backdropRoom(step.chapter), tier: backdropTier(save),
+    request: pickRequest(spec, holds, seed + 101, requestNumber), room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), career: true,
     decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
   };
@@ -417,6 +474,7 @@ export function torchlightArgs(save, chapter, forcedSeed = null) {
  * @returns {string|null} a string key, or null
  */
 export function introHintKey(save, step) {
+  if (step.keepWorking) return null; // Keep working customer 4 is not the career's customer 4
   if (step.chapter !== TWEEZERS_HINT.chapter || step.n !== TWEEZERS_HINT.n) return null;
   return Object.hasOwn(economyFromSave(save).items, 'tweezers') ? null : TWEEZERS_HINT.key;
 }
@@ -439,6 +497,9 @@ export function reactionKey(customer, owCount) {
  * - Failed + Next customer ('next'): the skip costs reputation (2, 3, 4, 5 in a row), the story moves on.
  * - Finished: coins (roundPayout), reputation from stars, stats, mastery for every clean pop, the story moves on.
  * Also says which milestone strips became playable (careerStrips) and what the result screen shows.
+ * A Keep working step (keepWorking: true, T5.4) pays KEEP_WORKING_PAY of every coin line (economy.js
+ * keepWorkingPayout) and counts keepWorkingDone up instead of moving the story; stars, mastery and the skip cost work
+ * as in the career.
  * @param {object} save the save
  * @param {object} payload the onFinish payload (round-logic.js finishPayload)
  * @param {{chapter: number, n: number}} step the customer step that was played
@@ -447,6 +508,7 @@ export function reactionKey(customer, owCount) {
  */
 export function applyRound(save, payload, step) {
   const failed = Boolean(payload?.failed);
+  const kw = Boolean(step?.keepWorking);
   if (failed && payload.failChoice !== 'next') {
     return { save, retry: true, failed, stars: 0, payout: null, reputationChange: 0, skipPenalty: 0, strips: [], factKey: null, reactionKey: undefined };
   }
@@ -460,19 +522,24 @@ export function applyRound(save, payload, step) {
     after = applyRoundResult(before, { failed: true, choice: 'next' });
   } else {
     const extras = { patches: payload.patches ?? 0, stripPeeled: payload.stripPeeled === true }; // patch tips, strip bonus
-    const result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false, 'again', payload.cleanBumpTools ?? null, extras);
+    let result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false, 'again', payload.cleanBumpTools ?? null, extras);
+    if (kw) { // Keep working pays KEEP_WORKING_PAY of every coin line (T5.4)
+      const cut = keepWorkingPayout(result.payout, (payload.cleanBumpTypes ?? []).length);
+      result = { ...result, payout: cut, total: cut.total };
+    }
     after = applyRoundResult(before, result);
     for (const type of payload.cleanBumpTypes ?? []) after = recordCleanPop(after, type);
     payout = result.payout;
     stars = result.stars;
   }
   const strips = careerStrips(save, before, after, stars);
-  const progress = advance(progressFromSave(save), failed ? 'skip' : 'done');
-  const next = { ...economyToSave(save, after), ...progressToSave(progress), pendingStrips: [...strips] }; // kept until played (B4)
-  const spec = customerSpec(step.chapter, step.n);
+  // Keep working never moves the story: it only counts its own customers (a skip counts too, so the next one is new).
+  const moved = kw ? { keepWorkingDone: (save.keepWorkingDone ?? 0) + 1 } : progressToSave(advance(progressFromSave(save), failed ? 'skip' : 'done'));
+  const next = { ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }; // kept until played (B4)
+  const spec = stepSpec(step);
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
-    strips, factKey: failed ? null : factForCustomer(step.chapter * 20 + step.n - 1),
+    strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
     reactionKey: failed ? undefined : reactionKey(spec?.customer, payload.owCount ?? 0),
   };
 }
@@ -488,10 +555,9 @@ export function buyItem(save, itemId) {
   const before = economyFromSave(save);
   if (!canBuy(before, itemId)) return { save, ok: false, needsScrub: false, strips: [] };
   const after = buy(before, itemId);
-  return {
-    save: economyToSave(save, after), ok: true, needsScrub: needsScrub(after, itemId),
-    strips: milestoneStripsToPlay(before, after, save.seenComics ?? []),
-  };
+  const strips = milestoneStripsToPlay(before, after, save.seenComics ?? []);
+  // The earned strips wait in the save until played (B4), so closing the app while one plays loses none.
+  return { save: addPendingStrips(economyToSave(save, after), strips), ok: true, needsScrub: needsScrub(after, itemId), strips };
 }
 
 /**
@@ -503,7 +569,21 @@ export function buyItem(save, itemId) {
 export function scrubDone(save, itemId) {
   const before = economyFromSave(save);
   const after = finishScrub(before, itemId);
-  return { save: economyToSave(save, after), strips: milestoneStripsToPlay(before, after, save.seenComics ?? []) };
+  const strips = milestoneStripsToPlay(before, after, save.seenComics ?? []);
+  return { save: addPendingStrips(economyToSave(save, after), strips), strips }; // kept until played (B4)
+}
+
+/**
+ * Adds milestone strips to the save's waiting list (B4), once each, after any already waiting. markSeen takes a strip
+ * off the list once it is played.
+ * @param {object} save the save
+ * @param {string[]} strips strip ids to add
+ * @returns {object} new save (the same save when there is nothing to add)
+ */
+export function addPendingStrips(save, strips) {
+  if (!strips.length) return save;
+  const pending = Array.isArray(save.pendingStrips) ? save.pendingStrips : [];
+  return { ...save, pendingStrips: [...pending, ...strips.filter((id) => !pending.includes(id))] };
 }
 
 /**

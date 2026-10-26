@@ -129,6 +129,7 @@
 }
 .app-menubtn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
 .app-menubtn--main { min-height: 76px; background-color: var(--mint); font-size: 1.5rem; }
+.app-menubtn--work { background-color: var(--yellow); } /* Keep working (T5.4) */
 .app-menubtn__sub { font-size: 0.9rem; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- Customer intro ---------- */
@@ -162,6 +163,7 @@
   font-size: 2rem; font-weight: 900; text-align: center; color: var(--cream); -webkit-text-stroke: 7px var(--ink); paint-order: stroke fill; text-shadow: 0 4px 0 var(--ink);
 }
 .app-stars { display: flex; gap: 4px; justify-content: center; }
+.app-result__tag { padding: 2px 14px; border-radius: 999px; border: 3px solid var(--ink); background: var(--yellow); text-align: center; font-weight: 800; font-size: 0.9rem; } /* Keep working pay (T5.4) */
 .app-star svg { width: 72px; height: 72px; filter: drop-shadow(0 4px 0 rgba(42, 33, 29, 0.3)); }
 .app-star--on { animation: app-star-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both; animation-delay: calc(var(--i) * 0.2s + 0.15s); }
 .app-coins { order: 1; display: grid; gap: 2px; padding: 10px 14px; }
@@ -348,6 +350,48 @@
 .app-shop-studio { width: 100%; }
 .app-shoplist > .app-empty { grid-column: 1 / -1; }
 
+/* ---------- Field guide (T6.5) ----------
+   A "3 of 10 found" pill in the top row and a scrolling list of cards (the shop's list frame and "more below" arrow). Each card:
+   a round picture on the left, name, funny line, "What to use" and a tip with a bulb. Locked cards are greyer with a
+   big "?". Over the pop scene (app-screen--overlay) the screen lies on top of the scene as a dialog. */
+.app-screen--overlay { position: absolute; inset: 0; z-index: 30; }
+.app-guide__count {
+  flex: none; padding: 2px 12px; border-radius: 999px; border: 3px solid var(--ink); background: var(--cream); text-align: center;
+  font-weight: 800; font-size: 0.85rem; white-space: nowrap;
+}
+.app-guidelist { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; }
+.app-guidecard {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 8px 12px 10px 8px; border-radius: 16px;
+  border: 3px solid var(--ink); box-shadow: 3px 4px 0 var(--shadow);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 38%), var(--cream);
+}
+.app-guidecard--locked { align-items: center; background-color: #eadbd0; }
+.app-guidecard__pic {
+  display: grid; place-items: center; width: 82px; height: 82px; border-radius: 50%; border: 3px solid var(--ink); background: var(--pink-soft);
+  overflow: hidden;
+}
+.app-guidecard__art { display: block; width: 76px; height: 76px; }
+.app-guidecard__q { font-size: 2.6rem; font-weight: 900; color: #8a756b; line-height: 1; }
+.app-guidecard--locked .app-guidecard__pic { border-style: dashed; background: #f6ece4; }
+.app-guidecard__text { min-width: 0; display: grid; gap: 3px; }
+.app-guidecard__name { font-size: 1.1rem; font-weight: 900; overflow-wrap: anywhere; }
+.app-guidecard--locked .app-guidecard__name { color: #8a756b; letter-spacing: 0.15em; }
+.app-guidecard__line { font-size: 0.88rem; font-style: italic; line-height: 1.25; color: #5f4a41; }
+.app-guidecard--locked .app-guidecard__line { font-style: normal; }
+.app-guidecard__use {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin-top: 2px; padding: 3px 10px; border-radius: 12px;
+  border: 2px solid var(--ink); background: #d9fbf3; font-size: 0.9rem; line-height: 1.25;
+}
+.app-guidecard__label { font-weight: 900; }
+.app-guidecard__tools { font-weight: 700; }
+.app-guidecard__tip { display: flex; align-items: flex-start; gap: 6px; font-size: 0.85rem; font-weight: 600; line-height: 1.25; }
+.app-guidecard__tip .app-icon { width: 20px; height: 20px; margin-top: -1px; }
+@media (orientation: landscape) and (max-height: 600px) {
+  .app-guidelist { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 860px; }
+  .app-guidecard__pic { width: 66px; height: 66px; }
+  .app-guidecard__art { width: 60px; height: 60px; }
+}
+
 /* ---------- Animations ---------- */
 @keyframes app-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-6px) rotate(1.5deg); } }
 @keyframes app-twinkle { 0%, 100% { transform: scale(1) rotate(0); opacity: 1; } 50% { transform: scale(0.6) rotate(20deg); opacity: 0.6; } }
@@ -432,6 +476,8 @@
 }
 .app-intro__menu { align-self: center; }
 .pop-menu { order: -1; }
+/* A finished customer's short end pause (pop-mode.js): no Menu, so the round always gets paid (it keeps its space). */
+.pop-game--ending .pop-menu { visibility: hidden; }
 
 .app-special, .app-end { align-items: center; justify-content: center; text-align: center; }
 .app-body--center.app-special > *, .app-body--center.app-end > * { margin-block: 0; }

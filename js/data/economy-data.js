@@ -83,7 +83,19 @@ export const DIFFICULTY_BANDS = [
 /** Difficulty of the chapter 2 and 3 special customers, and of anything outside the career. */
 export const SPECIAL_DIFFICULTY = 1.0;
 /** Difficulty New Game Plus starts at (after v1). */
-export const NEW_GAME_PLUS_DIFFICULTY = 1.5;
+export const NEW_GAME_PLUS_DIFFICULTY = 1.8;
+
+/**
+ * Keep working (T5.4, SPEC D23): the side mode after the ending. Every coin line of a customer (pops, tool bonuses,
+ * patch tips, nose strip, tip, combo, request) is multiplied by this, rounded to whole coins, at least 1 per clean pop.
+ */
+export const KEEP_WORKING_PAY = 0.6;
+/**
+ * Irritation difficulty of every Keep working customer: the same as the career's last block (customers 13 to 15,
+ * CAREER_BANDS in data/chapters.js, ECONOMY section 7). DIFFICULTY_BANDS above is only used by
+ * economy.js difficultyFor (tests), not by the real career.
+ */
+export const KEEP_WORKING_DIFFICULTY = 1.5;
 
 /** The milestone strip played on the first 3-star customer. */
 export const STRIP_FIRST_THREE_STAR = 'mstar';

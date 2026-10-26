@@ -69,14 +69,26 @@
   70% { opacity: 1; transform: translate(-50%, -190%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -220%) scale(1); }
 }
+/* Reduced motion (the phone's setting, or the game's own switch: pop-mode.js puts .pop-still on the scene): the
+   bubble only fades. */
+@keyframes pop-ow-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.pop-still .pop-ow { animation: pop-ow-fade 0.9s linear forwards; }
 @media (prefers-reduced-motion: reduce) {
   .pop-ow { animation: pop-ow-fade 0.9s linear forwards; }
-  @keyframes pop-ow-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 }
 
 .pop-foot { flex: none; position: relative; z-index: 2; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); background: rgba(16, 42, 40, 0.88); color: #fff; }
 .pop-foot[hidden] { display: none; }
 .pop-hint { margin: 0; font-size: 0.9rem; line-height: 1.3; min-height: 2.6em; }
+/* Field guide (T6.5): the "?" button in the header, and a first-time hint ("New: ...!") marked in yellow; it flashes
+   once when it comes up (pop-mode.js adds the flash only without reduced motion). Taps go through as usual. */
+.pop-guide { display: grid; place-items: center; width: 44px; padding: 0; font-size: 1.25rem; font-weight: 900; }
+.pop-guide[hidden] { display: none; }
+.pop-hint--new { color: #ffe08a; font-weight: 800; }
+.pop-hint--flash { animation: pop-hint-flash 0.9s ease-out 1; transform-origin: left center; }
+@keyframes pop-hint-flash { 0% { transform: scale(1); } 25% { transform: scale(1.04); color: #fff; } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .pop-hint--flash { animation: none; } }
+.pop-still .pop-hint--flash { animation: none; }
 
 .pop-done {
   position: absolute; z-index: 3; left: 16px; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto;
@@ -122,10 +134,13 @@
 .pop-fail__text { margin: 0; font-size: 0.95rem; line-height: 1.35; }
 .pop-fail .pop-btn { color: #102a28; border-color: #102a28; }
 .pop-fail .pop-btn--main { border-color: #5eead4; }
+/* Reduced motion (phone setting or .pop-still): the meter jumps, and a storm-off only fades. */
+@keyframes pop-storm-fade { to { opacity: 0; } }
+.pop-still .pop-irr__fill { transition: none; }
+.pop-still .pop-canvas--storm { animation: pop-storm-fade 0.25s linear forwards; }
 @media (prefers-reduced-motion: reduce) {
   .pop-irr__fill { transition: none; }
   .pop-canvas--storm { animation: pop-storm-fade 0.25s linear forwards; }
-  @keyframes pop-storm-fade { to { opacity: 0; } }
 }
 .pop-btn--main { color: #062b2b; background: #5eead4; border-color: #5eead4; }
 .pop-btn--main:hover { background: #7ff0de; }

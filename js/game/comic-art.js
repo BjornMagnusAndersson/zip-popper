@@ -27,6 +27,8 @@ export const CHARACTERS = {
   penny: { skin: 'deep', hair: 'bob', hairColor: 'pink', outfit: 'sunny', build: 'slim', lashes: true, nose: 'button', eyeColor: '#5d4030', size: 0.84 },
   // The hygiene inspector (strip 5 on): neat combover, tiny moustache, drab suit and tie; holds a clipboard or magnifier.
   inspector: { skin: 'brown', hair: 'combover', hairColor: 'grey', moustache: true, outfit: 'suit', build: 'lanky', nose: 'round', eyeColor: '#5d4030', size: 1.04 },
+  // The landlord (strip "plan", a one-off): a short, cheerful salesman with slicked hair, lost in a loud, too-big suit.
+  landlord: { skin: 'fair', hair: 'slick', hairColor: 'black', outfit: 'bigsuit', build: 'boxy', nose: 'round', eyeColor: '#5b7ce6', size: 0.86 },
 };
 
 /** Body shapes: half widths of shoulders and hips, belly bulge, head size. */
@@ -35,6 +37,8 @@ const BUILDS = {
   stocky: { shoulder: 100, hip: 94, belly: 26, head: 1.04 },
   round: { shoulder: 90, hip: 100, belly: 34, head: 1 },
   lanky: { shoulder: 84, hip: 68, belly: 0, head: 0.95 },
+  // Wide padded shoulders and a small head: a suit two sizes too big (the landlord).
+  boxy: { shoulder: 124, hip: 100, belly: 8, head: 0.9 },
 };
 
 /** Clothes. top/pants/shoes colours; sleeve long or short; extras: apron (+ apronTrim), hood, dots, stripes, armor,
@@ -53,6 +57,8 @@ export const OUTFITS = {
   flannel: { top: '#c9473f', pants: '#4a5c9a', shoes: '#6e4528', sleeve: 'long', stripes: '#9e2f2a' },
   sunny: { top: '#ffd25a', pants: '#3fae8c', shoes: '#e66a8f', sleeve: 'short', dots: '#ffffff' },
   suit: { top: '#8c8a66', pants: '#64634a', shoes: '#3a2f28', sleeve: 'long', tie: '#e8505b' },
+  // The landlord's loud mustard check suit, far too big: baggy = long jacket, wide sleeves, cuffs over the hands.
+  bigsuit: { top: '#e0a63a', pants: '#c48d2c', shoes: '#6e4528', sleeve: 'long', tie: '#6a7be6', check: '#b9822a', baggy: true },
 };
 
 /** Faces. eyes: open wide side half arc closed sad squint; brows: flat up high worried angry sly; mouth: smile grin
@@ -90,7 +96,7 @@ export const POSES = {
 };
 
 /** Things a figure can hold in the right hand. */
-export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'highlighter', 'book'];
+export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'highlighter', 'book', 'key', 'pen'];
 
 let gid = 0; // counter for unique gradient ids
 
@@ -297,6 +303,16 @@ const HAIRDOS = {
       line('M-60 -94 Q0 -110 70 -92 M-70 -78 Q-10 -96 60 -84', 3.5, { stroke: tint(col, -0.25), opacity: 0.7 }),
     ],
   },
+  slick: {
+    /** The landlord: short neat sides behind the ears. @param {string} fill @returns {SVGElement[]} */
+    back: (fill) => [el('path', { d: 'M-114 -6 C-124 -70 -96 -110 -60 -116 L-84 30 L-110 30Z M114 -6 C124 -70 96 -110 60 -116 L84 30 L110 30Z', fill, ...ink(5) })],
+    /** The landlord's front: glossy hair slicked back, a big curly quiff on top and two shine lines. @param {string} fill @returns {SVGElement[]} */
+    front: (fill) => [
+      el('path', { d: 'M-108 -10 C-120 -96 -60 -136 0 -134 C64 -136 120 -96 108 -10 C100 -56 70 -86 30 -92 C-10 -96 -70 -80 -108 -10Z', fill, ...ink(5) }),
+      el('path', { d: 'M-40 -120 C-50 -170 10 -196 50 -170 C78 -150 64 -116 36 -120 C50 -140 30 -160 6 -150 C-14 -142 -16 -126 -40 -120Z', fill, ...ink(5) }),
+      line('M-70 -96 Q-30 -118 20 -112 M-10 -160 Q14 -176 40 -164', 6, { stroke: '#ffffff', opacity: 0.55 }),
+    ],
+  },
   bald: {
     /** Nils: nothing behind the head. @returns {SVGElement[]} */
     back: () => [],
@@ -380,7 +396,8 @@ function head(c, e) {
   const g = el('g', { transform: `rotate(${(e.tilt ?? 0) * (c.flip ? -1 : 1)})` });
   const skin = SKIN[c.skin] ?? c.skin;
   const col = HAIR[c.hairColor] ?? c.hairColor;
-  const armor = OUTFITS[c.outfit]?.armor;
+  // `helmet: true` on a layer = his knight's helmet over everyday clothes (strip "plan": helmet on, hoodie still on).
+  const armor = OUTFITS[c.outfit]?.armor || c.helmet === true;
   const skinFill = shading(g, skin);
   const back = armor ? null : hairBack(c, col, g);
   if (back) g.appendChild(back);
@@ -621,6 +638,19 @@ function torso(c, b, out, sy, hy, parent) {
     inside.appendChild(el('path', { d: `M-12 ${sy + 4} L12 ${sy + 4} L8 ${sy + 22} L16 ${sy + 104} L0 ${sy + 124} L-16 ${sy + 104} L-8 ${sy + 22}Z`, fill: out.tie, ...ink(4) }));
     for (const s of [-1, 1]) inside.appendChild(el('path', { d: `M${s * 44} ${sy - 2} L${s * 4} ${sy + 126} L${s * 30} ${sy + 60} L${s * 66} ${sy + 40}Z`, fill: tint(out.top, -0.1), ...ink(4.5) }));
   }
+  if (out.check) {
+    // A loud check pattern (the landlord's suit): crossing bands, see-through, under the lapels.
+    for (let x = -sw; x < sw; x += 46) inside.insertBefore(el('rect', { x, y: sy - 10, width: 12, height: hy - sy + 20, fill: out.check, opacity: 0.5 }), inside.firstChild);
+    for (let y = sy + 20; y < hy; y += 46) inside.insertBefore(el('rect', { x: -sw - 20, y, width: sw * 2 + 40, height: 12, fill: out.check, opacity: 0.5 }), inside.firstChild);
+  }
+  if (out.baggy) {
+    // A jacket far too long: it hangs well below the hips, with a split at the back and a sagging crease.
+    const jw = hw + bel + 18;
+    g.appendChild(el('path', { d: `M${-hw - 4} ${hy - 30} L${hw + 4} ${hy - 30} L${jw} ${hy + 70} Q${jw * 0.5} ${hy + 84} 8 ${hy + 74} L0 ${hy + 30} L-8 ${hy + 74} Q${-jw * 0.5} ${hy + 84} ${-jw} ${hy + 70}Z`, fill, ...ink(5) }));
+    if (out.check) for (let x = -jw + 10; x < jw; x += 46) g.appendChild(line(`M${x} ${hy - 26} L${x + (x < 0 ? -4 : 4)} ${hy + 64}`, 12, { stroke: out.check, opacity: 0.5 }));
+    g.appendChild(line(`M${-hw + 20} ${hy + 20} q20 14 46 4 M${hw - 20} ${hy + 30} q-20 12 -42 0`, 4, { opacity: 0.4 }));
+    for (const by of [hy - 70, hy - 20]) g.appendChild(el('circle', { cx: 0, cy: by, r: 9, fill: '#6e4528', ...ink(3) }));
+  }
   if (out.hood) g.appendChild(el('path', { d: `M${-sw + 20} ${sy + 6} Q0 ${sy + 50} ${sw - 20} ${sy + 6} Q${sw - 10} ${sy - 40} 0 ${sy - 30} Q${-sw + 10} ${sy - 40} ${-sw + 20} ${sy + 6}Z`, fill: tint(out.top, -0.1), ...ink(5) }));
   return g;
 }
@@ -639,8 +669,9 @@ function arm(sh, elb, hand, out, skinFill, o) {
   const g = el('g');
   const d = `M${sh[0]} ${sh[1]} Q${elb[0]} ${elb[1]} ${hand[0]} ${hand[1]}`;
   const sleeve = out.armor ? '#c9d3de' : out.top;
-  g.appendChild(el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 52, 'stroke-linecap': 'round' }));
-  g.appendChild(el('path', { d, fill: 'none', stroke: out.sleeve === 'short' ? skinFill : sleeve, 'stroke-width': 40, 'stroke-linecap': 'round' }));
+  const fat = out.baggy ? 18 : 0; // baggy sleeves are much wider
+  g.appendChild(el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 52 + fat, 'stroke-linecap': 'round' }));
+  g.appendChild(el('path', { d, fill: 'none', stroke: out.sleeve === 'short' ? skinFill : sleeve, 'stroke-width': 40 + fat, 'stroke-linecap': 'round' }));
   if (out.sleeve === 'short') {
     const mid = [(sh[0] + elb[0]) / 2, (sh[1] + elb[1]) / 2];
     g.appendChild(el('path', { d: `M${sh[0]} ${sh[1]} L${mid[0]} ${mid[1]}`, stroke: INK, 'stroke-width': 56, 'stroke-linecap': 'round' }));
@@ -654,6 +685,14 @@ function arm(sh, elb, hand, out, skinFill, o) {
   } else {
     const turn = Math.atan2(hand[1] - elb[1], hand[0] - elb[0]) * 180 / Math.PI - 90; // fingers follow the forearm
     g.appendChild(el('g', { transform: `translate(${hand[0]} ${hand[1]}) rotate(${turn})` }, [closedHand(hf, o)]));
+  }
+  if (out.baggy) {
+    // A wide cuff swallowing the wrist (the sleeves are too long), tilted along the forearm.
+    const t = 0.78;
+    const cx = (1 - t) * (1 - t) * sh[0] + 2 * (1 - t) * t * elb[0] + t * t * hand[0];
+    const cy = (1 - t) * (1 - t) * sh[1] + 2 * (1 - t) * t * elb[1] + t * t * hand[1];
+    const a = Math.atan2(hand[1] - elb[1], hand[0] - elb[0]) * 180 / Math.PI;
+    g.appendChild(el('ellipse', { cx, cy, rx: 22, ry: 36, fill: tint(out.top, -0.08), ...ink(5), transform: `rotate(${a} ${cx} ${cy})` }));
   }
   return g;
 }
@@ -790,6 +829,21 @@ function heldThing(what, at, k = 1) {
         g.appendChild(line(`M${s * 18} ${y} L${s * 80} ${y - 4}`, 3, { opacity: 0.45 }));
       }
     }
+  } else if (what === 'key') {
+    // A huge old rusty key held by its ring, the shaft and the teeth up (strip "plan": the keys to the studio).
+    g.appendChild(el('rect', { x: -11, y: -190, width: 22, height: 180, rx: 8, fill: '#c07a3e', ...ink(4.5) }));
+    g.appendChild(el('path', { d: 'M11 -186 L58 -186 L58 -160 L44 -160 L44 -146 L58 -146 L58 -126 L11 -126Z', fill: '#c07a3e', ...ink(4.5) }));
+    g.appendChild(el('circle', { cx: 0, cy: 6, r: 34, fill: '#c07a3e', ...ink(5) }));
+    g.appendChild(el('circle', { cx: 0, cy: 6, r: 15, fill: 'none', ...ink(4.5) }));
+    for (const [x, y, r] of [[-4, -150, 6], [4, -96, 5], [-3, -50, 7], [44, -170, 5], [-18, 24, 6]]) g.appendChild(el('circle', { cx: x, cy: y, r, fill: '#8a4f24', opacity: 0.7 }));
+    g.appendChild(line('M-5 -176 L-5 -60', 4, { stroke: '#f2b47a', opacity: 0.8 }));
+  } else if (what === 'pen') {
+    // A ballpoint pen held for writing, tip down and a little to the front.
+    const pg = el('g', { transform: 'rotate(24)' });
+    pg.appendChild(el('rect', { x: -8, y: -70, width: 16, height: 118, rx: 6, fill: '#6a7be6', ...ink(4) }));
+    pg.appendChild(el('path', { d: 'M-8 48 L8 48 L0 70Z', fill: '#fff8ee', ...ink(3.5) }));
+    pg.appendChild(el('rect', { x: -10, y: -78, width: 20, height: 18, rx: 5, fill: '#2b2f3a', ...ink(3) }));
+    g.appendChild(pg);
   } else if (what === 'snack') {
     g.appendChild(el('path', { d: 'M-30 -70 L30 -70 L24 10 L-24 10Z', fill: '#f3a33a', ...ink(4.5) }));
     for (const [x, y] of [[-14, -78], [4, -84], [18, -76]]) g.appendChild(el('circle', { cx: x, cy: y, r: 11, fill: '#fff4c8', ...ink(3.5) }));
@@ -1073,6 +1127,14 @@ export const ROOMS = {
     sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: true, lamp: true,
     shabby: true, leak: true, bulb: true, sign: true, door: true,
   },
+  // The closed launderette (strip "plan"): the same shabby room before it became her studio, only dustier: a row of
+  // dusty washing machines (washers: true or a list of 0..1 positions), cobwebs in the top corners, a cracked sink
+  // (sinkX) and lost socks on the floor. No "Clean!" sign yet. Options as the studio, plus washers/cobwebs/sink/socks false.
+  launderette: {
+    wall: ['#9aa38f', '#868f7b'], stripes: '#919a86', skirting: '#5f6a56', floor: '#585e50', boards: '#454a3e',
+    sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: false, lamp: false,
+    shabby: true, leak: true, bulb: true, sign: false, door: true, washers: true, cobwebs: true, sink: true, socks: true,
+  },
 };
 
 /**
@@ -1178,6 +1240,88 @@ function shabbyFront(g, r, w, F) {
     g.appendChild(el('rect', { x: bx - 11 * k, y: by - 34 * k, width: 22 * k, height: 18 * k, fill: '#8d9389', ...ink(3.5) }));
     g.appendChild(el('ellipse', { cx: bx, cy: by, rx: 20 * k, ry: 24 * k, fill: '#fff2bf', ...ink(4) }));
     for (const s of [-1, 1]) g.appendChild(line(`M${bx + s * 34 * k} ${by - 10 * k} l${s * 14 * k} ${-6 * k} l${-s * 4 * k} ${12 * k} l${s * 14 * k} ${-6 * k}`, 3.5, { stroke: '#e8b830' }));
+  }
+}
+
+/**
+ * A cobweb in a corner: threads fanning out from the corner point, joined by sagging rings.
+ * @param {SVGElement} g where to draw @param {number} x corner x @param {number} y corner y @param {number} size reach
+ * @param {number} dx 1 = the web spreads right, -1 = left @returns {void}
+ */
+function cobweb(g, x, y, size, dx) {
+  const angles = [0, 22, 45, 68, 90].map((a) => (a * Math.PI) / 180);
+  /** A point on the web: angle a (radians) and distance r from the corner. @param {number} a @param {number} r @returns {number[]} x, y */
+  const pt = (a, r) => [x + dx * Math.cos(a) * r, y + Math.sin(a) * r];
+  for (const a of angles) { const [ex, ey] = pt(a, size); g.appendChild(line(`M${x} ${y} L${ex} ${ey}`, 2.5, { stroke: '#f4f4ee', opacity: 0.85 })); }
+  for (const f of [0.35, 0.62, 0.9]) {
+    let d = '';
+    angles.forEach((a, i) => {
+      const [px, py] = pt(a, size * f);
+      if (!i) { d = `M${px} ${py}`; return; }
+      const [qx, qy] = pt((a + angles[i - 1]) / 2, size * f * 0.82);
+      d += ` Q${qx} ${qy} ${px} ${py}`;
+    });
+    g.appendChild(line(d, 2.5, { stroke: '#f4f4ee', opacity: 0.85 }));
+  }
+}
+
+/**
+ * The closed launderette's things (room kind 'launderette'): dusty front-loading washing machines along the wall
+ * (one with a forgotten sock behind the glass), a cracked sink with a dripping tap, cobwebs and lost socks.
+ * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
+ * @returns {void}
+ */
+function laundry(g, r, w, F) {
+  const k = Math.min(F / 600, w / 1000);
+  if (r.cobwebs) { cobweb(g, 0, 0, 150 * k, 1); cobweb(g, w, 0, 170 * k, -1); }
+  if (r.sink) {
+    // A wall sink: a pipe down to the floor, a chipped basin with a zigzag crack, a tap with a drop on it.
+    const sx = w * (r.sinkX ?? 0.3);
+    const sy = F - 190 * k;
+    g.appendChild(el('rect', { x: sx - 12 * k, y: sy + 40 * k, width: 24 * k, height: F - sy - 30 * k, fill: '#a4adb6', ...ink(4) }));
+    g.appendChild(el('path', { d: `M${sx - 18 * k} ${sy - 120 * k} L${sx - 18 * k} ${sy - 84 * k} L${sx + 30 * k} ${sy - 84 * k} L${sx + 30 * k} ${sy - 64 * k}`, fill: 'none', ...ink(14 * k + 6) }));
+    g.appendChild(el('path', { d: `M${sx - 18 * k} ${sy - 120 * k} L${sx - 18 * k} ${sy - 84 * k} L${sx + 30 * k} ${sy - 84 * k} L${sx + 30 * k} ${sy - 64 * k}`, fill: 'none', stroke: '#c9d3de', 'stroke-width': 14 * k, 'stroke-linejoin': 'round' }));
+    g.appendChild(el('circle', { cx: sx - 18 * k, cy: sy - 126 * k, r: 16 * k, fill: '#c9d3de', ...ink(4) }));
+    g.appendChild(el('path', { d: `M${sx - 120 * k} ${sy - 40 * k} L${sx + 120 * k} ${sy - 40 * k} L${sx + 96 * k} ${sy + 50 * k} L${sx - 96 * k} ${sy + 50 * k}Z`, fill: '#ece9df', ...ink(5) }));
+    g.appendChild(el('rect', { x: sx - 128 * k, y: sy - 52 * k, width: 256 * k, height: 20 * k, rx: 8 * k, fill: '#f6f3ea', ...ink(4.5) }));
+    g.appendChild(line(`M${sx + 40 * k} ${sy - 32 * k} l-14 ${22 * k} l18 ${14 * k} l-16 ${26 * k} l12 ${14 * k}`, 4));
+    g.appendChild(el('path', { d: `M${sx - 96 * k} ${sy - 52 * k} l14 ${-0.1 * k} l-6 ${12 * k}Z`, fill: '#9aa287' })); // a chip
+    g.appendChild(el('ellipse', { cx: sx - 50 * k, cy: sy + 10 * k, rx: 34 * k, ry: 12 * k, fill: '#786834', opacity: 0.25 }));
+    const dy = sy - 52 * k;
+    g.appendChild(el('path', { d: `M${sx + 30 * k} ${dy - 14 * k} C${sx + 40 * k} ${dy} ${sx + 40 * k} ${dy + 10 * k} ${sx + 30 * k} ${dy + 10 * k} C${sx + 20 * k} ${dy + 10 * k} ${sx + 20 * k} ${dy} ${sx + 30 * k} ${dy - 14 * k}Z`, fill: '#9ad8ff', ...ink(3) }));
+  }
+  const spots = r.washers === true ? [0.6, 0.73, 0.86] : Array.isArray(r.washers) ? r.washers : [];
+  spots.forEach((fx, i) => {
+    // A front-loading washing machine, grey with dust, standing against the wall.
+    const mw = 190 * k;
+    const mh = 230 * k;
+    const x = w * fx - mw / 2;
+    const y = F + 26 * k - mh;
+    g.appendChild(el('rect', { x, y, width: mw, height: mh, rx: 14 * k, fill: '#dcdad0', ...ink(5) }));
+    g.appendChild(el('rect', { x: x + 4 * k, y: y + 4 * k, width: mw - 8 * k, height: 44 * k, rx: 10 * k, fill: '#c9c6b8' }));
+    g.appendChild(line(`M${x} ${y + 48 * k} L${x + mw} ${y + 48 * k}`, 4));
+    g.appendChild(el('circle', { cx: x + mw * 0.8, cy: y + 26 * k, r: 12 * k, fill: '#a4adb6', ...ink(3.5) }));
+    for (const bx of [0.18, 0.32]) g.appendChild(el('rect', { x: x + mw * bx, y: y + 20 * k, width: 18 * k, height: 12 * k, rx: 4 * k, fill: '#8a96a6', ...ink(3) }));
+    const cx = x + mw / 2;
+    const cy = y + 48 * k + (mh - 48 * k) / 2;
+    g.appendChild(el('circle', { cx, cy, r: 66 * k, fill: '#b9bcb2', ...ink(5) }));
+    g.appendChild(el('circle', { cx, cy, r: 50 * k, fill: '#5b6b70', ...ink(4) }));
+    if (i === 1) {
+      // A forgotten pink sock behind the glass.
+      g.appendChild(el('path', { d: `M${cx - 20 * k} ${cy - 18 * k} l${16 * k} ${26 * k} q${8 * k} ${14 * k} ${26 * k} ${6 * k} l${4 * k} ${-10 * k} l${-22 * k} ${-6 * k} l${-12 * k} ${-24 * k}Z`, fill: '#f27eb2', ...ink(3) }));
+    }
+    g.appendChild(line(`M${cx - 30 * k} ${cy - 26 * k} Q${cx - 14 * k} ${cy - 40 * k} ${cx + 6 * k} ${cy - 40 * k}`, 6 * k, { stroke: '#ffffff', opacity: 0.6 }));
+    // Dust: pale grey patches on the lid and the front.
+    for (const [ex, ey, rr] of [[0.3, 0.1, 30], [0.75, 0.86, 26], [0.15, 0.6, 18]]) g.appendChild(el('ellipse', { cx: x + mw * ex, cy: y + mh * ey, rx: rr * k, ry: rr * k * 0.5, fill: '#9c9a8c', opacity: 0.35 }));
+    if (r.cobwebs && i === spots.length - 1) cobweb(g, x + mw - 6 * k, y + 52 * k, 60 * k, -1);
+  });
+  if (r.socks && spots.length) {
+    // Lost socks on the floor in front of the machines (every launderette has them).
+    for (const [fx, col, rot] of [[spots[0] - 0.06, '#6a7be6', -20], [spots[spots.length - 1] + 0.05, '#ffd25a', 30]]) {
+      const sx = w * fx;
+      const sy = F + 60 * k;
+      g.appendChild(el('path', { d: `M${sx} ${sy} l${18 * k} ${-30 * k} l${16 * k} ${8 * k} l${-10 * k} ${20 * k} q${30 * k} ${4 * k} ${26 * k} ${18 * k} q${-6 * k} ${12 * k} ${-36 * k} ${2 * k}Z`, fill: col, ...ink(3.5), transform: `rotate(${rot} ${sx} ${sy})` }));
+    }
   }
 }
 
@@ -1289,6 +1433,7 @@ function room(l) {
     g.appendChild(el('circle', { cx: bx + 142, cy: by + 58, r: 12, fill: '#f0a43a' }));
   }
   if (r.shabby) shabbyFront(g, r, w, F);
+  if (r.washers || r.sink || r.cobwebs || r.socks) laundry(g, r, w, F);
   if (r.lamp) {
     const lx = w * (l.lampX ?? 0.94);
     const gl = `cl${gid += 1}`;
@@ -1544,8 +1689,144 @@ function dog(l) {
   return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${f * s} ${s})` }, [g]), mouth };
 }
 
+/**
+ * Her hand-drawn business plan on a sheet of paper (strip "plan"): a stick-figure her with happy hands, one VERY big
+ * pimple, and a price list (lines and coins). No words, so nothing to translate. Centre at 0,0, 300 x 380 units.
+ * @param {boolean} [tape] two strips of tape on the top corners (stuck to a door)
+ * @returns {SVGElement} the sheet
+ */
+function planSheet(tape = false) {
+  const g = el('g');
+  g.appendChild(el('path', { d: 'M-150 -190 L150 -190 L150 160 L120 190 L-150 190Z', fill: '#fffaf0', ...ink(5) }));
+  g.appendChild(el('path', { d: 'M150 160 L120 160 L120 190Z', fill: '#e8dfc8', ...ink(3.5) }));
+  for (let y = -150; y < 180; y += 34) g.appendChild(line(`M-140 ${y} L140 ${y}`, 2, { stroke: '#9fd3e8', opacity: 0.7 }));
+  // The stick figure (her, with her bun), arms up, next to the big pimple with shine and wiggle lines.
+  g.appendChild(el('circle', { cx: -92, cy: -128, r: 20, fill: 'none', ...ink(4) }));
+  g.appendChild(el('circle', { cx: -84, cy: -150, r: 9, fill: '#6e4528', ...ink(3) }));
+  g.appendChild(line('M-92 -108 L-92 -50 M-92 -50 L-110 -14 M-92 -50 L-74 -14 M-92 -92 L-120 -122 M-92 -92 L-64 -122', 4));
+  g.appendChild(el('circle', { cx: 40, cy: -90, r: 74, fill: '#ff9cb5', ...ink(5) }));
+  g.appendChild(el('circle', { cx: 40, cy: -108, r: 28, fill: '#fff8ee' }));
+  g.appendChild(line('M-6 -168 l-12 -14 M40 -176 l0 -14 M86 -168 l12 -14 M126 -96 l16 0', 4, { stroke: '#e8505b' }));
+  // Price list: three rows, a line and a coin each, then a heart.
+  for (const [i, y] of [24, 70, 116].entries()) {
+    g.appendChild(line(`M-120 ${y} L${10 - i * 22} ${y}`, 6, { opacity: 0.7 }));
+    for (let c = 0; c <= i; c += 1) g.appendChild(el('circle', { cx: 60 + c * 28, cy: y - 2, r: 12, fill: '#ffd25a', ...ink(3) }));
+  }
+  g.appendChild(el('path', { d: 'M-100 166 c-10 -14 -30 0 0 18 c30 -18 10 -32 0 -18Z', fill: '#e8505b', ...ink(2.5) }));
+  if (tape) for (const s of [-1, 1]) g.appendChild(el('rect', { x: s * 130 - 34, y: -204, width: 68, height: 26, fill: '#f6ecc0', opacity: 0.9, ...ink(2.5), transform: `rotate(${s * 30} ${s * 130} -191)` }));
+  return g;
+}
+
+/**
+ * The business plan as a prop (strip "plan"): the sheet on a table, held up, or taped to a door.
+ * @param {object} l layer: x, y (middle), scale, rotate (degrees; 180 = upside down), tape
+ * @returns {{node: SVGElement}} the sheet
+ */
+function plan(l) {
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) rotate(${l.rotate ?? 0}) scale(${l.scale ?? 1})` }, [planSheet(l.tape)]) };
+}
+
+/**
+ * A little shop seen from the street, filling the panel (strip "plan": the closed launderette that becomes her studio):
+ * sky, a tired plaster front, a long blank sign board (only the ghost of the old washing-machine logo), a faded
+ * striped awning, a dusty shop window and a wooden door, pavement in front.
+ * @param {object} l layer: w, h (panel size), floorY (pavement line), doorX and windowX (0..1 across), sky [two
+ *   colours], sun (true = a low evening sun), glow (warm light inside), plantEyes (the plant on the window sill:
+ *   'sad' | 'wide' | 'smug' | 'happy'; leave out = no plant), plan (her business plan taped to the door)
+ * @returns {{node: SVGElement}} the shop front
+ */
+function shopfront(l) {
+  const w = l.w ?? 1600;
+  const h = l.h ?? 900;
+  const F = l.floorY ?? h * 0.86;
+  const k = Math.min(F / 780, w / 1000);
+  const g = el('g');
+  const sid = `csk${gid += 1}`;
+  const [s0, s1] = l.sky ?? ['#8fd3ff', '#dff4ff'];
+  g.appendChild(el('defs', {}, [el('linearGradient', { id: sid, x1: 0, y1: 0, x2: 0, y2: 1 }, [el('stop', { offset: 0, 'stop-color': s0 }), el('stop', { offset: 1, 'stop-color': s1 })])]));
+  g.appendChild(el('rect', { width: w, height: h, fill: `url(#${sid})` }));
+  if (l.sun) {
+    g.appendChild(el('circle', { cx: w * 0.9, cy: F * 0.1, r: 150 * k, fill: '#fff3c4', opacity: 0.45 }));
+    g.appendChild(el('circle', { cx: w * 0.9, cy: F * 0.1, r: 80 * k, fill: '#ffe27a', ...ink(5) }));
+  }
+  // The building front, from the roof line down to the pavement; neighbours peek in at both sides.
+  const top = F * 0.08;
+  const x0 = w * 0.05;
+  const x1 = w * 0.95;
+  for (const [nx, nw] of [[-20, x0 + 24], [x1 - 4, w - x1 + 24]]) g.appendChild(el('rect', { x: nx, y: top + 30 * k, width: nw, height: F - top, fill: '#b98a6a', ...ink(5) }));
+  g.appendChild(el('rect', { x: x0, y: top, width: x1 - x0, height: F - top, fill: '#e6d3b0', ...ink(6) }));
+  g.appendChild(el('rect', { x: x0 - 14 * k, y: top - 20 * k, width: x1 - x0 + 28 * k, height: 28 * k, rx: 6 * k, fill: '#8a96a6', ...ink(4.5) })); // the gutter
+  // Peeling plaster: a few bare brick patches and a crack.
+  for (const [fx, fy] of [[0.12, 0.62], [0.88, 0.5], [0.5, 0.06]]) {
+    const bx = w * fx;
+    const by = F * fy + top;
+    g.appendChild(el('path', { d: `M${bx - 50 * k} ${by} q${30 * k} ${-26 * k} ${70 * k} ${-10 * k} q${30 * k} ${20 * k} ${10 * k} ${44 * k} q${-50 * k} ${16 * k} ${-80 * k} ${-34 * k}Z`, fill: '#c98f6b', ...ink(3) }));
+    g.appendChild(line(`M${bx - 30 * k} ${by + 4 * k} l${50 * k} 0 M${bx - 10 * k} ${by + 18 * k} l${44 * k} 0`, 3, { opacity: 0.5 }));
+  }
+  g.appendChild(line(`M${w * 0.42} ${top + 6} l${-12 * k} ${40 * k} l${16 * k} ${30 * k} l${-10 * k} ${36 * k}`, 3.5, { opacity: 0.6 }));
+  // The blank sign board, with only the faded ghost of the old launderette logo (a machine door and bubbles).
+  const sy0 = top + F * 0.05;
+  const sh = F * 0.17;
+  g.appendChild(el('rect', { x: w * 0.1, y: sy0, width: w * 0.8, height: sh, rx: 10 * k, fill: '#a9bcc4', ...ink(6) }));
+  g.appendChild(el('rect', { x: w * 0.1 + 16 * k, y: sy0 + 14 * k, width: w * 0.8 - 32 * k, height: sh - 28 * k, rx: 6 * k, fill: 'none', stroke: '#c9d7dc', 'stroke-width': 6 * k }));
+  const gx = w * 0.5;
+  const gy = sy0 + sh / 2;
+  g.appendChild(el('circle', { cx: gx, cy: gy, r: sh * 0.32, fill: 'none', stroke: '#93a8b0', 'stroke-width': 8 * k, opacity: 0.8 }));
+  for (const [bx, by, br] of [[0.62, -0.1, 0.1], [0.7, 0.14, 0.07], [0.38, 0.08, 0.08]]) g.appendChild(el('circle', { cx: gx + (bx - 0.5) * sh * 3, cy: gy + by * sh, r: br * sh, fill: 'none', stroke: '#93a8b0', 'stroke-width': 6 * k, opacity: 0.8 }));
+  // A faded striped awning with a scalloped edge.
+  const ay = sy0 + sh + 10 * k;
+  const ah = F * 0.08;
+  const ax0 = w * 0.08;
+  const ax1 = w * 0.92;
+  g.appendChild(el('path', { d: `M${ax0} ${ay} L${ax1} ${ay} L${ax1 + 20 * k} ${ay + ah} L${ax0 - 20 * k} ${ay + ah}Z`, fill: '#f3e3e0', ...ink(5) }));
+  const n = Math.round((ax1 - ax0) / (70 * k));
+  const sw = (ax1 - ax0 + 40 * k) / n;
+  for (let i = 0; i < n; i += 2) g.appendChild(el('path', { d: `M${ax0 + ((ax1 - ax0) / n) * i} ${ay} L${ax0 + ((ax1 - ax0) / n) * (i + 1)} ${ay} L${ax0 - 20 * k + sw * (i + 1)} ${ay + ah} L${ax0 - 20 * k + sw * i} ${ay + ah}Z`, fill: '#e8a2b4', opacity: 0.8 }));
+  let sc = `M${ax0 - 20 * k} ${ay + ah}`;
+  for (let i = 0; i < n; i += 1) sc += ` q${sw / 2} ${30 * k} ${sw} 0`;
+  g.appendChild(el('path', { d: `${sc} Z`, fill: '#f3e3e0', ...ink(4.5) }));
+  // The shop window: dusty glass, a sill inside, optionally the plant on it and warm light.
+  const wy0 = ay + ah + 46 * k;
+  const ww = Math.min(w * 0.42, 600 * k);
+  const wx0 = w * (l.windowX ?? 0.66) - ww / 2;
+  const wy1 = F - 70 * k;
+  const gid2 = `cgl${gid += 1}`;
+  const glass = l.glow ? ['#ffe9a8', '#ffc870'] : ['#5d7780', '#3f545b'];
+  g.appendChild(el('defs', {}, [el('linearGradient', { id: gid2, x1: 0, y1: 0, x2: 0, y2: 1 }, [el('stop', { offset: 0, 'stop-color': glass[0] }), el('stop', { offset: 1, 'stop-color': glass[1] })])]));
+  g.appendChild(el('rect', { x: wx0 - 16 * k, y: wy0 - 16 * k, width: ww + 32 * k, height: F - wy0 + 16 * k, fill: '#8a6a4a', ...ink(5) }));
+  g.appendChild(el('rect', { x: wx0, y: wy0, width: ww, height: wy1 - wy0, fill: `url(#${gid2})`, ...ink(5) }));
+  if (l.plantEyes) {
+    const ps = ((wy1 - wy0) * 0.62) / 420;
+    g.appendChild(plant({ x: wx0 + ww * 0.72, y: wy1 - 10 * k, scale: ps, eyes: l.plantEyes }).node);
+  }
+  g.appendChild(el('rect', { x: wx0 - 8 * k, y: wy1 - 12 * k, width: ww + 16 * k, height: 16 * k, rx: 5 * k, fill: '#c9a27a', ...ink(4) }));
+  // Dust streaks and a shine across the glass.
+  g.appendChild(el('path', { d: `M${wx0 + ww * 0.1} ${wy1 - 20 * k} L${wx0 + ww * 0.36} ${wy0 + 20 * k} L${wx0 + ww * 0.46} ${wy0 + 20 * k} L${wx0 + ww * 0.2} ${wy1 - 20 * k}Z`, fill: '#ffffff', opacity: 0.22 }));
+  if (!l.glow) for (const [fx, fy, rr] of [[0.3, 0.7, 60], [0.8, 0.3, 50]]) g.appendChild(el('ellipse', { cx: wx0 + ww * fx, cy: wy0 + (wy1 - wy0) * fy, rx: rr * k, ry: rr * k * 0.6, fill: '#c9c6b8', opacity: 0.25 }));
+  // The door: tired wood, a glass panel at the top, a brass knob, a step.
+  const dw = 230 * k;
+  const dx = w * (l.doorX ?? 0.28) - dw / 2;
+  const dy = wy0 - 20 * k;
+  g.appendChild(el('rect', { x: dx - 14 * k, y: dy - 14 * k, width: dw + 28 * k, height: F - dy + 14 * k, fill: '#7a6a50', ...ink(5) }));
+  g.appendChild(el('rect', { x: dx, y: dy, width: dw, height: F - dy, fill: '#5f8f8a', ...ink(5) }));
+  g.appendChild(el('rect', { x: dx + dw * 0.14, y: dy + 20 * k, width: dw * 0.72, height: (F - dy) * 0.36, rx: 6 * k, fill: l.glow ? '#ffe2a0' : '#4f646b', ...ink(4) }));
+  g.appendChild(el('rect', { x: dx + dw * 0.16, y: dy + (F - dy) * 0.56, width: dw * 0.68, height: (F - dy) * 0.32, rx: 6 * k, fill: 'none', ...ink(3.5), opacity: 0.6 }));
+  g.appendChild(el('circle', { cx: dx + dw * 0.84, cy: dy + (F - dy) * 0.52, r: 12 * k, fill: '#c9a24a', ...ink(3) }));
+  if (l.plan) {
+    const ps = Math.min(dw * 0.6 / 300, (F - dy) * 0.3 / 380);
+    g.appendChild(el('g', { transform: `translate(${dx + dw / 2} ${dy + 20 * k + (F - dy) * 0.18}) rotate(-4) scale(${ps})` }, [planSheet(true)]));
+  }
+  g.appendChild(el('rect', { x: dx - 30 * k, y: F - 4 * k, width: dw + 60 * k, height: 24 * k, rx: 4 * k, fill: '#b5b4ba', ...ink(4) }));
+  // The pavement: slabs and a kerb, and warm light spilling out when the lamp is on inside.
+  g.appendChild(el('rect', { y: F + 20 * k, width: w, height: h - F, fill: '#a9a8ae' }));
+  g.appendChild(line(`M0 ${F + 20 * k} L${w} ${F + 20 * k}`, 5));
+  for (let x = 60 * k; x < w; x += 220 * k) g.appendChild(line(`M${x} ${F + 20 * k} l${-30 * k} ${h - F}`, 3, { stroke: '#8f8e94' }));
+  if (l.glow) g.appendChild(el('path', { d: `M${wx0} ${F + 20 * k} L${wx0 + ww} ${F + 20 * k} L${wx0 + ww * 1.2} ${h} L${wx0 - ww * 0.2} ${h}Z`, fill: '#ffe496', opacity: 0.35 }));
+  return { node: g };
+}
+
 /** Props, rooms and effects by name. */
-export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog };
+export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront };
 
 /** Every art piece a strip can name with `art:` (characters and props). Each takes the layer and returns { node, mouth? }. */
 export const ARTS = {

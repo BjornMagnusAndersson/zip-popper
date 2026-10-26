@@ -34,6 +34,8 @@ const PRECACHE = [
   './js/screens/scrub-logic.js',
   './js/screens/end.js',
   './js/screens/studio.js',
+  './js/screens/guide.js',
+  './js/screens/guide-logic.js',
   './strings/en.json',
   './js/core/save.js',
   './js/core/sound.js',
@@ -73,6 +75,7 @@ const PRECACHE = [
   './js/data/comics/strip-3.js',
   './js/data/comics/strip-4.js',
   './js/data/comics/strip-5.js',
+  './js/data/comics/strip-plan.js',
   './js/data/comics/strip-books.js',
   './js/data/comics/strip-mplant.js',
   './js/data/comics/strip-mlamp.js',
@@ -96,12 +99,15 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v34';
+const CACHE_VERSION = 'v36';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
-// On install: download every listed file into the new cache.
+// On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the
+// browser's HTTP cache, so a quick second update never stores an old copy under the new cache name).
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME)
+    .then((cache) => cache.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 // On activate: delete caches from older versions, then take control of open pages.

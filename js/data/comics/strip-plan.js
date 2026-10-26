@@ -1,0 +1,384 @@
+// Bridge strip 4b "The plan" (between strip 4 "Rock bottom" and strip 5 "The shabby studio"). 8 panels.
+// Beginning: the next morning {name} brings a hand-drawn business plan to breakfast; he eats his cereal out of his
+// upturned helmet, then puts it on (cereal and all) to be her guard. Middle: a cheerful landlord in a too-big suit
+// shows them a closed launderette (dusty machines, a leak, lost socks); the splash is her imagination: the same dump
+// as a clean, sparkling studio. She signs the lease without reading it ("the roof is not included"). End: the huge
+// rusty key, moving in (one chair, one bucket, one lamp, and the sad plant she adopts), and the evening outside:
+// "Tomorrow." Tone (owner): HOPEFUL; nobody is mean. Greta and Nils are NOT in this strip (they come in strip 5).
+// Running gags: his helmet gets fancier (three plumes, now a cereal spoon tucked in like a feather), the plant (sad,
+// then amazed, then happy and greener), the roof. Visual surprise: the dream studio. Format: docs/COMIC-FORMAT.md.
+
+/** Her husband in his helmet over the hoodie, three plumes (the helmet ladder, see STORY.md). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
+const helmeted = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, helmet: true, visor: 'up', plumes: 3, ...o });
+
+/** Where a husband layer's head is (centre and size), for things stuck to his helmet. @param {object} l the layer @returns {{x: number, y: number, k: number}} head centre and head scale */
+function headOf(l) {
+  const s = l.scale ?? 1;
+  const up = { stand: 515, hips: 515, cheer: 515, wave: 515, point: 515, shrug: 515, bust: 255, sit: 440 }[l.pose ?? 'stand'];
+  return { x: l.x, y: l.y - up * s, k: 1.04 * s };
+}
+
+/**
+ * The running gag this time: a cereal spoon tucked into the side of his helmet like a feather (the helmet was his
+ * cereal bowl), and optionally a few cereal loops still stuck on it.
+ * @param {object} him the husband layer @param {boolean} [loops] cereal loops and a drop of milk on the helmet
+ * @returns {object[]} shape layers (put them after him)
+ */
+function spoon(him, loops = false) {
+  const { x, y, k } = headOf(him);
+  const f = him.flip ? -1 : 1;
+  const out = [
+    { shape: 'path', d: `M${x + f * 112 * k} ${y - 30 * k} L${x + f * 178 * k} ${y - 170 * k}`, stroke: true, sw: 18 * k + 4 },
+    { shape: 'path', d: `M${x + f * 112 * k} ${y - 30 * k} L${x + f * 178 * k} ${y - 170 * k}`, stroke: '#d7dee7', sw: 18 * k },
+    { shape: 'ellipse', x: x + f * 190 * k, y: y - 204 * k, rx: 26 * k, ry: 40 * k, rotate: f * 26, fill: '#d7dee7', stroke: true, sw: 5 },
+    { shape: 'ellipse', x: x + f * 184 * k, y: y - 214 * k, rx: 8 * k, ry: 16 * k, rotate: f * 26, fill: '#ffffff', opacity: 0.8 },
+  ];
+  if (loops) {
+    for (const [dx, dy, c] of [[-60, -110, '#f3a33a'], [40, -128, '#e66a8f'], [-10, -140, '#ffd25a'], [70, -96, '#f3a33a']]) {
+      out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 15 * k, fill: c, stroke: true, sw: 4 });
+      out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 5 * k, fill: '#fff8ee' });
+    }
+    out.push({ shape: 'path', d: `M${x - f * 124 * k} ${y + 20 * k} q${-f * 8 * k} ${30 * k} 0 ${44 * k} q${f * 10 * k} ${-10 * k} 0 ${-44 * k}Z`, fill: '#ffffff', stroke: true, sw: 3 });
+  }
+  return out;
+}
+
+/**
+ * A kitchen table seen from the front (as in strip 2): a tablecloth with a scalloped edge and two wooden legs.
+ * Put it after the people sitting at it, so it covers their laps.
+ * @param {number} x0 left edge @param {number} x1 right edge @param {number} top table top @param {number} bottom legs end
+ * @returns {object[]} shape layers
+ */
+function table(x0, x1, top, bottom) {
+  const w = x1 - x0;
+  const out = [];
+  for (const lx of [x0 + 40, x1 - 70]) out.push({ shape: 'rect', x: lx, y: top + 100, w: 30, h: bottom - top, fill: '#b07a4a', stroke: true, sw: 5 });
+  out.push({ shape: 'rect', x: x0, y: top, w, h: 110, fill: '#9fd3e8', stroke: true, sw: 6 });
+  for (let x = x0 + 30; x < x1 - 10; x += 60) out.push({ shape: 'rect', x, y: top + 4, w: 30, h: 102, fill: '#ffffff', opacity: 0.45 });
+  out.push({ shape: 'rect', x: x0 - 10, y: top - 14, w: w + 20, h: 26, rx: 10, fill: '#fff8ee', stroke: true, sw: 5 });
+  return out;
+}
+
+/**
+ * His helmet upside down on the table as a cereal bowl: a steel dome, milk, cereal loops, a spoon, the plume flopped over.
+ * @param {number} x middle @param {number} y table top @param {number} k size @returns {object[]} shape layers
+ */
+function helmetBowl(x, y, k) {
+  const out = [
+    // The cheek guards stick up at both sides; the red plume flops down over the front of the table.
+    { shape: 'path', d: `M${x - 112 * k} ${y - 90 * k} L${x - 128 * k} ${y - 150 * k} L${x - 84 * k} ${y - 168 * k} L${x - 78 * k} ${y - 100 * k}Z`, fill: '#c9d3de', stroke: true, sw: 5 },
+    { shape: 'path', d: `M${x + 112 * k} ${y - 90 * k} L${x + 128 * k} ${y - 150 * k} L${x + 84 * k} ${y - 168 * k} L${x + 78 * k} ${y - 100 * k}Z`, fill: '#c9d3de', stroke: true, sw: 5 },
+    { shape: 'path', d: `M${x - 110 * k} ${y - 96 * k} C${x - 110 * k} ${y + 10 * k} ${x + 110 * k} ${y + 10 * k} ${x + 110 * k} ${y - 96 * k}Z`, fill: '#c9d3de', stroke: true, sw: 6 },
+    { shape: 'path', d: `M${x - 80 * k} ${y - 70 * k} Q${x - 70 * k} ${y - 20 * k} ${x - 30 * k} ${y - 12 * k}`, stroke: '#ffffff', sw: 8 * k, opacity: 0.7 },
+    ...[[-74, -60], [74, -60], [0, -34]].map(([dx, dy]) => ({ shape: 'circle', x: x + dx * k, y: y + dy * k, r: 7 * k, fill: '#8a96a6' })),
+    { shape: 'path', d: `M${x - 10 * k} ${y - 6 * k} C${x - 40 * k} ${y + 30 * k} ${x - 90 * k} ${y + 40 * k} ${x - 100 * k} ${y + 120 * k} C${x - 60 * k} ${y + 80 * k} ${x - 20 * k} ${y + 50 * k} ${x + 16 * k} ${y - 4 * k}Z`, fill: '#e8505b', stroke: true, sw: 5 },
+    { shape: 'ellipse', x, y: y - 96 * k, rx: 110 * k, ry: 22 * k, fill: '#fff8ee', stroke: true, sw: 5 },
+    { shape: 'path', d: `M${x + 30 * k} ${y - 100 * k} L${x + 90 * k} ${y - 200 * k}`, stroke: true, sw: 16 * k + 4 },
+    { shape: 'path', d: `M${x + 30 * k} ${y - 100 * k} L${x + 90 * k} ${y - 200 * k}`, stroke: '#d7dee7', sw: 16 * k },
+    { shape: 'ellipse', x: x + 98 * k, y: y - 222 * k, rx: 22 * k, ry: 32 * k, rotate: 30, fill: '#d7dee7', stroke: true, sw: 4 },
+  ];
+  for (const [dx, dy, c] of [[-60, -104, '#f3a33a'], [-20, -112, '#e66a8f'], [20, -102, '#ffd25a'], [-40, -92, '#ffd25a'], [56, -100, '#f3a33a'], [0, -94, '#f3a33a']]) {
+    out.push({ shape: 'circle', x: x + dx * k, y: y + dy * k, r: 14 * k, fill: c, stroke: true, sw: 3.5 });
+    out.push({ shape: 'circle', x: x + dx * k, y: y + dy * k, r: 5 * k, fill: '#fff8ee' });
+  }
+  return out;
+}
+
+/**
+ * Her phone held up big, the screen a grid of tiny pop-video thumbnails (all 212 of them, more or less).
+ * @param {number} x middle @param {number} y middle @param {number} k size @returns {object[]} shape layers
+ */
+function phoneWall(x, y, k) {
+  const out = [
+    { shape: 'circle', x, y, r: 150 * k, fill: '#8fe3ff', opacity: 0.25 },
+    { shape: 'rect', x: x - 80 * k, y: y - 140 * k, w: 160 * k, h: 280 * k, rx: 24 * k, fill: '#2b2f3a', stroke: true, sw: 6 },
+    { shape: 'rect', x: x - 66 * k, y: y - 116 * k, w: 132 * k, h: 232 * k, rx: 8 * k, fill: '#eaf8ff' },
+  ];
+  for (let r = 0; r < 6; r += 1) {
+    for (let c = 0; c < 4; c += 1) {
+      const tx = x - 60 * k + c * 31 * k;
+      const ty = y - 110 * k + r * 37 * k;
+      out.push({ shape: 'rect', x: tx, y: ty, w: 27 * k, h: 31 * k, rx: 4 * k, fill: (r + c) % 3 ? '#ffe8d6' : '#ffd8e6' });
+      out.push({ shape: 'circle', x: tx + 13.5 * k, y: ty + 15 * k, r: 6 * k, fill: '#ff9cb5' });
+    }
+  }
+  return out;
+}
+
+/** A small art layer helper: the sad plant she adopts, on its own. @param {number} x @param {number} y pot bottom @param {number} s scale @param {string} eyes face @returns {object} layer */
+const littlePlant = (x, y, s, eyes) => ({ id: 'plant', art: 'plant', x, y, scale: s, eyes, mouth: [x, y - 150 * s] });
+
+/**
+ * The splash's thought cloud: puffs with one outline, a trail of small puffs down to her head, and inside it the
+ * dream: the same room clean and sparkling, a pink chair, a lamp, a sparkly sign, and the plant, happy.
+ * @returns {object[]} layers
+ */
+function dream() {
+  const puffs = [[450, 210, 95], [540, 120, 105], [680, 85, 105], [810, 120, 100], [880, 230, 90], [830, 340, 95], [690, 380, 100], [550, 360, 95], [460, 300, 85], [670, 230, 190]];
+  return [
+    { shape: 'circle', x: 650, y: 672, r: 14, fill: '#ffffff', stroke: true, sw: 4 },
+    { shape: 'circle', x: 626, y: 614, r: 22, fill: '#ffffff', stroke: true, sw: 4 },
+    { shape: 'circle', x: 604, y: 546, r: 32, fill: '#ffffff', stroke: true, sw: 5 },
+    ...puffs.map(([x, y, r]) => ({ shape: 'circle', x, y, r, fill: '#ffffff', stroke: true, sw: 6 })),
+    ...puffs.map(([x, y, r]) => ({ shape: 'circle', x, y, r: r - 4, fill: '#ffffff' })),
+    // The dream room: clean pink wall, warm floor.
+    { shape: 'rect', x: 480, y: 110, w: 390, h: 280, rx: 30, fill: '#ffe6ef', stroke: '#f5b8cc', sw: 4 },
+    { shape: 'rect', x: 480, y: 320, w: 390, h: 70, rx: 20, fill: '#f6cfae' },
+    { shape: 'path', d: 'M480 320 L870 320', stroke: '#e8a98a', sw: 5 },
+    // The sign: a tick, a heart and sparkles (no words).
+    { shape: 'rect', x: 510, y: 140, w: 130, h: 72, rx: 10, fill: '#ffffff', stroke: true, sw: 4 },
+    { shape: 'path', d: 'M528 176 l14 16 l28 -32', stroke: '#3fae8c', sw: 9 },
+    { shape: 'path', d: 'M608 194 c-8 -12 -26 0 0 16 c26 -16 8 -28 0 -16Z', fill: '#e8505b', stroke: true, sw: 2.5 },
+    // The lamp, switched on.
+    { shape: 'circle', x: 820, y: 200, r: 70, fill: '#fff3a8', opacity: 0.8 },
+    { shape: 'path', d: 'M820 210 L820 376', stroke: true, sw: 6 },
+    { shape: 'ellipse', x: 820, y: 378, rx: 26, ry: 7, fill: '#6e4528', stroke: true, sw: 3 },
+    { shape: 'path', d: 'M798 172 L842 172 L860 214 L780 214Z', fill: '#ffd25a', stroke: true, sw: 4 },
+    { art: 'chair', x: 700, y: 380, scale: 0.42, color: '#f27eb2' },
+    { art: 'plant', x: 545, y: 380, scale: 0.3, eyes: 'happy' },
+    { art: 'sparkles', x: 680, y: 170, r: 110 },
+  ];
+}
+
+/**
+ * The three pages of the lease, fanned out on top of a washing machine: tiny, tiny print, and her signature, a big loop.
+ * @param {number} x middle @param {number} y top of the front page @returns {object[]} shape layers
+ */
+function lease(x, y) {
+  const out = [];
+  for (const [dx, rot, fill] of [[-60, -10, '#f3ecdc'], [50, 8, '#f7f1e3'], [0, -2, '#fffaf0']]) {
+    out.push({ shape: 'rect', x: x + dx - 120, y, w: 240, h: 300, rx: 6, fill, stroke: true, sw: 5, rotate: rot });
+  }
+  for (let r = 0; r < 11; r += 1) out.push({ shape: 'path', d: `M${x - 96} ${y + 28 + r * 14} L${x + (r % 3 ? 96 : 60)} ${y + 28 + r * 14}`, stroke: '#7d8597', sw: 3, opacity: 0.6, rotate: -2 });
+  out.push({ shape: 'path', d: `M${x - 90} ${y + 200} L${x + 90} ${y + 200}`, stroke: true, sw: 3, rotate: -2 });
+  // Her signature: one big happy loop with a flourish.
+  out.push({ shape: 'path', d: `M${x - 86} ${y + 196} C${x - 60} ${y + 120} ${x - 10} ${y + 120} ${x - 24} ${y + 176} C${x - 36} ${y + 220} ${x + 30} ${y + 210} ${x + 40} ${y + 170} C${x + 50} ${y + 140} ${x + 80} ${y + 190} ${x + 100} ${y + 176}`, fill: 'none', stroke: '#e66a8f', sw: 7 });
+  return out;
+}
+
+/**
+ * Her arm reaching over the lease to sign (drawn over the pages, since she stands behind the machine): pink sleeve,
+ * hand and a pen whose tip sits at the end of her big loop.
+ * @returns {object[]} shape layers
+ */
+const signingHand = () => [
+  { shape: 'path', d: 'M690 700 Q820 660 950 712', stroke: true, sw: 48 },
+  { shape: 'path', d: 'M690 700 Q820 660 950 712', stroke: '#e66a8f', sw: 36 },
+  { shape: 'rect', x: 984, y: 700, w: 15, h: 100, rx: 6, fill: '#6a7be6', stroke: true, sw: 4, rotate: -20 },
+  { shape: 'path', d: 'M1004 790 L1018 788 L1006 812Z', fill: '#fff8ee', stroke: true, sw: 3 },
+  { shape: 'ellipse', x: 974, y: 726, rx: 25, ry: 23, fill: '#ebb795', stroke: true, sw: 5 },
+  { shape: 'path', d: 'M1030 760 l20 -10 M1036 786 l22 0', stroke: true, sw: 4, opacity: 0.6 },
+];
+
+/**
+ * A washing machine seen close up, filling the bottom of a panel like a counter (the lease lies on top of it).
+ * @param {number} x0 left @param {number} x1 right @param {number} top top edge @param {number} bottom panel bottom @returns {object[]} shape layers
+ */
+const counter = (x0, x1, top, bottom) => [
+  { shape: 'rect', x: x0, y: top, w: x1 - x0, h: bottom - top + 20, rx: 20, fill: '#dcdad0', stroke: true, sw: 6 },
+  { shape: 'rect', x: x0 + 6, y: top + 6, w: x1 - x0 - 12, h: 40, rx: 14, fill: '#c9c6b8' },
+  { shape: 'circle', x: (x0 + x1) / 2, y: bottom + 120, r: 190, fill: '#b9bcb2', stroke: true, sw: 6 },
+  { shape: 'circle', x: (x0 + x1) / 2, y: bottom + 120, r: 150, fill: '#5b6b70', stroke: true, sw: 5 },
+  { shape: 'ellipse', x: x0 + 90, y: top + 70, rx: 50, ry: 16, fill: '#9c9a8c', opacity: 0.35 },
+];
+
+/**
+ * A little green watering can held up and pouring (moving in: she waters the plant).
+ * @param {number} x handle (her hand) @param {number} y handle @returns {object[]} shape layers
+ */
+const wateringCan = (x, y) => [
+  { shape: 'path', d: `M${x + 40} ${y + 20} L${x + 140} ${y - 60}`, stroke: true, sw: 18 },
+  { shape: 'path', d: `M${x + 40} ${y + 20} L${x + 140} ${y - 60}`, stroke: '#3fae8c', sw: 10 },
+  { shape: 'rect', x: x - 50, y: y - 10, w: 110, h: 90, rx: 18, fill: '#3fae8c', stroke: true, sw: 5, rotate: -18 },
+  { shape: 'path', d: `M${x - 40} ${y - 4} Q${x - 10} ${y - 70} ${x + 30} ${y - 20}`, fill: 'none', stroke: true, sw: 7 },
+  ...[[150, -46], [164, -20], [148, 4]].map(([dx, dy]) => ({ shape: 'ellipse', x: x + dx, y: y + dy, rx: 6, ry: 10, fill: '#9ad8ff', stroke: true, sw: 2.5 })),
+];
+
+const P2_HIM = helmeted(1060, 900, 0.85, { pose: 'hips', expr: 'happy', look: -1 });
+const P3_HIM = helmeted(1310, 880, 0.86, { pose: 'stand', expr: 'shocked', look: -1 });
+const P5_HIM = helmeted(440, 740, 0.85, { pose: 'bust', expr: 'shocked', look: 1 });
+const P7_HIM = helmeted(470, 880, 0.85, { pose: 'stand', expr: 'happy', look: 1 });
+
+export const STRIP = {
+  id: 'plan',
+  title: 'comic.plan.title',
+  panels: [
+    {
+      // 1. THE PLAN. Breakfast. She has made a business plan; he holds it upside down, his cereal in his upturned helmet.
+      layout: 'wide',
+      scene: {
+        layers: [
+          { art: 'room', kind: 'kitchen', w: 1600, h: 900, floorY: 600, windowX: 0.5, plant: false },
+          { id: 'her', art: 'heroine', x: 420, y: 860, pose: 'sit', expr: 'happy', look: 1 },
+          { id: 'him', art: 'husband', x: 1170, y: 860, pose: 'sit', expr: 'neutral', look: -1 },
+          ...table(-20, 1620, 640, 900),
+          // His arms reach up to the plan; the plan is upside down.
+          { shape: 'path', d: 'M1098 590 Q1040 640 1018 620', stroke: true, sw: 52 },
+          { shape: 'path', d: 'M1098 590 Q1040 640 1018 620', stroke: '#6a7be6', sw: 40 },
+          { shape: 'path', d: 'M1242 590 Q1250 650 1190 626', stroke: true, sw: 52 },
+          { shape: 'path', d: 'M1242 590 Q1250 650 1190 626', stroke: '#6a7be6', sw: 40 },
+          { id: 'plan', art: 'plan', x: 1104, y: 600, scale: 0.5, rotate: 176 },
+          { shape: 'ellipse', x: 1022, y: 616, rx: 24, ry: 26, fill: '#d29a6c', stroke: true, sw: 5 },
+          { shape: 'ellipse', x: 1186, y: 622, rx: 24, ry: 26, fill: '#d29a6c', stroke: true, sw: 5 },
+          ...helmetBowl(1430, 640, 0.9),
+          { shape: 'rect', x: 640, y: 560, w: 64, h: 78, rx: 12, fill: '#e66a8f', stroke: true, sw: 5 },
+          { shape: 'path', d: 'M704 576 q34 4 30 26 q-4 20 -30 18', fill: 'none', stroke: true, sw: 6 },
+          { shape: 'path', d: 'M660 546 q-12 -24 0 -46 M684 546 q12 -24 0 -46', stroke: '#ffffff', sw: 6, opacity: 0.8 },
+        ],
+      },
+      camera: { move: 'pushIn', focus: [900, 450], amount: 0.06, ms: 4000 },
+      bubbles: [
+        { kind: 'caption', key: 'comic.plan.p1.cap', at: [330, 56], w: 580 },
+        { kind: 'say', key: 'comic.plan.p1.her', at: [740, 330], to: 'her', w: 300 },
+        { kind: 'say', key: 'comic.plan.p1.him', at: [1340, 160], to: 'him', w: 460 },
+      ],
+    },
+    {
+      // 2. "Who pays to be popped?" Her phone: 212 videos. He puts the helmet on, cereal and all: her guard.
+      layout: 'wide',
+      scene: {
+        layers: [
+          { art: 'room', kind: 'kitchen', w: 1600, h: 900, floorY: 600, windowX: 0.5, plant: false },
+          { id: 'her', art: 'heroine', x: 420, y: 900, scale: 0.85, pose: 'cheer', expr: 'bliss', look: 1 },
+          ...phoneWall(600, 410, 0.8),
+          P2_HIM,
+          ...spoon(P2_HIM, true),
+        ],
+      },
+      bubbles: [
+        { kind: 'say', key: 'comic.plan.p2.him', at: [1080, 90], to: 'him', w: 460 },
+        { kind: 'say', key: 'comic.plan.p2.her', at: [430, 140], to: 'her', w: 560 },
+        { kind: 'say', key: 'comic.plan.p2.him2', at: [1460, 540], to: 'him', w: 250 },
+      ],
+    },
+    {
+      // 3. LOOK AT A PLACE. The landlord shows them a closed launderette: dusty machines, a leak, a bucket, lost socks.
+      layout: 'wide',
+      scene: {
+        layers: [
+          { art: 'room', kind: 'launderette', w: 1600, h: 900, floorY: 600, doorX: 0.92, doorOpen: true, windowX: 0.66, leakX: 0.5, bulbX: 0.3, washers: [0.1, 0.22, 0.34], sink: false },
+          { art: 'bucket', x: 800, y: 830, scale: 0.5 },
+          { id: 'landlord', art: 'landlord', x: 600, y: 880, scale: 0.95, pose: 'shrug', expr: 'happy', look: -1 },
+          { id: 'her', art: 'heroine', x: 1060, y: 880, scale: 0.85, pose: 'stand', expr: 'neutral', look: -1 },
+          P3_HIM,
+          ...spoon(P3_HIM),
+        ],
+      },
+      camera: { move: 'pullOut', focus: [800, 450], amount: 0.08, ms: 3500 },
+      sound: 'creak',
+      bubbles: [
+        { kind: 'caption', key: 'comic.plan.p3.cap', at: [420, 52], w: 660 },
+        { kind: 'say', key: 'comic.plan.p3.landlord', at: [290, 330], to: 'landlord', w: 360 },
+        { kind: 'say', key: 'comic.plan.p3.him', at: [1330, 110], to: 'him', w: 330 },
+      ],
+    },
+    {
+      // 4. Splash: the dump up close (drip, cracked sink, cobwebs, a sad little plant), and what SHE sees.
+      layout: 'splash',
+      scene: {
+        layers: [
+          { art: 'room', kind: 'launderette', w: 1000, h: 1000, floorY: 760, windowX: 0.86, door: false, bulb: false, leakX: 0.12, washers: false, socks: false, sinkX: 0.27 },
+          { art: 'bucket', x: 112, y: 960, scale: 0.6 },
+          { art: 'drip', x: 112, y: 400, r: 18 },
+          littlePlant(330, 522, 0.42, 'sad'),
+          { shape: 'circle', x: 720, y: 830, r: 260, fill: '#fff3a8', opacity: 0.45 },
+          { id: 'her', art: 'heroine', x: 720, y: 1060, pose: 'bust', expr: 'bliss', look: 1 },
+          ...dream(),
+        ],
+      },
+      camera: { move: 'pullOut', focus: [500, 500], amount: 0.1, ms: 3500 },
+      sound: 'ooh_happy',
+      bubbles: [
+        { kind: 'caption', key: 'comic.plan.p4.cap', at: [210, 50], w: 360 },
+        { kind: 'whisper', key: 'comic.plan.p4.landlord', at: [250, 740], to: [4, 660], w: 320 },
+        { kind: 'say', key: 'comic.plan.p4.her', at: [880, 640], to: 'her', w: 220 },
+      ],
+    },
+    {
+      // 5. SIGN THE LEASE. Tiny print; she signs with a big loop without reading; he peeks over her shoulder.
+      layout: 'wide',
+      scene: {
+        layers: [
+          { art: 'room', kind: 'launderette', w: 1600, h: 900, floorY: 600, windowX: 0.16, door: false, leak: false, bulbX: 0.5, washers: false, sink: false, socks: false },
+          P5_HIM,
+          ...spoon(P5_HIM),
+          { id: 'her', art: 'heroine', x: 600, y: 1000, scale: 0.9, pose: 'stand', expr: 'proud' },
+          { id: 'landlord', art: 'landlord', x: 1230, y: 960, pose: 'wave', flip: true, expr: 'happy', look: -1 },
+          ...counter(300, 1360, 700, 900),
+          ...lease(900, 610),
+          ...signingHand(),
+        ],
+      },
+      camera: { move: 'pushIn', focus: [860, 560], amount: 0.06, ms: 3000 },
+      bubbles: [
+        { kind: 'say', key: 'comic.plan.p5.landlord', at: [1240, 150], to: 'landlord', w: 540 },
+        { kind: 'say', key: 'comic.plan.p5.him', at: [240, 230], to: 'him', w: 340 },
+        { kind: 'say', key: 'comic.plan.p5.her', at: [820, 250], to: 'her', w: 300 },
+      ],
+    },
+    {
+      // 6. GET IT. Outside: one huge rusty key; the landlord runs off happy; her plan is taped to the door.
+      layout: 'tall',
+      scene: {
+        layers: [
+          { art: 'shopfront', w: 900, h: 1200, floorY: 1000, doorX: 0.3, windowX: 0.74, plan: true },
+          { shape: 'path', d: 'M620 900 l-110 0 M640 950 l-140 0 M630 1000 l-100 0', stroke: true, sw: 6, opacity: 0.5 },
+          { shape: 'circle', x: 680, y: 1130, r: 40, fill: '#e8e4dc', stroke: true, sw: 4, opacity: 0.9 },
+          { shape: 'circle', x: 650, y: 1140, r: 28, fill: '#e8e4dc', stroke: true, sw: 4, opacity: 0.9 },
+          { id: 'landlord', art: 'landlord', x: 790, y: 1150, scale: 0.85, pose: 'wave', expr: 'happy' },
+          { id: 'her', art: 'heroine', x: 430, y: 1160, scale: 0.95, pose: 'wave', hold: 'key', holdScale: 2.1, expr: 'bliss' },
+          { art: 'sparkles', x: 620, y: 360, r: 150 },
+        ],
+      },
+      camera: { move: 'pushIn', focus: [450, 600], amount: 0.06, ms: 3000 },
+      sound: 'cheer',
+      bubbles: [
+        { kind: 'shout', key: 'comic.plan.p6.her', at: [230, 230], to: 'her', w: 320 },
+        { kind: 'say', key: 'comic.plan.p6.landlord', at: [560, 1120], to: 'landlord', w: 260 },
+      ],
+    },
+    {
+      // 7. Moving in (just the two of them): one chair, one bucket, one lamp. She waters the plant on the sill. Click.
+      layout: 'wide',
+      scene: {
+        layers: [
+          { art: 'room', kind: 'studio', w: 1600, h: 900, floorY: 600, doorX: 0.08, windowX: 0.64, leakX: 0.36, bulb: false, sign: false, plant: false, lampX: 0.92 },
+          { shape: 'rect', x: 0, y: 0, w: 1600, h: 900, fill: '#ffb86b', opacity: 0.14 },
+          { shape: 'path', d: 'M1400 140 l-30 -30 M1472 140 l30 -30 M1436 120 l0 -40 M1360 220 l-40 0 M1512 220 l40 0', stroke: '#ffd25a', sw: 8 },
+          { art: 'chair', x: 1240, y: 830, scale: 0.55, color: '#9a8f6a' },
+          { art: 'drip', x: 576, y: 600, r: 16 },
+          P7_HIM,
+          ...spoon(P7_HIM),
+          { art: 'bucket', x: 571, y: 830, scale: 0.45 },
+          littlePlant(1024, 386, 0.42, 'wide'),
+          { id: 'her', art: 'heroine', x: 760, y: 880, scale: 0.85, pose: 'wave', expr: 'happy', look: 1 },
+          ...wateringCan(922, 428),
+        ],
+      },
+      camera: { move: 'pullOut', focus: [800, 450], amount: 0.08, ms: 3500 },
+      bubbles: [
+        { kind: 'caption', key: 'comic.plan.p7.cap', at: [300, 52], w: 480 },
+        { kind: 'say', key: 'comic.plan.p7.her', at: [700, 190], to: 'her', w: 340 },
+        { kind: 'shout', key: 'comic.plan.p7.click', at: [1400, 80], w: 280, sound: 'creak' },
+      ],
+    },
+    {
+      // 8. Evening, golden light. She looks up at the blank sign board. "Tomorrow." The plant in the window: happier.
+      layout: 'wide',
+      scene: {
+        layers: [
+          { art: 'shopfront', w: 1600, h: 900, floorY: 774, doorX: 0.3, windowX: 0.68, sky: ['#ffb86b', '#ffe2a8'], sun: true, glow: true, plan: true, plantEyes: 'happy' },
+          { shape: 'rect', x: 0, y: 0, w: 1600, h: 900, fill: '#ff9a4d', opacity: 0.1 },
+          { art: 'sparkles', x: 1250, y: 520, r: 120 },
+          { shape: 'circle', x: 660, y: 640, r: 230, fill: '#fff3a8', opacity: 0.2 },
+          { id: 'her', art: 'heroine', x: 660, y: 890, scale: 0.85, pose: 'stand', hold: 'key', holdScale: 1.3, expr: 'happy' },
+        ],
+      },
+      camera: { move: 'pullOut', focus: [800, 400], amount: 0.1, ms: 4000 },
+      bubbles: [
+        { kind: 'whisper', key: 'comic.plan.p8.her', at: [420, 380], to: 'her', w: 260 },
+        { kind: 'caption', key: 'comic.plan.p8.cap', at: [320, 846], w: 600 },
+      ],
+    },
+  ],
+};

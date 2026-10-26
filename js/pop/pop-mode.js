@@ -32,6 +32,9 @@
 // Hooks for a special mode wrapped round the scene (T4.5 torchlight, screens/torchlight.js): startRound may fix the
 // face's mood (mood: 'sleep') and pass onPop and onOw listeners; setMood, halt, faceBox and bumps let the wrapper
 // change the face, stop popping, and know where the face, its eyes and the bumps are on screen.
+// Field guide (T6.5): with onGuide a small "?" button in the header opens the guide (the game shows it over the scene;
+// it is left out of hurry rounds, whose clock cannot pause). With seenKinds, each new face tells the game which kinds
+// she meets for the first time (onSeenKinds), and the hint line says "New: ...!" for them, one at a time.
 import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
@@ -44,6 +47,7 @@ import { createRound, registerPop, registerOw, registerCleanup, registerFail, al
 import {
   applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
 } from './round-logic.js';
+import { kindsOnFace, newKindQueue, hintQueueAfterPop, newKindHintKey } from '../screens/guide-logic.js';
 
 /** How much reputation "Next customer" after a fail costs (first guess; reputation itself comes in T3.x). */
 export const FAIL_REPUTATION_HIT = 1;
@@ -107,12 +111,15 @@ function buzz(pattern) {
  * Create the pop scene.
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
  *   count?: number, tier?: number, layers?: string[], career?: boolean, onReputationHit?: (amount: number) => void,
- *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void}} o the text lookup
+ *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void,
+ *   sfxVolume?: number}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
  *   bumps per face, the studio tier for the room behind (0..2) and its owned upgrade layers (T5.1a), career = a Story/Career round that can fail (free play
  *   when false), the reputation hook called by "Next customer" after a fail, and reducedMotion = true for the calm
- *   version whatever the phone says (the player's Settings switch)
+ *   version whatever the phone says (the player's Settings switch). Field guide (T6.5): onGuide = the "?" button
+ *   was pressed (left out = no button); seenKinds = the kinds she has met (left out = no first-time hints);
+ *   onSeenKinds(kinds) = she just met these kinds on a new face. sfxVolume = the Settings effects volume, 0 to 1
  * @returns {{node: HTMLElement, mount: (host: HTMLElement) => void, newFace: () => void, unlock: () => void,
  *   setTier: (tier: number, layers?: string[]) => void, results: () => object[], startRound: (o: object) => void,
  *   startFree: (o?: object) => void, setUnlockedTools: (list: string[]) => void, dispose: () => void}} the scene's
@@ -121,14 +128,17 @@ function buzz(pattern) {
 export function createPopMode({
   t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, layers: firstLayers = [], career = false,
   onReputationHit = () => {}, reducedMotion = false, squeeze = false, squeezeHint = false, onSqueezeHint = () => {},
+  onGuide = null, seenKinds = null, onSeenKinds = () => {}, sfxVolume = 1,
 }) {
+  const seenSet = Array.isArray(seenKinds) ? new Set(seenKinds) : null; // the kinds met so far (T6.5), null = no hints
   // Two-finger squeeze (T1.7): squeeze = the Settings switch; squeezeHint = show "squeeze between two fingers" until
   // the first pop of this scene (onSqueezeHint is told once, so the game shows it only once ever).
   let squeezeHintOn = Boolean(squeeze && squeezeHint);
   /** Calm version: the player's own setting (reducedMotion, T3.1c) or the phone's. @returns {boolean} true = less motion */
   const still = () => reducedMotion === true || prefersReducedMotion();
   const results = []; // every finished or failed customer's round data (game/scoring.js), newest last
-  const sound = createSound({ sfxOn: loadPopSoundOn(storage), onChange: (s) => savePopSoundOn(storage, s.sfxOn) });
+  // sfxVolume = the Settings effects slider (0 to 1), so pop sounds follow it like the menus and comics do.
+  const sound = createSound({ sfxOn: loadPopSoundOn(storage), sfxVolume, onChange: (s) => savePopSoundOn(storage, s.sfxOn) });
   let seed = Number.isFinite(firstSeed) && firstSeed > 0 ? Math.floor(firstSeed) : 1 + Math.floor(Math.random() * 2e9);
   let freshSeed = true; // the next face uses `seed` as it is (the first face, or after startFree with a seed)
   let current = null; // {scene, canvas, w, h, dpr, face, spec, seed, total, healed, round, owed, ...}
@@ -146,6 +156,8 @@ export function createPopMode({
   const back = { w: 0, h: 0, dpr: 1, timer: 0, start: performance.now() };
 
   const root = el('section', 'pop-game');
+  // Reduced motion (the player's switch or the phone's): pop.css stops the Ow float, storm-off slide and hint flash.
+  root.classList.toggle('pop-still', still());
   root.setAttribute('role', 'region');
   root.setAttribute('aria-label', t('pop.region'));
   const head = el('div', 'pop-head');
@@ -177,7 +189,11 @@ export function createPopMode({
   reqBox.append(reqText, reqTime, reqState);
   titles.append(title, countLine, reqBox);
   const newBtn = button('pop-btn pop-new', t('pop.newFace'), () => newFace(true));
-  head.append(titles, soundSwitch(), newBtn);
+  // The Field guide's "?" button (T6.5): in the header, so it never covers a bump or the zoom buttons.
+  const guideBtn = typeof onGuide === 'function' ? button('pop-btn pop-guide', t('pop.guideMark'), () => onGuide()) : null;
+  guideBtn?.setAttribute('aria-label', t('pop.guide'));
+  if (guideBtn) guideBtn.title = t('pop.guide');
+  head.append(titles, soundSwitch(), ...(guideBtn ? [guideBtn] : []), newBtn);
   const stage = el('div', 'pop-stage');
   const foot = el('div', 'pop-foot');
   const hint = el('p', 'pop-hint');
@@ -342,9 +358,11 @@ export function createPopMode({
   /**
    * The hint text for a step of the scene (while popping: what the tool in hand does).
    * @param {string} step pop, wipe, cream or done
+   * @param {boolean} [newOk] false = the tool's own hint even while a first-time hint is waiting (a tool was picked)
    * @returns {string} the text
    */
-  function hintFor(step) {
+  function hintFor(step, newOk = true) {
+    if (step === 'pop' && newOk && newHintKind()) return t(newKindHintKey(newHintKind())); // "New: Evil Horn! ..." (T6.5)
     if (step === 'wipe') { // with the cotton pad in the bar but not in hand: tell her it wipes faster (B13 round 2b)
       return t(toolIds.includes('cottonPad') && toolId !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe');
     }
@@ -357,6 +375,52 @@ export function createPopMode({
   }
 
   /**
+   * The kind whose first-time hint is due on the face in play (T6.5), or null. The one-time squeeze hint goes first.
+   * @returns {string|null} a guide kind id
+   */
+  function newHintKind() {
+    return !squeezeHintOn && current?.newQueue?.length ? current.newQueue[0] : null;
+  }
+
+  /**
+   * Put the hint for a step on the hint line; a first-time hint is marked (and flashes once, never with reduced motion).
+   * @param {string} step pop, wipe, cream or done
+   * @param {boolean} [newOk] false = the tool's own hint (see hintFor)
+   * @returns {void}
+   */
+  function paintHint(step, newOk = true) {
+    const fresh = step === 'pop' && newOk && Boolean(newHintKind());
+    const text = hintFor(step, newOk);
+    const changed = hint.textContent !== text;
+    hint.textContent = text;
+    hint.classList.toggle('pop-hint--new', fresh);
+    if (fresh && changed && !still()) { // restart the little flash
+      hint.classList.remove('pop-hint--flash');
+      void hint.offsetWidth;
+      hint.classList.add('pop-hint--flash');
+    } else if (!fresh) hint.classList.remove('pop-hint--flash');
+  }
+
+  /**
+   * Note the guide kinds on a face just laid out (T6.5): the ones she meets for the first time are told to the game
+   * (onSeenKinds) and remembered here, and come back as the face's first-time hint queue. Off in the demo and when the
+   * game passed no seenKinds.
+   * @param {{pimples: object[], strip: object|null, decoys: object[]}} lay the layout (logic.js layoutFace)
+   * @returns {string[]} the hint queue (guide-logic.js newKindQueue)
+   */
+  function meetKinds(lay) {
+    if (!seenSet || cfg.kind === 'demo') return [];
+    const kinds = kindsOnFace(lay);
+    const queue = newKindQueue(kinds, [...seenSet]);
+    const fresh = kinds.filter((k) => !seenSet.has(k));
+    for (const k of fresh) seenSet.add(k);
+    if (fresh.length) {
+      try { onSeenKinds(fresh); } catch (e) { console.warn('onSeenKinds failed:', e); }
+    }
+    return queue;
+  }
+
+  /**
    * Pick up a tool from the tool bar: press its button, hand it to the scene, and show what it does.
    * @param {string} id a tool id
    * @returns {void}
@@ -366,7 +430,7 @@ export function createPopMode({
     for (const [k, b] of toolButtons) b.setAttribute('aria-pressed', String(k === id));
     current?.scene?.setTool(id);
     const step = current?.scene?.step() ?? 'pop';
-    if (step === 'pop' || step === 'wipe') hint.textContent = hintFor(step);
+    if (step === 'pop' || step === 'wipe') paintHint(step, false); // the picked tool's hint (a first-time hint comes back after the next pop)
   }
 
   /**
@@ -632,6 +696,7 @@ export function createPopMode({
     clearTimeout(prev?.failTimer);
     clearTimeout(prev?.endTimer);
     clearInterval(prev?.reqTimer);
+    root.classList.remove('pop-game--ending'); // a new face: the game's Menu button may show again
     fail.hidden = true;
     showIrritation(0);
     newBtn.disabled = false;
@@ -676,6 +741,7 @@ export function createPopMode({
       owed: new Set(), cleanTypes: [], cleanTools: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
       request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
       hooks: round ? cfg.hooks : {}, // a special mode's onPop and onOw listeners (T4.5)
+      newQueue: meetKinds(lay), // first-time hints for the kinds she meets on this face (T6.5)
     };
     current = c;
     sizeCanvas(canvas, w, h);
@@ -699,13 +765,17 @@ export function createPopMode({
       onPatch: (n) => { c.patches = n; }, // each patched spot pays a small tip (economy.js roundPayout)
       onStripPeeled: () => { c.stripPeeled = true; }, // the peeled nose strip pays a bonus (economy.js roundPayout)
       covered: () => coveredRects(), // where the tool bar and buttons sit over the face, so the wipe pad rests clear of them
-      onNote: (n) => { if (n === 'patchFirst' && current === c) hint.textContent = t('tool.patch.notYet'); },
+      onNote: (n) => { if (n === 'patchFirst' && current === c) { hint.textContent = t('tool.patch.notYet'); hint.classList.remove('pop-hint--new', 'pop-hint--flash'); } },
       onPop: (p) => {
+        const shownNew = newHintKind(); // a first-time hint that was due before this pop (T6.5)
+        if (c.newQueue.length) { // a first-time hint is done once that kind is popped; the next one shows
+          c.newQueue = shownNew ? hintQueueAfterPop(c.newQueue, p.type) : c.newQueue.filter((k) => k !== p.type);
+        }
         if (squeezeHintOn) { // the one-time squeeze hint has done its job: back to the tool's hint
           squeezeHintOn = false;
           try { onSqueezeHint(); } catch (e) { console.warn('onSqueezeHint failed:', e); }
-          if (c.scene?.step() === 'pop') hint.textContent = hintFor('pop');
-        }
+          if (c.scene?.step() === 'pop') paintHint('pop');
+        } else if (shownNew && c.scene?.step() === 'pop') paintHint('pop');
         const clean = !c.owed.has(p.id); // clean = no Ow on this bump (counts for mastery and pay)
         c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean });
         c.popTypes.push(p.type);
@@ -717,7 +787,7 @@ export function createPopMode({
         try { c.hooks.onPop?.(p, c.scene?.left() ?? 0); } catch (e) { console.warn('onPop failed:', e); }
       },
       onStep: (step) => {
-        hint.textContent = hintFor(step);
+        paintHint(step);
         drawCount();
         if (step === 'done') {
           c.round = registerCleanup(c.round);
@@ -732,6 +802,10 @@ export function createPopMode({
         foot.hidden = true;
         bar.hidden = true;
         if (round) { // a moment to see the glowing face, then the game takes over
+          // During this pause leaving would lose the finished customer (no pay, no stars): the game's Menu button
+          // hides (app.css .pop-game--ending) and ending() says so.
+          c.ending = true;
+          root.classList.add('pop-game--ending');
           const pause = (still() ? END_PAUSE_REDUCED : END_PAUSE) * 1000;
           c.endTimer = setTimeout(() => finishRound(c, null), pause);
           return;
@@ -743,7 +817,7 @@ export function createPopMode({
     canvas.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { if (c.scene.keyPress()) e.preventDefault(); }
     });
-    hint.textContent = hintFor('pop');
+    paintHint('pop');
     drawCount();
     drawRequest(c);
     if (c.request?.type === 'hurry') c.reqTimer = setInterval(() => drawRequest(c), 250); // the hurry clock; stops once done or missed
@@ -808,6 +882,7 @@ export function createPopMode({
         hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
       };
       moodOverride = typeof o.mood === 'string' ? o.mood : null;
+      if (guideBtn) guideBtn.hidden = o.request?.type === 'hurry'; // a hurry clock cannot pause: no guide in that round (T6.5)
       setRoundTexts(typeof o.customerName === 'string' && o.customerName ? o.customerName : null, o.skipCost);
       buildToolBar(tools);
       room = o.room === 'home' ? 'home' : 'studio';
@@ -830,6 +905,7 @@ export function createPopMode({
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {},
       };
       if (Number.isFinite(o.seed) && o.seed > 0) { seed = Math.floor(o.seed); freshSeed = true; }
+      if (guideBtn) guideBtn.hidden = false;
       setRoundTexts(null, null);
       buildToolBar(roundTools(cfg.unlockedTools));
       room = 'studio'; // free play is always in the studio
@@ -889,6 +965,11 @@ export function createPopMode({
     },
     /** Wake the popping sounds up (call from inside a tap). @returns {void} */
     unlock: () => sound.unlock(),
+    /**
+     * Whether a finished customer is in the short pause before the game takes over (leaving now would lose them).
+     * @returns {boolean} true = do not leave yet
+     */
+    ending: () => Boolean(current?.ending && !current.finished),
     /**
      * Change the studio room behind the face (SPEC D11: it follows the studio upgrades).
      * @param {number} next tier 0..2
