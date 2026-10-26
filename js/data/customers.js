@@ -165,7 +165,8 @@ export function makeCustomer(seed, { chapter = 2 } = {}) {
   const howMany = between(rng, 0, 2);
   while (accessories.length < howMany) {
     const a = pick(rng, FACE_PARTS.accessories);
-    if (!accessories.includes(a)) accessories.push(a);
+    // Random faces never get the clown nose (owner: it reads as a giant bump); only Clown Cleo wears one.
+    if (a !== 'clown-nose' && !accessories.includes(a)) accessories.push(a);
   }
   const face = {
     shape: pick(rng, FACE_PARTS.shape),

@@ -1132,6 +1132,10 @@ function drawFaceWear(ctx, f, look) {
     const x = X(0);
     const y = Y(ft.noseV);
     const r = rx * 0.11;
+    // Elastic strap to the ears so it reads as a clown's nose, not as a bump.
+    ctx.strokeStyle = '#2b2b33';
+    ctx.lineWidth = Math.max(1.5, rx * 0.012);
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + s * r * 0.9, y); ctx.quadraticCurveTo(X(s * 0.5), y - ry * 0.02, X(s * 0.93), y - ry * 0.05); ctx.stroke(); }
     const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
     g.addColorStop(0, '#ff8a80');
     g.addColorStop(0.6, '#e8303a');
