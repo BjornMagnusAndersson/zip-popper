@@ -80,6 +80,7 @@ function sunMouse(x, y, k) {
 export const STRIP = {
   id: 'mlamp',
   title: 'comic.mlamp.title',
+  dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
   panels: [
     {
       // 1. Closing time, the bulb has given up. She squints at a pore; Nils squints back.

@@ -56,6 +56,7 @@ function tinyCape(x, y, k) {
 export const STRIP = {
   id: 'mtweezers',
   title: 'comic.mtweezers.title',
+  dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
   panels: [
     {
       // 1. Fresh from the shop: she raises the tweezers like a sword. Nils, in the chair, squints at the tiny blade.

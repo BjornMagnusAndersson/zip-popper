@@ -1,4 +1,5 @@
 // Every number of the economy as one table (T3.2, approved in docs/ECONOMY.md; SPEC D12, D13, D15, D16).
+// Prices raised about 1.5x (tools) and 2x (studio, outfit) after the owner played chapter 5 and found money too easy.
 // All numbers are first guesses and get tuned after playing, so they live ONLY here. The rules that use them are in
 // game/economy.js. No DOM, no text shown to the player: item names on screen come from the string table.
 
@@ -33,19 +34,19 @@ export const SCRUB_REPUTATION = 1;
  * - story: true = only given by the story (not for sale).
  */
 export const SHOP_ITEMS = {
-  cottonPad: { price: 30, tier: 1, kind: 'tool', toolId: 'cottonPad' },
-  tweezers: { price: 50, tier: 1, kind: 'tool', toolId: 'tweezers', strip: 'mtweezers' },
-  noseStrip: { price: 40, tier: 1, kind: 'tool', toolId: 'noseStrip' },
-  patch: { price: 40, tier: 1, kind: 'tool', toolId: 'patch' },
-  warmCloth: { price: 60, tier: 1, kind: 'tool', toolId: 'warmCloth' },
+  cottonPad: { price: 45, tier: 1, kind: 'tool', toolId: 'cottonPad' },
+  tweezers: { price: 75, tier: 1, kind: 'tool', toolId: 'tweezers', strip: 'mtweezers' },
+  noseStrip: { price: 60, tier: 1, kind: 'tool', toolId: 'noseStrip' },
+  patch: { price: 60, tier: 1, kind: 'tool', toolId: 'patch' },
+  warmCloth: { price: 90, tier: 1, kind: 'tool', toolId: 'warmCloth' },
   gloves: { price: 0, tier: 1, kind: 'tool', toolId: 'gloves', story: true }, // end of chapter 5 (hygiene scare)
-  lamp: { price: 50, tier: 1, kind: 'studio', strip: 'mlamp' },
-  plant: { price: 40, tier: 1, kind: 'studio', strip: 'mplant' },
-  apron: { price: 60, tier: 1, kind: 'outfit', strip: 'mapron' },
-  chair: { price: 100, tier: 2, kind: 'studio' },
-  wallPaint: { price: 120, tier: 2, kind: 'studio' },
-  scrubs: { price: 150, tier: 3, kind: 'outfit' },
-  sign: { price: 80, tier: 3, kind: 'studio' },
+  lamp: { price: 100, tier: 1, kind: 'studio', strip: 'mlamp' },
+  plant: { price: 80, tier: 1, kind: 'studio', strip: 'mplant' },
+  apron: { price: 120, tier: 1, kind: 'outfit', strip: 'mapron' },
+  chair: { price: 200, tier: 2, kind: 'studio' },
+  wallPaint: { price: 240, tier: 2, kind: 'studio' },
+  scrubs: { price: 300, tier: 3, kind: 'outfit' },
+  sign: { price: 160, tier: 3, kind: 'studio' },
 };
 
 /** Every shop item id, in table order. */

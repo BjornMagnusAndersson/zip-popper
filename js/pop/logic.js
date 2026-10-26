@@ -295,7 +295,7 @@ const PLAIN_KINDS = ['whitehead', 'red'];
  * How often a face in a customer round (a list of allowed kinds) gets a golden bump (ECONOMY.md section 6: gold is
  * rare). First guess. Faces without a list (demo, free play) keep one golden bump each.
  */
-export const ROUND_GOLD_CHANCE = 0.35;
+export const ROUND_GOLD_CHANCE = 0.2;
 
 /**
  * Which kind each bump on a face is: the nose gets a blackhead, one cheek a big one, one other spot a golden one, the

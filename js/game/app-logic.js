@@ -14,7 +14,7 @@ import {
   SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL,
 } from '../data/economy-data.js';
 import { pickRequest } from './requests.js';
-import { STUDIO_LAYERS, studioTier, studioLayersShown, studioOutfit } from './studio.js';
+import { STUDIO_LAYERS, studioTier, studioLayersShown, heroOutfit, OUTFIT_TIERS, OUTFIT_ITEMS } from './studio.js';
 import { faceBumpHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
@@ -109,10 +109,12 @@ function intOrNull(v) {
 /**
  * Reads the testing flags from the page address (?test, ?chapter=N, ?customer=M, ?money=, ?rep=, ?seed=, ?name=, ?demo,
  * ?squeeze = the two-finger squeeze switch on, T1.7; ?layers=lamp,plant or ?layers=all = these studio upgrades
- * owned and scrubbed, T5.1a, so the studio tiers and layers can be looked at).
+ * owned and scrubbed, T5.1a, so the studio tiers and layers can be looked at; ?outfit=everyday|apron|scrubs = her
+ * outfit tier, T5.2: the outfit items up to that tier owned, so the studio view and the comics show it).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
- *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null}} the flags
+ *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null,
+ *   outfit: string|null}} the flags
  */
 export function parseFlags(search) {
   const p = new URLSearchParams(search ?? '');
@@ -123,7 +125,34 @@ export function parseFlags(search) {
     money: intOrNull(p.get('money')), rep: intOrNull(p.get('rep')), seed: seed !== null && seed > 0 ? seed : null,
     name: p.has('name') ? sanitizeName(p.get('name')) : null, squeeze: p.has('squeeze'),
     layers: lay === null ? null : lay === 'all' ? [...STUDIO_LAYERS] : studioLayersShown(lay.split(',')),
+    outfit: OUTFIT_TIERS.includes(p.get('outfit')) ? p.get('outfit') : null,
   };
+}
+
+/**
+ * The outfit shop items a test run gets for ?outfit= (T5.2): every outfit item up to that tier (scrubs = apron and
+ * scrubs, as if bought in order), none for everyday.
+ * @param {string} outfit 'everyday', 'apron' or 'scrubs'
+ * @returns {string[]} shop item ids
+ */
+export function outfitTestItems(outfit) {
+  const tier = OUTFIT_TIERS.indexOf(outfit) + 1;
+  return OUTFIT_ITEMS.filter(([, t]) => t <= tier).map(([id]) => id).reverse();
+}
+
+/**
+ * Which outfit the comic player dresses her in for a strip (T5.2): strips marked `dressed: true` are set after she
+ * may own an outfit (chapter 5 in her studio, the hygiene scare, the teaser and the milestone strips), so there she
+ * wears her best owned outfit (studio.js heroOutfit); the other strips (earlier times, and the apron strip with its
+ * own look) keep what they draw. Only heroine layers without their own `outfit` are dressed (comic-art.js dressHeroine).
+ * @param {object|null} strip the strip data
+ * @param {object} save the save
+ * @returns {string|null} an outfit name, or null = draw the strip as it is
+ */
+export function comicOutfit(strip, save) {
+  if (!strip?.dressed) return null;
+  const outfit = heroOutfit(save);
+  return outfit === 'everyday' ? null : outfit;
 }
 
 /**
@@ -154,6 +183,10 @@ export function applyTestFlags(save, flags, now = Date.now()) {
   if (flags.layers) { // ?layers=: these studio upgrades bought and scrubbed (T5.1a), so the shop does not offer them again
     s.studioLayers = [...flags.layers];
     s.items = { ...s.items, ...Object.fromEntries(flags.layers.map((id) => [id, { needsScrub: false }])) };
+  }
+  if (flags.outfit) { // ?outfit=: her outfit items up to that tier owned (T5.2), outfitTier copied along
+    s.items = { ...s.items, ...Object.fromEntries(outfitTestItems(flags.outfit).map((id) => [id, { needsScrub: false }])) };
+    s.outfitTier = OUTFIT_TIERS.indexOf(flags.outfit) + 1;
   }
   return normalizeSave(s, now);
 }
@@ -288,7 +321,7 @@ export function backdropLayers(save) {
  * @returns {{tier: number, layers: string[], outfit: string}} the studio view's data
  */
 export function studioViewArgs(save) {
-  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: studioOutfit(save.items) };
+  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: heroOutfit(save) };
 }
 
 /**

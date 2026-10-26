@@ -37,11 +37,14 @@ const BUILDS = {
   lanky: { shoulder: 84, hip: 68, belly: 0, head: 0.95 },
 };
 
-/** Clothes. top/pants/shoes colours; sleeve long or short; extras: apron, hood, dots, stripes, armor, vneck. */
+/** Clothes. top/pants/shoes colours; sleeve long or short; extras: apron (+ apronTrim), hood, dots, stripes, armor,
+ * vneck, and the scrubs bits (T5.2): tunic (top hangs over the hips), pocket (chest pocket with pens), badge (clip-on
+ * name badge, no words), clogs (round clogs with holes) and cap (a puffy scrub cap over the hair, dotted). */
 export const OUTFITS = {
+  // Her outfit tiers (T5.2, game/studio.js): 1 everyday, 2 the apron over her everyday clothes, 3 scrubs.
   everyday: { top: '#e66a8f', pants: '#4a5c9a', shoes: '#fff4ea', sleeve: 'long' },
-  apron: { top: '#f0a43a', pants: '#4a5c9a', shoes: '#fff4ea', sleeve: 'long', apron: '#fff8ee' },
-  scrubs: { top: '#3fb6a8', pants: '#3fb6a8', shoes: '#ffffff', sleeve: 'short', vneck: true },
+  apron: { top: '#e66a8f', pants: '#4a5c9a', shoes: '#fff4ea', sleeve: 'long', apron: '#fff6e4', apronTrim: '#f2a33a' },
+  scrubs: { top: '#3fb6a8', pants: '#2f978c', shoes: '#f27eb2', sleeve: 'short', vneck: true, tunic: true, pocket: true, badge: true, clogs: true, cap: '#3fb6a8' },
   pajamas: { top: '#b9a6f0', pants: '#b9a6f0', shoes: '#f27eb2', sleeve: 'long', dots: '#ffffff' },
   hoodie: { top: '#6a7be6', pants: '#7d8597', shoes: '#e8e4dc', sleeve: 'long', hood: true },
   stripes: { top: '#9fd3c7', pants: '#9fd3c7', shoes: '#6a7be6', sleeve: 'long', stripes: '#ffffff' },
@@ -395,6 +398,8 @@ function head(c, e) {
     : line('M-6 24 Q2 34 8 26', 5));
   if (!armor) g.appendChild(hairFront(c, col, g));
   else if (c.beard) g.appendChild(hairFront({ ...c, hair: 'none' }, col, g).lastChild);
+  const cap = OUTFITS[c.outfit]?.cap;
+  if (cap && !armor) g.appendChild(scrubCap(cap));
   g.appendChild(mouth(e.mouth, 62));
   // A tiny clipped moustache under the nose (the inspector).
   if (c.moustache) g.appendChild(el('path', { d: 'M-26 50 Q-24 38 -4 40 L0 44 L4 40 Q24 38 26 50 Q0 56 -26 50Z', fill: col, ...ink(4) }));
@@ -451,6 +456,124 @@ function helmet(c) {
 }
 
 /**
+ * A chest pocket on her left (the viewer's right) with a pen and a little torch peeking out (scrubs, T5.2).
+ * @param {string} top the shirt colour
+ * @param {number} sy shoulder height
+ * @returns {SVGElement} the pocket
+ */
+function chestPocket(top, sy) {
+  const g = el('g');
+  g.appendChild(el('rect', { x: 32, y: sy + 66, width: 11, height: 44, rx: 5, fill: '#6a7be6', ...ink(3.5) }));
+  g.appendChild(el('rect', { x: 49, y: sy + 76, width: 12, height: 36, rx: 4, fill: '#ffd25a', ...ink(3.5) }));
+  g.appendChild(el('rect', { x: 22, y: sy + 92, width: 50, height: 50, rx: 7, fill: tint(top, -0.08), ...ink(4.5) }));
+  g.appendChild(line(`M26 ${sy + 102} L68 ${sy + 102}`, 3, { stroke: tint(top, 0.4) }));
+  return g;
+}
+
+/**
+ * A clip-on name badge on her right (the viewer's left): pink stripe, a tiny smiling photo, two lines for a name (no
+ * words, so nothing to translate) (scrubs, T5.2).
+ * @param {number} sy shoulder height
+ * @returns {SVGElement} the badge
+ */
+function nameBadge(sy) {
+  const g = el('g', { transform: `rotate(-6 -50 ${sy + 108})` });
+  g.appendChild(el('rect', { x: -58, y: sy + 70, width: 16, height: 14, rx: 3, fill: '#c9d3de', ...ink(3) }));
+  g.appendChild(el('rect', { x: -76, y: sy + 78, width: 52, height: 62, rx: 7, fill: '#ffffff', ...ink(4.5) }));
+  g.appendChild(el('path', { d: `M-76 ${sy + 92} L-76 ${sy + 85} Q-76 ${sy + 78} -69 ${sy + 78} L-31 ${sy + 78} Q-24 ${sy + 78} -24 ${sy + 85} L-24 ${sy + 92}Z`, fill: '#f27eb2' }));
+  g.appendChild(el('circle', { cx: -50, cy: sy + 107, r: 10, fill: '#ffd9c2', ...ink(3) }));
+  g.appendChild(line(`M-55 ${sy + 109} Q-50 ${sy + 114} -45 ${sy + 109}`, 2.5));
+  for (const y of [sy + 125, sy + 132]) g.appendChild(line(`M-68 ${y} L${y === sy + 125 ? -32 : -42} ${y}`, 3, { opacity: 0.45 }));
+  g.appendChild(line(`M-76 ${sy + 92} L-24 ${sy + 92}`, 3));
+  return g;
+}
+
+/**
+ * A bib apron worn over the clothes (outfit tier 2, T5.2): neck strap, bib, waist ties with a bow, a skirt down over
+ * the thighs with a trimmed hem and a big pocket (a heart on it, tweezers peeking out). Drawn after the torso so the
+ * skirt can hang over the legs.
+ * @param {object} b the build
+ * @param {object} out the outfit (apron = cloth colour, apronTrim = trim colour)
+ * @param {number} sy shoulder height
+ * @param {number} hy hip height
+ * @param {string} legKind stand, sit or none (sitting: the skirt ends on the lap)
+ * @param {SVGElement} parent for the shading defs
+ * @returns {SVGElement} the apron
+ */
+function apronFront(b, out, sy, hy, legKind, parent) {
+  const g = el('g');
+  const trim = out.apronTrim ?? tint(out.apron, -0.25);
+  const wy = Math.round(sy + (hy - sy) * 0.52); // waist
+  const hem = legKind === 'sit' ? hy + 22 : hy + 96;
+  const hw = b.hip + 16;
+  for (const s of [-1, 1]) {
+    g.appendChild(line(`M${s * 44} ${sy + 38} L${s * 25} ${sy - 8}`, 16));
+    g.appendChild(line(`M${s * 44} ${sy + 38} L${s * 25} ${sy - 8}`, 8, { stroke: out.apron }));
+  }
+  const d = `M-48 ${sy + 34} L48 ${sy + 34} L56 ${wy} Q${hw - 6} ${wy + 50} ${hw} ${hem} Q0 ${hem + 16} ${-hw} ${hem} Q${-hw + 6} ${wy + 50} -56 ${wy}Z`;
+  g.appendChild(el('path', { d, fill: shading(parent, out.apron, 0.1, 0.12), ...ink(5) }));
+  g.appendChild(line(`M${-hw + 3} ${hem - 13} Q0 ${hem + 3} ${hw - 3} ${hem - 13}`, 9, { stroke: trim }));
+  g.appendChild(line(`M-40 ${sy + 46} L40 ${sy + 46}`, 6, { stroke: trim }));
+  // Waist ties: the band round the waist and a bow on her left.
+  g.appendChild(el('rect', { x: -b.shoulder + 4, y: wy - 9, width: b.shoulder * 2 - 8, height: 18, rx: 8, fill: trim, ...ink(4) }));
+  const bx = b.shoulder - 4;
+  for (const r of [-28, 28]) g.appendChild(el('ellipse', { cx: bx + 4, cy: wy + r * 0.5, rx: 20, ry: 10, fill: trim, ...ink(4), transform: `rotate(${r} ${bx} ${wy})` }));
+  for (const r of [16, 46]) g.appendChild(el('path', { d: `M${bx} ${wy} l10 34 l-14 -6Z`, fill: trim, ...ink(3.5), transform: `rotate(${r - 30} ${bx} ${wy})` }));
+  g.appendChild(el('circle', { cx: bx, cy: wy, r: 9, fill: tint(trim, -0.1), ...ink(4) }));
+  // The pocket (only when the skirt is long enough to carry it).
+  if (legKind !== 'sit') {
+    const py = wy + 40;
+    g.appendChild(line(`M12 ${py + 2} L22 ${py - 30} L32 ${py + 2}`, 11));
+    g.appendChild(line(`M12 ${py + 2} L22 ${py - 30} L32 ${py + 2}`, 5, { stroke: '#d7dee7' }));
+    g.appendChild(el('rect', { x: -44, y: py, width: 88, height: 58, rx: 10, fill: tint(out.apron, -0.05), ...ink(4.5) }));
+    g.appendChild(line(`M-44 ${py + 12} L44 ${py + 12}`, 5, { stroke: trim }));
+    g.appendChild(el('path', { d: `M0 ${py + 48} C-22 ${py + 34} -16 ${py + 20} 0 ${py + 28} C16 ${py + 20} 22 ${py + 34} 0 ${py + 48}Z`, fill: '#e8505b', ...ink(3) }));
+  }
+  return g;
+}
+
+/**
+ * The bottom of a scrubs top hanging over the hips, with small side slits (T5.2). Drawn after the torso; its top edge
+ * has no outline, so it joins the shirt without a seam.
+ * @param {object} b the build
+ * @param {object} out the outfit
+ * @param {number} hy hip height
+ * @param {string} legKind stand or sit (sitting: a shorter hem)
+ * @param {SVGElement} parent for the shading defs
+ * @returns {SVGElement} the hem
+ */
+function tunicHem(b, out, hy, legKind, parent) {
+  const g = el('g');
+  const top = hy - 24;
+  const bot = legKind === 'sit' ? hy + 14 : hy + 36;
+  const w = b.hip + 8;
+  g.appendChild(el('path', { d: `M${-b.hip} ${top} L${b.hip} ${top} L${w} ${bot} Q0 ${bot + 10} ${-w} ${bot}Z`, fill: shading(parent, out.top, 0.18, 0.18) }));
+  g.appendChild(el('path', { d: `M${-b.hip} ${top} L${-w} ${bot} Q0 ${bot + 10} ${w} ${bot} L${b.hip} ${top}`, fill: 'none', ...ink(5) }));
+  for (const s of [-1, 1]) g.appendChild(line(`M${s * (w - 14)} ${bot + 2} L${s * (w - 18)} ${bot - 22}`, 4));
+  return g;
+}
+
+/**
+ * A puffy scrub cap over the hair, bun and all, with a band over the forehead and white dots (scrubs, T5.2). In head
+ * units (centre 0,0, radius about 105).
+ * @param {string} col the cap colour
+ * @returns {SVGElement} the cap
+ */
+function scrubCap(col) {
+  const g = el('g');
+  const d = 'M-112 -18 C-126 -100 -94 -156 -30 -166 C-12 -200 64 -204 82 -160 C120 -140 128 -76 112 -18 Q0 -70 -112 -18Z';
+  g.appendChild(el('path', { d, fill: shading(g, col, 0.25, 0.2), ...ink() }));
+  const id = `cc${gid += 1}`;
+  g.appendChild(el('defs', {}, [el('clipPath', { id }, [el('path', { d })])]));
+  const dots = el('g', { 'clip-path': `url(#${id})` });
+  for (let row = 0; row < 6; row += 1) for (let x = -120; x < 130; x += 34) dots.appendChild(el('circle', { cx: x + (row % 2 ? 17 : 0), cy: -200 + row * 32, r: 6, fill: '#ffffff', opacity: 0.8 }));
+  g.appendChild(dots);
+  g.appendChild(line('M-28 -170 Q-10 -150 -6 -118', 4, { opacity: 0.35 }));
+  g.appendChild(el('path', { d: 'M-114 -16 Q0 -70 114 -16 L110 -40 Q0 -90 -110 -40Z', fill: tint(col, -0.12), ...ink(4.5) }));
+  return g;
+}
+
+/**
  * The torso (shirt with outfit details), from the shoulders down to the hips.
  * @param {object} c the character
  * @param {object} b the build
@@ -474,10 +597,6 @@ function torso(c, b, out, sy, hy, parent) {
   g.appendChild(inside);
   if (out.dots) for (let y = sy + 30; y < hy; y += 48) for (let x = -sw; x < sw; x += 48) inside.appendChild(el('circle', { cx: x + ((y / 48) % 2 ? 24 : 0), cy: y, r: 8, fill: out.dots, opacity: 0.85 }));
   if (out.stripes) for (let y = sy + 24; y < hy; y += 40) inside.appendChild(el('rect', { x: -sw - 30, y, width: sw * 2 + 60, height: 14, fill: out.stripes, opacity: 0.8 }));
-  if (out.apron) {
-    inside.appendChild(el('path', { d: `M-56 ${sy + 40} L56 ${sy + 40} L${hw - 6} ${hy + 4} L${-hw + 6} ${hy + 4}Z`, fill: out.apron, ...ink(5) }));
-    inside.appendChild(el('rect', { x: -32, y: sy + 120, width: 64, height: 42, rx: 8, fill: tint(out.apron, -0.06), ...ink(4) }));
-  }
   if (out.hood) {
     inside.appendChild(el('rect', { x: -52, y: hy - 90, width: 104, height: 54, rx: 18, fill: tint(out.top, -0.12), ...ink(4) }));
     inside.appendChild(line(`M-18 ${sy + 4} l-4 60 M18 ${sy + 4} l4 60`, 4, { stroke: '#fff' }));
@@ -488,6 +607,13 @@ function torso(c, b, out, sy, hy, parent) {
     inside.appendChild(el('rect', { x: -18, y: hy - 42, width: 36, height: 30, rx: 4, fill: '#ffd25a', ...ink(4) }));
   }
   if (out.vneck) inside.appendChild(el('path', { d: `M-34 ${sy - 2} L0 ${sy + 54} L34 ${sy - 2}`, fill: tint(out.top, -0.15), ...ink(5) }));
+  if (out.tunic) {
+    // Scrubs: a lighter piping round the V, and two seams down the sides.
+    inside.appendChild(line(`M-40 ${sy - 2} L0 ${sy + 66} L40 ${sy - 2}`, 6, { stroke: tint(out.top, 0.45) }));
+    for (const s of [-1, 1]) inside.appendChild(line(`M${s * (sw - 20)} ${sy + 70} Q${s * (hw - 6)} ${(sy + hy) / 2 + 40} ${s * (hw - 14)} ${hy}`, 3.5, { opacity: 0.35 }));
+  }
+  if (out.pocket) inside.appendChild(chestPocket(out.top, sy));
+  if (out.badge) inside.appendChild(nameBadge(sy));
   if (out.tie) {
     // A suit: white shirt in a deep V, a tie, and jacket lapels.
     inside.appendChild(el('path', { d: `M-44 ${sy - 2} L0 ${sy + 120} L44 ${sy - 2}Z`, fill: '#fbf8f0', ...ink(5) }));
@@ -595,7 +721,15 @@ function legs(kind, hy, b, out) {
       g.appendChild(el('rect', { x: s * x - w / 2, y: hy - 30, width: w, height: -hy + 10, rx: w / 2.6, fill: pants, ...ink() }));
     }
     if (out.armor) g.appendChild(el('circle', { cx: s * x, cy: kind === 'sit' ? hy + 8 : hy / 2, r: 18, fill: '#aeb9c6', ...ink(4) }));
-    g.appendChild(el('ellipse', { cx: s * (x + 8), cy: -8, rx: w / 2 + 12, ry: 20, fill: out.shoes, ...ink(5) }));
+    if (out.clogs) {
+      // Round cartoon clogs (scrubs, T5.2): a white sole, a domed toe and three holes.
+      const cx = s * (x + 8);
+      g.appendChild(el('rect', { x: cx - w / 2 - 14, y: -14, width: w + 28, height: 16, rx: 8, fill: '#ffffff', ...ink(4.5) }));
+      g.appendChild(el('path', { d: `M${cx - w / 2 - 12} -12 Q${cx - w / 2 - 10} -46 ${cx} -46 Q${cx + w / 2 + 10} -46 ${cx + w / 2 + 12} -12Z`, fill: out.shoes, ...ink(5) }));
+      for (const dx of [-14, 0, 14]) g.appendChild(el('circle', { cx: cx + dx + s * 6, cy: -28, r: 4.5, fill: tint(out.shoes, -0.3) }));
+    } else {
+      g.appendChild(el('ellipse', { cx: s * (x + 8), cy: -8, rx: w / 2 + 12, ry: 20, fill: out.shoes, ...ink(5) }));
+    }
   }
   return g;
 }
@@ -728,6 +862,8 @@ export function drawCharacter(who, l) {
   if (pose.legs === 'sit') body.appendChild(el('rect', { x: -b.hip - 4, y: hy - 30, width: b.hip * 2 + 8, height: 40, rx: 18, fill: out.armor ? '#c9d3de' : out.pants, ...ink(5) }));
   body.appendChild(el('rect', { x: -26, y: headY + 90, width: 52, height: sy - headY - 80, fill: skinFill, ...ink(5) }));
   body.appendChild(torso(c, b, out, sy, hy, body));
+  if (out.tunic && pose.legs !== 'none') body.appendChild(tunicHem(b, out, hy, pose.legs, body));
+  if (out.apron) body.appendChild(apronFront(b, out, sy, hy, pose.legs, body));
   if (out.armor) for (const sx of [-1, 1]) body.appendChild(el('path', { d: `M${sx * (b.shoulder + 26)} ${sy + 50} C${sx * (b.shoulder + 30)} ${sy - 30} ${sx * 20} ${sy - 30} ${sx * 30} ${sy + 20}Z`, fill: '#d7dee7', ...ink(5) }));
   const h = head({ ...c, flip: c.flip }, e);
   h.node.setAttribute('transform', `translate(0 ${headY}) scale(${b.head}) ${h.node.getAttribute('transform')}`);
@@ -1415,6 +1551,18 @@ export const ARTS = {
   ...Object.fromEntries(Object.keys(CHARACTERS).map((who) => [who, (l) => drawCharacter(who, l)])),
   ...PROPS,
 };
+
+/**
+ * The art kit with the heroine dressed in an outfit (T5.2 outfit tiers): every heroine layer that names no outfit of
+ * its own wears this one; layers with their own outfit (pajamas, the apron strip) stay as they are.
+ * @param {Record<string, Function>} arts an art kit (usually ARTS)
+ * @param {string|null|undefined} outfit an OUTFITS name, or nothing = the kit unchanged
+ * @returns {Record<string, Function>} the art kit to hand the comic player
+ */
+export function dressHeroine(arts, outfit) {
+  if (!outfit || !(outfit in OUTFITS) || typeof arts.heroine !== 'function') return arts;
+  return { ...arts, heroine: (l, kit) => arts.heroine(l.outfit === undefined ? { ...l, outfit } : l, kit) };
+}
 
 /**
  * Check one art layer's options against the tables (for tests and the comic test page).

@@ -6,6 +6,7 @@
 import { starsFor, comboBonus } from './scoring.js';
 import { bumpInfo } from '../data/bumps.js';
 import { defaultSave, normalizeSave } from '../core/save.js';
+import { outfitTier } from './studio.js';
 import {
   STAR_TIPS, REQUEST_BONUS, REQUEST_BONUS_DEFAULT, REPUTATION_PER_STAR, SKIP_PENALTIES, TIER_THRESHOLDS,
   SCRUB_REPUTATION, SHOP_ITEMS, MASTERY_LEVELS, MASTERY_STRIP_LEVEL, DIFFICULTY_BANDS,
@@ -239,7 +240,8 @@ export function economyFromSave(save) {
 }
 
 /**
- * Puts the economy state back into a save, keeping every other save field (name, settings, chapter...).
+ * Puts the economy state back into a save, keeping every other save field (name, settings, chapter...). Also writes
+ * outfitTier from the bought items, so that copy stays in sync (studio.js outfitTier is the source of truth).
  * @param {object} save the save to update (not changed) @param {object} state the economy state @returns {object} new save object
  */
 export function economyToSave(save, state) {
@@ -248,5 +250,6 @@ export function economyToSave(save, state) {
     money: state.money, reputation: state.reputation, skipStreak: state.skipStreak, mastery: { ...state.mastery },
     items: { ...state.items }, unlockedTools: [...state.unlockedTools], studioLayers: [...state.studioLayers],
     threeStarDone: state.threeStarDone, requestsDone: state.requestsDone, stats: { ...(save.stats ?? {}), ...state.stats },
+    outfitTier: outfitTier(state.items),
   };
 }

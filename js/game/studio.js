@@ -4,7 +4,7 @@
 // (save.studioLayers): lamp (a ring light on a stand), plant (a hanging plant), chair (a padded wingback chair behind
 // the customer), wallPaint (fresh wall colour) and sign (a shiny new sign).
 // The same drawing is the backdrop of the pop scene and the full-size studio view (T5.1c, screens/studio.js), whose
-// captions and outfit come from the helpers at the end of this file.
+// captions and her outfit (outfit tiers, T5.2) come from the helpers at the end of this file.
 
 /** Every studio layer, in the order they are drawn (back to front): the wall first, the chair before the side things. */
 export const STUDIO_LAYERS = ['wallPaint', 'sign', 'chair', 'plant', 'lamp'];
@@ -43,18 +43,37 @@ export function studioKey(tier, layers) {
 
 // ---- The studio view screen (T5.1c, screens/studio.js) ----
 
-/** What she wears in the studio view, best first: the first one she owns (shop outfits), else her everyday clothes.
- * The names are comic-art.js OUTFITS. Outfit tiers come in T5.2. */
-export const VIEW_OUTFITS = ['scrubs', 'apron'];
+// ---- Her outfit tiers (T5.2, SPEC section 4 "Studio", D6) ----
+// The ONE place that says what she wears: tier 1 everyday clothes, tier 2 the apron (shop item 'apron'), tier 3 the
+// scrubs (shop item 'scrubs'). The bought items (save.items) are the source of truth: the best one she owns wins, so
+// scrubs bought before the apron still give tier 3. save.outfitTier is only a copy for the save shape in SPEC 8: it is
+// written from the items every time the economy is saved (economy.js economyToSave) and never read to draw her, so old
+// saves (outfitTier 1, maybe an apron already bought) still show the right outfit.
+
+/** The outfit for each tier (index = tier - 1). The names are comic-art.js OUTFITS. */
+export const OUTFIT_TIERS = ['everyday', 'apron', 'scrubs'];
+
+/** The shop item that gives each outfit tier above 1, best first. */
+export const OUTFIT_ITEMS = [['scrubs', 3], ['apron', 2]];
 
 /**
- * The outfit she wears in the studio view: the best outfit item she owns, or 'everyday'.
- * @param {unknown} items the bought shop items (save.items: id -> {needsScrub})
- * @returns {string} an outfit name of comic-art.js OUTFITS
+ * Her outfit tier: 3 with the scrubs, else 2 with the apron, else 1 (everyday clothes).
+ * @param {unknown} saveOrItems a save (its items are used) or a bought-items table (id -> {needsScrub})
+ * @returns {number} 1, 2 or 3
  */
-export function studioOutfit(items) {
-  if (!items || typeof items !== 'object') return 'everyday';
-  return VIEW_OUTFITS.find((id) => Object.hasOwn(items, id)) ?? 'everyday';
+export function outfitTier(saveOrItems) {
+  const x = saveOrItems && typeof saveOrItems === 'object' ? saveOrItems : {};
+  const items = x.items && typeof x.items === 'object' ? x.items : x;
+  return OUTFIT_ITEMS.find(([id]) => Object.hasOwn(items, id))?.[1] ?? 1;
+}
+
+/**
+ * The outfit she wears (studio view, and the comic strips set after she owns it): the outfit of her outfit tier.
+ * @param {unknown} saveOrItems a save or a bought-items table
+ * @returns {'everyday'|'apron'|'scrubs'} an outfit name of comic-art.js OUTFITS
+ */
+export function heroOutfit(saveOrItems) {
+  return OUTFIT_TIERS[outfitTier(saveOrItems) - 1];
 }
 
 /**

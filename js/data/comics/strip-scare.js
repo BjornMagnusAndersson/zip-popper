@@ -10,6 +10,7 @@ const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScar
 export const STRIP = {
   id: 'scare',
   title: 'comic.scare.title',
+  dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
   panels: [
     {
       // 1. The door creaks: the inspector is back, clipboard ready. She freezes mid-pop.

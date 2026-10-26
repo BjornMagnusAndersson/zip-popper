@@ -43,6 +43,7 @@ const knight = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s
 export const STRIP = {
   id: 'strip5',
   title: 'comic.s5.title',
+  dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
   panels: [
     {
       // 1. Opening day: one chair, one bucket under the leak, one cheap lamp. She hangs the "Clean!" sign. It is not.

@@ -20,7 +20,7 @@ import { createPopMode } from '../pop/pop-mode.js';
 import { faceGeometry } from '../pop/logic.js';
 import { makeFaceTexture } from '../pop/face.js';
 import { playComic } from './comic.js';
-import { ARTS } from './comic-art.js';
+import { ARTS, dressHeroine } from './comic-art.js';
 import { describeRequest } from './requests.js';
 import { economyFromSave } from './economy.js';
 import { getChapter } from '../data/chapters.js';
@@ -196,7 +196,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     sound.unlock();
     setMusic({ screen: 'comic' });
     playComic(strip, {
-      name: playerName(), reducedMotion: still() || undefined, sound, arts: ARTS,
+      name: playerName(), reducedMotion: still() || undefined, sound, arts: dressHeroine(ARTS, L.comicOutfit(strip, save)),
       onSeen: (sid) => persist(L.markSeen(save, sid)),
       onClose: then,
     });

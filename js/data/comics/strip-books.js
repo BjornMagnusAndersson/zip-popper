@@ -82,6 +82,7 @@ const highlightedPlant = (x, F) => [-120, -170, -220].map((dy, i) => ({ shape: '
 export const STRIP = {
   id: 'books',
   title: 'comic.books.title',
+  dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
   panels: [
     {
       // 1. After closing. The studio is still shabby, but there is a patch of new paint. Some customers still run away.

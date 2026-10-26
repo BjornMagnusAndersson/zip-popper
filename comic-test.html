@@ -49,7 +49,7 @@ import { STRIP as mmastery } from './js/data/comics/strip-mmastery.js';
 import { STRIP as mapron } from './js/data/comics/strip-mapron.js';
 import { STRIP as mtweezers } from './js/data/comics/strip-mtweezers.js';
 import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
-import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer } from './js/game/comic-art.js';
+import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer, dressHeroine } from './js/game/comic-art.js';
 
 const STRIPS = [strip0, strip1, strip2, strip3, strip4, strip5, books,mplant, mlamp, mapron, mmastery, mtweezers, mstar, testStrip, placeholder]; // add new strips here to see them in the chooser
 const params = new URLSearchParams(location.search);
@@ -105,6 +105,11 @@ function showKit() {
       tile(r, pose, 600, 760, [{ art: who, x: 300, y: pose === 'bust' ? 600 : 740, pose, expr: 'happy', hold: pose === 'sit' ? 'remote' : undefined }]);
     }
   }
+  // Her outfit tiers (T5.2) in a few poses: &rows=tiers shows only these.
+  for (const outfit of ['everyday', 'apron', 'scrubs']) {
+    const rt = row(`outfit tiers: ${outfit}`);
+    for (const pose of ['hips', 'stand', 'sit', 'bust']) tile(rt, `${outfit} ${pose}`, 500, 760, [{ art: 'heroine', x: 250, y: pose === 'bust' ? 600 : 740, outfit, expr: 'happy', pose, hold: pose === 'stand' ? 'tweezers' : undefined }]);
+  }
   const r = row('outfits');
   for (const outfit of Object.keys(OUTFITS)) tile(r, outfit, 500, 760, [{ art: outfit === 'hoodie' || outfit === 'stripes' || outfit === 'armor' ? 'husband' : 'heroine', x: 250, y: 740, outfit, expr: 'proud', pose: 'hips' }]);
   const p = row('props and scenes');
@@ -129,7 +134,7 @@ nameBox.value = params.get('name') ?? '';
 stillBox.checked = params.has('still');
 const sound = createSound();
 
-/** Play one strip with the options on the page. @param {object} strip the strip @returns {object} the player */
+/** Play one strip with the options on the page (&outfit=apron|scrubs dresses her in strips marked dressed, as the game does, T5.2). @param {object} strip the strip @returns {object} the player */
 function open(strip) {
   sound.unlock();
   const problems = validateStrip(strip, { hasKey: hasString, sounds: SOUND_TABLE, arts: ARTS });
@@ -138,7 +143,7 @@ function open(strip) {
   }));
   log.textContent = problems.length ? problems.join('\n') : '';
   return playComic(strip, {
-    name: nameBox.value.trim(), reducedMotion: stillBox.checked || undefined, sound, arts: ARTS,
+    name: nameBox.value.trim(), reducedMotion: stillBox.checked || undefined, sound, arts: dressHeroine(ARTS, strip.dressed ? params.get('outfit') : null),
     onSeen: (id, info) => { log.textContent += `seen: ${id}${info.skipped ? ' (skipped)' : ''}\n`; },
   });
 }
