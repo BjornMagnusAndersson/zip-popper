@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound test (developer page)</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #f8f5ef; padding: 16px; }
+  button { font: inherit; padding: 14px 16px; margin: 4px; border-radius: 12px; border: 1px solid #ccc; background: #fff; min-width: 120px; }
+  button.music { background: #eef; }
+  h2 { margin: 16px 0 4px; font-size: 1rem; }
+</style>
+</head>
+<body>
+<!-- Developer tool, not part of the game: one button per name in the sound table. -->
+<h1>Sound test</h1>
+<p>Tap a button to hear that sound. Serve with: <code>npx serve src</code> (ES modules need http, not file://).</p>
+<div id="list"></div>
+<script type="module">
+import { createSound } from './js/core/sound.js';
+import { SOUND_TABLE } from './js/core/soundTable.js';
+
+const sound = createSound();
+const list = document.getElementById('list');
+const groups = {};
+
+// Make one button per sound name, grouped by category.
+for (const [name, entry] of Object.entries(SOUND_TABLE)) {
+  const cat = entry.category ?? 'sfx';
+  if (!groups[cat]) {
+    const h = document.createElement('h2');
+    h.textContent = cat;
+    list.append(h);
+    groups[cat] = list;
+  }
+  const b = document.createElement('button');
+  b.textContent = name;
+  if (cat === 'music') b.className = 'music';
+  b.onclick = () => { sound.unlock(); sound.play(name); };
+  list.append(b);
+}
+</script>
+</body>
+</html>

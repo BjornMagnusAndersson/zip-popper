@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#f48fb1">
+<title>Popper seed demo</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #f8f5ef; padding: 16px; }
+  button { font: inherit; padding: 12px 14px; margin: 4px; border-radius: 12px; border: 1px solid #ccc; background: #fff; }
+  #chip { display: none; }
+</style>
+</head>
+<body>
+<h1>Popper seed demo</h1>
+<p>Stand-alone demo of the pop engine. Pretend to answer cards:</p>
+<button id="ok">OK (1 pimple)</button>
+<button id="edit">Edit (2 + gold)</button>
+<button id="comment">Comment (1 + gold)</button>
+<button id="five">Five-answer bonus (big round)</button>
+<button id="done">Finish batch (face finale)</button>
+<button id="chip"></button>
+<div id="host"></div>
+<script type="module">
+// Serve this folder with: npx serve src   (ES modules need http, not file://)
+import { createPopMode } from './js/pop/pop-mode.js';
+const strings = await (await fetch('./strings/en.json')).json();
+const t = (k) => strings[k] ?? k;
+const host = document.getElementById('host');
+const chip = document.getElementById('chip');
+const pop = createPopMode({
+  uid: 'demo', storage: localStorage, host, t, lang: () => 'en',
+  onBankChange: (n) => { chip.style.display = n ? '' : 'none'; chip.textContent = `${n} waiting`; },
+});
+document.body.append(pop.node);
+chip.onclick = () => pop.openBank();
+const go = (s, m = []) => () => { pop.unlock(); pop.onAnswer(s, m); };
+document.getElementById('ok').onclick = go('ok');
+document.getElementById('edit').onclick = go('edit');
+document.getElementById('comment').onclick = go('comment');
+document.getElementById('five').onclick = go('ok', ['five']);
+document.getElementById('done').onclick = go('ok', ['done']);
+</script>
+<script type="module">
+import { registerServiceWorker } from './js/core/pwa.js';
+registerServiceWorker();
+</script>
+</body>
+</html>

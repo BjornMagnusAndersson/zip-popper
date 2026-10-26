@@ -1,0 +1,71 @@
+/* The pimple-popper play mode of the popper game: the bottom sheet with the skin patch and the full-screen
+   face finale. Loaded by pop-mode.js itself (not in index.html), only when someone plays Pimple popper.
+   The mode choice, the in-game switch and the chip live in review.css (they show in Classic too).
+   The skin and pimples are drawn on canvas. */
+
+/* ---- The sheet ---- */
+.pop-layer { position: relative; z-index: 40; }
+.pop-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-width: 560px; margin: 0 auto;
+  height: 300px; display: flex; flex-direction: column; overflow: hidden;
+  background: #2b1d1a; color: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
+  padding-bottom: env(safe-area-inset-bottom); transform: translateY(105%);
+}
+.pop-sheet.is-open { transform: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .pop-sheet { transition: transform 240ms cubic-bezier(.2, .9, .3, 1); }
+  .pop-finale { transition: opacity 260ms ease-out; }
+}
+.pop-sheet__head { flex: none; display: flex; align-items: center; gap: 8px; height: 64px; padding: 6px 10px 6px 14px; overflow: hidden; }
+.pop-finale .pop-sheet__head { height: auto; min-height: 64px; }
+.pop-sheet__titles { flex: 1; min-width: 0; overflow: hidden; }
+.pop-sheet__title { margin: 0; font-weight: 800; font-size: 1.02rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-sheet__count { display: flex; align-items: center; gap: 8px; white-space: nowrap; margin: 2px 0 0; font-size: 0.85rem; color: #f3d9cf; min-height: 1.3em; }
+.pop-bonus[hidden] { display: none; }
+.pop-finale .pop-sheet__title { white-space: normal; }
+.pop-bonus {
+  display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 0.76rem; font-weight: 800; line-height: 1.6;
+  background: linear-gradient(135deg, #ffe58a, #f5b82e); color: #5a3a00; vertical-align: 1px; white-space: nowrap;
+}
+.pop-sheet .pop-sound, .pop-finale .pop-sound { color: #fff; background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.25); }
+.pop-sheet .pop-sound--off, .pop-finale .pop-sound--off { color: #c9b3ab; }
+.pop-skip {
+  flex: none; min-height: 40px; padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 0.9rem; font-weight: 700;
+  color: #fff; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.3); cursor: pointer;
+}
+.pop-skip:hover { background: rgba(255, 255, 255, 0.24); }
+.pop-skip:focus-visible, .pop-canvas:focus-visible { outline: 3px solid #ffd166; outline-offset: -3px; }
+.pop-sheet__stage { flex: 1; min-height: 0; display: flex; justify-content: center; overflow: hidden; }
+.pop-canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; cursor: pointer; }
+.pop-sheet__foot { flex: none; display: flex; align-items: center; gap: 10px; height: 56px; padding: 6px 10px 6px 14px; }
+.pop-sheet__hint { flex: 1; min-width: 0; margin: 0; font-size: 0.88rem; line-height: 1.3; color: #f3d9cf; max-height: 100%; overflow: hidden; }
+.pop-finale .pop-sheet__foot { height: auto; min-height: 56px; }
+
+/* While the sheet is open the answer buttons sit right above it in one slim row, so answering never has to wait
+   and the Icelandic line stays in view. */
+.review-page.has-pop-sheet { padding-bottom: var(--pop-h, 300px); }
+.review-page.has-pop-sheet .review-actions {
+  bottom: var(--pop-h, 300px); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-top: 10px; padding-bottom: 8px;
+}
+.review-page.has-pop-sheet .review-actions > .review-actions__row { display: contents; }
+.review-page.has-pop-sheet .review-actions > .review-actions__row--small { display: none; }
+.review-page.has-pop-sheet .review-actions .review-btn { min-height: 48px; padding: 4px 6px; font-size: 0.9rem; }
+
+/* ---- The face finale ---- */
+.pop-finale {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: #a7d1cc; color: #102a28;
+  opacity: 0;
+}
+.pop-finale.is-open { opacity: 1; }
+.pop-finale__head { background: rgba(16, 42, 40, 0.86); color: #fff; padding-top: calc(8px + env(safe-area-inset-top)); }
+.pop-finale__stage { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: flex-start; overflow: hidden; }
+.pop-finale__foot { background: rgba(16, 42, 40, 0.86); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+.pop-finale__foot .pop-sheet__hint { color: #fff; }
+.pop-finale__done {
+  position: absolute; left: 16px; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto;
+  display: grid; gap: 10px; padding: 16px; text-align: center; border-radius: 20px; background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); color: #102a28;
+}
+.pop-finale__done[hidden] { display: none; }
+.pop-finale__done-text { margin: 0; font-size: 1.25rem; font-weight: 800; }
+.pop-finale__done .review-btn { color: #062b2b; background: #5eead4; border-color: #5eead4; }
