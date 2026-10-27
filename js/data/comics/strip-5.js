@@ -7,7 +7,7 @@
 // scarf), the armor (four plumes, knitted hat, shield and banner), his "No.". Visual surprise: the knight in the
 // doorway as the first "customer". Format: docs/COMIC-FORMAT.md.
 
-/** The dingy studio filling a panel (tier 0; the plant wears Greta's scarf). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
+/** The dingy studio filling a panel (tier 0; the plant wears Greta's scarf from panel 5, when she brings it: panels 1 and 2 pass plantScarf false). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
 const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', ...o });
 
 /** The one chair with someone sitting on it. @param {object} who the character layer (art, x, y, scale...) @returns {object[]} layers */
@@ -50,7 +50,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.08, windowX: 0.4, leakX: 0.66, bulbX: 0.58, signX: 0.86, plantX: 0.2, lampX: 0.97 }),
+          studio(1600, 900, { floorY: 600, doorX: 0.08, windowX: 0.4, leakX: 0.66, bulbX: 0.58, signX: 0.86, plantX: 0.2, lampX: 0.97, plantScarf: false }),
           { art: 'bucket', x: 1056, y: 820, scale: 0.6 },
           { art: 'chair', x: 1220, y: 760, scale: 0.6, color: '#9a8f6a' },
           { id: 'her', art: 'heroine', x: 1400, y: 880, scale: 0.85, pose: 'cheer', expr: 'proud' },
@@ -67,7 +67,7 @@ export const STRIP = {
       layout: 'small',
       scene: {
         layers: [
-          studio(800, 600, { floorY: 470, windowX: 0.16, leakX: 0.5, plantX: 0.86, plantEyes: 'sad', door: false, sign: false, bulb: false, lamp: false }),
+          studio(800, 600, { floorY: 470, windowX: 0.16, leakX: 0.5, plantX: 0.86, plantEyes: 'sad', plantScarf: false, door: false, sign: false, bulb: false, lamp: false }),
           { art: 'drip', x: 400, y: 230, r: 22 },
           { art: 'bucket', x: 400, y: 590, scale: 0.95 },
         ],
