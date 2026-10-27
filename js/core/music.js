@@ -19,7 +19,7 @@ export const CROSSFADE = 1.5;
 /** Fade when the music is switched off, paused or the page is hidden (seconds). */
 export const STOP_FADE = 0.6;
 /** Overall music level at volume 1 (set so the music sits clearly under the sound effects). */
-export const MUSIC_GAIN = 0.4;
+export const MUSIC_GAIN = 0.3; // 0.4 before R7: the owner found the music a bit loud
 /** Volume the music starts at (0 to 1). */
 export const DEFAULT_VOLUME = 0.7;
 

@@ -947,18 +947,19 @@ function drawHeadwear(ctx, f, look) {
     ctx.beginPath(); ctx.arc(X(0), Y(bandBottom - 0.22), rx * 0.035, 0, Math.PI * 2); ctx.fill();
   }
   if (has('headband')) drawHeadband(ctx, f, look);
-  if (has('tiara')) { // a small golden crown with a pink gem
-    const baseV = -1.05;
-    ctx.save();
-    // B56: on a mohawk it sits lower, in front of the crest's root (which used to show as a block under it).
-    if (look.hairStyle === 'mohawk') ctx.translate(0, ry * 0.12);
+  if (has('tiara')) { // a small golden crown with a pink gem, resting on the hairline (R7: it used to float above bald and short heads)
+    const drop = look.hairStyle === 'bald' || look.hairStyle === 'mohawk' ? 0.09 : 0; // a bare head: sit lower, on the dome
+    // The tiara's lower edge at u: just above the hairline, so it follows the curve of the head.
+    const base = (u) => hairline(f, u) - 0.03 + drop;
+    // Peak heights above the base at each u (the ends are short, the points between them are tall).
+    const pts = [[-0.42, 0.13], [-0.26, 0.2], [-0.14, 0.33], [0, 0.22], [0.14, 0.33], [0.26, 0.2], [0.42, 0.13]];
     ctx.beginPath();
-    ctx.moveTo(X(-0.42), Y(baseV + 0.02));
-    const pts = [[-0.42, -1.2], [-0.26, -1.12], [-0.14, -1.27], [0, -1.16], [0.14, -1.27], [0.26, -1.12], [0.42, -1.2]];
-    for (const [u, v] of pts) ctx.lineTo(X(u), Y(v));
-    ctx.lineTo(X(0.42), Y(baseV + 0.02));
-    ctx.quadraticCurveTo(X(0), Y(baseV - 0.04), X(-0.42), Y(baseV + 0.02));
-    const g = ctx.createLinearGradient(0, Y(-1.3), 0, Y(baseV));
+    ctx.moveTo(X(-0.42), Y(base(-0.42)));
+    for (const [u, h] of pts) ctx.lineTo(X(u), Y(base(u) - h));
+    ctx.lineTo(X(0.42), Y(base(0.42)));
+    for (let i = 10; i >= 0; i -= 1) { const u = -0.42 + (0.84 * i) / 10; ctx.lineTo(X(u), Y(base(u) + 0.02)); }
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, Y(base(0) - 0.34), 0, Y(base(0)));
     g.addColorStop(0, '#fff2a8');
     g.addColorStop(1, '#d9a520');
     ctx.fillStyle = g;
@@ -967,12 +968,11 @@ function drawHeadwear(ctx, f, look) {
     ctx.lineWidth = Math.max(1, lw * 0.6);
     ctx.stroke();
     ctx.fillStyle = '#f06aa8';
-    ctx.beginPath(); ctx.arc(X(0), Y(-1.1), rx * 0.05, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(0), Y(base(0) - 0.05), rx * 0.05, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#7fd4f0';
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(X(s * 0.24), Y(-1.08), rx * 0.03, 0, Math.PI * 2); ctx.fill(); }
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(X(s * 0.24), Y(base(0.24) - 0.03), rx * 0.03, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.beginPath(); ctx.arc(X(-0.02), Y(-1.115), rx * 0.016, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    ctx.beginPath(); ctx.arc(X(-0.02), Y(base(0) - 0.065), rx * 0.016, 0, Math.PI * 2); ctx.fill();
   }
   if (has('veil')) { // the front of the veil: a pearl band on top of the head
     ctx.fillStyle = '#fffaf0';
