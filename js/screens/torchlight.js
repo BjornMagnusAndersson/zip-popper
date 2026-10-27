@@ -368,7 +368,9 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
     raf = 0;
     if (disposed) return;
     const now = performance.now();
-    const dt = (now - last) / 1000;
+    // At most a tenth of a second per frame: no frames run while the page is hidden, and the first frame back must not
+    // count the whole hidden time (he would wake up at once after a phone call, B83).
+    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
     last = now;
     const face = faceNow();
     if (face && !torch) torch = { x: face.cx, y: Math.min(face.cy + face.ry * 1.35, stageBox().y + stageBox().h - 20) };

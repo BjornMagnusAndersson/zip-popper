@@ -48,7 +48,7 @@ import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
 import {
   applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
-  stripChance, stripHintKey, wipeHintKey,
+  stripChance, stripHintKey, wipeHintKey, hiddenMs, clockSeconds,
 } from './round-logic.js';
 import { kindsOnFace, newKindQueue, hintQueueAfterPop, newKindHintKey } from '../screens/guide-logic.js';
 
@@ -589,7 +589,23 @@ export function createPopMode({
    * @returns {number} seconds
    */
   function elapsedFor(c) {
-    return c.popEnd ?? (performance.now() - c.startAt) / 1000;
+    return c.popEnd ?? clockSeconds(c.startAt, performance.now(), hiddenSince); // stands still while the page is hidden (B83)
+  }
+
+  let hiddenSince = null; // when the page went hidden (phone call, app switch, lock screen), null while on show (B83)
+  /**
+   * The page was hidden or shown again (B83): the round clock (a hurry request, the daily "Beat the clock") stands
+   * still while hidden; on return the face's start moves on by the hidden time, so it goes on where it stopped.
+   * @returns {void}
+   */
+  function onVisibility() {
+    const doc = globalThis.document;
+    const now = performance.now();
+    if (doc?.hidden) { hiddenSince ??= now; return; }
+    if (hiddenSince === null) return;
+    if (current) current.startAt += hiddenMs(hiddenSince, now);
+    hiddenSince = null;
+    drawRequest(current);
   }
 
   /**
@@ -912,6 +928,9 @@ export function createPopMode({
     mount(host) {
       host.append(root);
       globalThis.addEventListener?.('resize', onResize);
+      globalThis.document?.addEventListener?.('visibilitychange', onVisibility); // the round clock pauses while hidden (B83)
+      globalThis.addEventListener?.('pagehide', onVisibility);
+      globalThis.addEventListener?.('pageshow', onVisibility);
       watcher?.observe(stage);
       requestAnimationFrame(() => { ready = true; newFace(wantFocus); wantFocus = false; }); // the demo face, or a round/free play asked for before
     },
@@ -1073,6 +1092,9 @@ export function createPopMode({
       current?.scene?.dispose();
       current = null;
       globalThis.removeEventListener?.('resize', onResize);
+      globalThis.document?.removeEventListener?.('visibilitychange', onVisibility);
+      globalThis.removeEventListener?.('pagehide', onVisibility);
+      globalThis.removeEventListener?.('pageshow', onVisibility);
       root.remove();
       sound.dispose();
     },

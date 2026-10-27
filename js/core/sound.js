@@ -226,7 +226,7 @@ export function createSound({ sfxOn = true, musicOn = true, sfxVolume = 1, onCha
       changed();
     },
     /**
-     * Play a sound now. Silent when its switch is off or before the first tap. A file that is not (yet) loaded is
+     * Play a sound now. Silent when its switch is off, before the first tap or while the page is hidden. A file that is not (yet) loaded is
      * replaced by its generated fallback.
      * @param {string} name a key of the sound table
      * @param {object} [o] options for the sound (e.g. {level} for squish)
@@ -236,6 +236,7 @@ export function createSound({ sfxOn = true, musicOn = true, sfxVolume = 1, onCha
       const entry = table[name];
       if (!entry || !ctx) return false;
       if (entry.category === 'music' ? !music : !sfx) return false;
+      if (globalThis.document?.hidden) return false; // the page is hidden (phone call, app switch, B83): stay quiet
       if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       try {
         if (entry.type === 'file') {

@@ -31,7 +31,7 @@ import { describeRequest } from './requests.js';
 import { economyFromSave } from './economy.js';
 import { getChapter } from '../data/chapters.js';
 import { SHOP_ITEMS } from '../data/economy-data.js';
-import { importNoticeKey, osPrefersStill } from '../screens/screen-logic.js';
+import { importNoticeKey, osPrefersStill, ignoreInput, backRoute } from '../screens/screen-logic.js';
 import { createTitleScreen } from '../screens/title.js';
 import { createNameScreen } from '../screens/name.js';
 import { createMenuScreen } from '../screens/menu.js';
@@ -108,6 +108,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music, sfxVolume: save.settings.sfxVolume }); // comics and menus
   const music = createMusic({ sound, volume: save.settings.musicVolume }); // background music (T6.1a), on the same audio as the sounds
   let hurryTimer = 0; // ends the hectic music when a hurry request's time is up
+  let hurry = null; // that hurry clock: {request, left: ms still to go, since: when it last went on (null = paused while hidden)}
   let midnightTimer = 0; // redraws the menu at midnight, so a new day's challenge shows while the app is open (T8.5)
   // Browsers only allow sound after a tap: the first tap anywhere wakes the audio, and the music starts then.
   for (const type of ['click', 'touchend', 'keydown']) (root.ownerDocument ?? root).addEventListener(type, () => sound.unlock(), { passive: true });
@@ -185,6 +186,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function setMusic(context) {
     clearTimeout(hurryTimer);
+    hurry = null;
     music.setMood(L.musicMoodFor({ musicOn: save.settings.music, ...context }));
   }
 
@@ -197,9 +199,40 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function roundMusic(request) {
     setMusic({ screen: 'round', request });
     if (request?.type === 'hurry' && Number.isFinite(request.timeLimit)) {
-      hurryTimer = setTimeout(() => setMusic({ screen: 'round', request, requestOpen: false }), request.timeLimit * 1000);
+      hurry = { request, left: request.timeLimit * 1000, since: performance.now() };
+      planHurryEnd();
     }
   }
+
+  /** (Re)start the timer that ends the hectic music when the hurry request's time is up. @returns {void} */
+  function planHurryEnd() {
+    clearTimeout(hurryTimer);
+    if (!hurry) return;
+    const h = hurry;
+    hurryTimer = setTimeout(() => { if (hurry === h) { hurry = null; setMusic({ screen: 'round', request: h.request, requestOpen: false }); } }, h.left);
+  }
+
+  /**
+   * The page was hidden or shown again (B83): the hurry clock stands still while hidden (pop-mode.js pauses the round's
+   * own clock), so the timer that ends the hectic music stops too and goes on with the time that was left.
+   * @returns {void}
+   */
+  function onPageVisibility() {
+    if (!hurry) return;
+    const now = performance.now();
+    if (globalThis.document?.hidden) {
+      if (hurry.since === null) return; // already paused
+      clearTimeout(hurryTimer);
+      hurry.left = Math.max(0, hurry.left - (now - hurry.since));
+      hurry.since = null;
+    } else if (hurry.since === null) {
+      hurry.since = now;
+      planHurryEnd();
+    }
+  }
+  globalThis.document?.addEventListener?.('visibilitychange', onPageVisibility);
+  globalThis.addEventListener?.('pagehide', onPageVisibility);
+  globalThis.addEventListener?.('pageshow', onPageVisibility);
 
   /** Take the screen or the pop scene that is on show away. @returns {void} */
   function clear() {
@@ -210,14 +243,85 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     pop = null;
   }
 
+  // The phone's Back button (B87): while a screen other than the menu, title or name screen is on show, one extra page
+  // history entry (the "guard") sits on top. Back takes it away, and the game runs that screen's own Back or Menu
+  // action instead of leaving the page (screen-logic.js backRoute). On the menu Back leaves the game as usual (after
+  // the guard, if one is still there, a second Back). The address stays the same, so a reload works as before.
+  const hist = globalThis.history;
+  let nav = { root: true, back: null }; // what is on show for Back: root = menu, title or name; back = its Back or Menu action
+  let guardOn = Boolean(hist?.state?.popperGuard); // a reload on the guard entry: it is still there
+  let changedAt = -Infinity; // when the screen last changed (ms), for the double-tap guard (B85)
+  let restoring = false; // true while Back runs a screen's action (onBackButton): no new history entry then
+
+  /**
+   * A new screen is on show: note the time (the double-tap guard) and what Back does there, and make sure the guard
+   * history entry is there when Back should not leave the game.
+   * @param {{root?: boolean, back?: (() => void)|null}} [o] root = the menu, title or name screen; back = its Back or Menu action
+   * @returns {void}
+   */
+  function screenChanged({ root: top = false, back = null } = {}) {
+    changedAt = performance.now();
+    nav = { root: top, back };
+    if (!top) pushGuard();
+  }
+
+  /** Put the guard history entry on top (once), so the phone's Back comes to the game first (B87). @returns {void} */
+  function pushGuard() {
+    if (guardOn || restoring || typeof hist?.pushState !== 'function') return;
+    try { hist.pushState({ popperGuard: true }, ''); guardOn = true; } catch { /* no history here: Back leaves as before */ }
+  }
+
+  /**
+   * The phone's or browser's Back took the guard entry away (B87): do what the screen's own Back or Menu button does
+   * (screen-logic.js backRoute), then put the guard back if the new screen still is not a top screen.
+   * @param {PopStateEvent} e the history event
+   * @returns {void}
+   */
+  function onBackButton(e) {
+    if (e.state?.popperGuard) { guardOn = true; return; } // Forward onto the guard entry again: nothing to do
+    guardOn = false;
+    const route = backRoute({ root: nav.root, overlay: Boolean(guideOverlay), hasBack: typeof nav.back === 'function', ending: Boolean(pop?.ending?.()) });
+    restoring = true; // the new screen must not add an entry here (see below)
+    try {
+      if (route === 'overlay') closeGuideOverlay(true);
+      else if (route === 'back') nav.back();
+    } finally { restoring = false; }
+    // Still not a top screen: step forward onto the same guard entry again. (A new entry added here, without a tap,
+    // could be skipped by the phone's next Back; going forward never is.) The popstate it brings sets guardOn.
+    if (!nav.root) { try { hist.forward(); } catch { pushGuard(); } }
+  }
+  globalThis.addEventListener?.('popstate', onBackButton);
+
+  /**
+   * The double-tap guard (B85): a finger or mouse tap in the first moment after a screen change, and a held Enter or
+   * Space key's repeats on a button, are stopped before any screen sees them (screen-logic.js ignoreInput).
+   * @param {MouseEvent|KeyboardEvent} e the click, keydown or keypress
+   * @returns {void}
+   */
+  function guardInput(e) {
+    const target = e.target;
+    const skip = ignoreInput({
+      type: e.type, trusted: e.isTrusted, pointer: e.detail > 0, repeat: e.repeat, key: e.key,
+      onButton: Boolean(target?.closest?.('button, a[href], [role="button"]')), inPop: Boolean(target?.closest?.('.pop-game')),
+      msSinceChange: performance.now() - changedAt,
+    });
+    if (skip) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }
+  globalThis.addEventListener?.('click', guardInput, true);
+  globalThis.addEventListener?.('keydown', guardInput, true);
+  globalThis.addEventListener?.('keypress', guardInput, true);
+
   /**
    * Show a screen (the old one goes).
    * @param {{node: HTMLElement, dispose: () => void}} next the screen
+   * @param {{root?: boolean, back?: (() => void)|null}} [navOpts] for the phone's Back (B87): root = the menu, title or
+   *   name screen (Back may leave the game); back = what the screen's own Back or Menu button does (none = Back stays)
    * @returns {object} the same screen
    */
-  function show(next) {
+  function show(next, navOpts = {}) {
     clear();
     setMusic({ screen: 'menu' });
+    screenChanged(navOpts);
     screen = next;
     root.append(next.node);
     // The old screen (and the button that was focused on it) is gone: keep keyboard focus in the new screen, so Tab starts
@@ -239,6 +343,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     clear();
     sound.unlock();
     setMusic({ screen: 'comic' });
+    screenChanged(); // a comic: Back stays (it has no Back or Menu button, B87)
     playComic(strip, {
       name: playerName(), reducedMotion: still() || undefined, sound, arts: dressHeroine(ARTS, L.comicOutfit(strip, save)),
       onSeen: (sid) => persist(L.markSeen(save, sid)),
@@ -314,12 +419,12 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     show(createNameScreen({
       t, reducedMotion: still(),
       onDone: (name) => { persist(L.setName(save, name)); showMenu(); },
-    }));
+    }), { root: true });
   }
 
   /** The title screen. @returns {void} */
   function showTitle() {
-    show(createTitleScreen({ t, reducedMotion: still(), onStart: () => { sound.unlock(); showMenu(); }, onAbout: () => showAbout(showTitle) }));
+    show(createTitleScreen({ t, reducedMotion: still(), onStart: () => { sound.unlock(); showMenu(); }, onAbout: () => showAbout(showTitle) }), { root: true });
   }
 
   /**
@@ -338,7 +443,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const date = dailyDate();
     const st = dailyState(save, date);
     if (st.done) return { key: 'ui.menu.dailyDone' };
-    const goal = t(describeGoal(dailyFor(date).goal).nameKey);
+    const goal = t(describeGoal(dailyFor(date, economyFromSave(save).unlockedTools).goal).nameKey); // her tools: No Ows needs a warm cloth (D27c)
     return st.streak ? { key: 'ui.menu.dailySub', vars: { goal, n: st.streak } } : { key: 'ui.menu.dailySubNew', vars: { goal } };
   }
 
@@ -365,7 +470,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       showDaily: L.keepWorkingOpen(save), dailySub: L.keepWorkingOpen(save) ? dailyMenuLine() : null,
       onDaily: () => { sound.unlock(); playDaily(); },
       onAlbum: L.shopOpen(save) ? () => showAlbum(showMenu) : undefined, // the Face album (T8.2): from the career chapter on, like the shop
-    }));
+    }), { root: true });
   }
 
   /**
@@ -374,7 +479,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showAlbum(back) {
-    show(createAlbumScreen({ t, reducedMotion: still(), faces: save.albumFaces, onBack: back }));
+    show(createAlbumScreen({ t, reducedMotion: still(), faces: save.albumFaces, onBack: back }), { back });
   }
 
   /**
@@ -425,8 +530,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const st = dailyState(save, date);
     show(createDailyDoneScreen({
       t, reducedMotion: still(), streak: st.streak, best: st.best,
-      nextGoalKey: describeGoal(dailyFor(addDays(date, 1)).goal).nameKey, onMenu: showMenu,
-    }));
+      nextGoalKey: describeGoal(dailyFor(addDays(date, 1), economyFromSave(save).unlockedTools).goal).nameKey, onMenu: showMenu,
+    }), { back: showMenu });
   }
 
   /**
@@ -435,7 +540,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showGuide(back) {
-    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), onBack: back }));
+    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), onBack: back }), { back });
   }
 
   /**
@@ -449,6 +554,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), overlay: true, onBack: () => closeGuideOverlay(true),
     });
     pop.node.inert = true;
+    changedAt = performance.now(); // the double-tap guard (B85); the phone's Back closes it (B87, onBackButton)
     root.append(guideOverlay.node);
     guideOverlay.focus();
   }
@@ -464,6 +570,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     guideOverlay = null;
     if (!pop) return;
     pop.node.inert = false;
+    changedAt = performance.now(); // the double-tap guard (B85): the Back tap must not land on the scene's buttons
     if (refocus) { // the "?" button, or the face when that button is hidden
       const btn = pop.node.querySelector('.pop-guide');
       (btn && !btn.hidden ? btn : pop.node.querySelector('.pop-canvas'))?.focus({ preventScroll: true });
@@ -476,7 +583,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showStudio(back) {
-    show(createStudioScreen({ t, reducedMotion: still(), ...L.studioViewArgs(save), onBack: back }));
+    show(createStudioScreen({ t, reducedMotion: still(), ...L.studioViewArgs(save), onBack: back }), { back });
   }
 
   /**
@@ -485,7 +592,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showAbout(back) {
-    show(createAboutScreen({ t, reducedMotion: still(), onBack: back }));
+    show(createAboutScreen({ t, reducedMotion: still(), onBack: back }), { back });
   }
 
   /**
@@ -510,7 +617,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     } else if (step.type === 'customer') showIntro(step);
     else {
       persist(L.finishStep(save, step)); // the end: v1 is finished (Continue shows this screen again)
-      show(createEndScreen({ t, reducedMotion: still(), textKey: step.textKey, playerName: save.playerName, onMenu: showMenu }));
+      show(createEndScreen({ t, reducedMotion: still(), textKey: step.textKey, playerName: save.playerName, onMenu: showMenu }), { back: showMenu });
     }
   }
 
@@ -526,7 +633,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const tl = show(createTorchlightScreen({
       t, reducedMotion: still(), roundArgs: L.torchlightArgs(save, step.chapter, flags.seed),
       popOptions: { storage: popStorage, sfxVolume: save.settings.sfxVolume, ...squeezeOptions() }, onContinue: done, onMenu: showMenu,
-    }));
+    }), { back: showMenu });
     tl.unlock();
   }
 
@@ -538,7 +645,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playPhoneScroll(done) {
     sound.unlock();
-    show(createPhoneScrollScreen({ t, sound, seed: flags.seed, reducedMotion: still(), onContinue: done, onMenu: showMenu }));
+    show(createPhoneScrollScreen({ t, sound, seed: flags.seed, reducedMotion: still(), onContinue: done, onMenu: showMenu }), { back: showMenu });
   }
 
   /**
@@ -567,7 +674,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         : step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
       portrait: facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
       hintKey: L.introHintKey(save, step), onStart: () => playRound(step, args), onMenu: showMenu,
-    }));
+    }), { back: showMenu });
   }
 
   /**
@@ -583,6 +690,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
+    screenChanged({ back: showMenu }); // Back = the scene's Menu button (not in the end pause, B87)
     const paintGoal = args.daily ? addPopGoalChip(args.daily.goal) : null; // the daily goal in the header (T8.5)
     // An Ow spoils a "3 stars" or "No Ows" day at once: the chip says so (Try again starts it fresh).
     const goalHooks = paintGoal && OW_GOALS.includes(args.daily.goal.id) ? { onOw: () => paintGoal(true) } : {};
@@ -636,6 +744,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
+    screenChanged({ back: showMenu }); // Back = the scene's Menu button (B87)
     sound.unlock();
     pop.unlock();
     setMusic({ screen: 'free' });
@@ -662,7 +771,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         else if (out.strips.length) playStrips(out.strips, reopen);
         else shop.update({ state: economyFromSave(save) });
       },
-    }));
+    }), { back });
   }
 
   /**
@@ -689,7 +798,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     show(createComicsScreen({
       t, reducedMotion: still(), strips: L.comicsList(), seen: save.seenComics, onBack: showMenu,
       onPlay: (id) => playStrip(id, showComics),
-    }));
+    }), { back: showMenu });
   }
 
   /**
@@ -711,13 +820,13 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   /** Settings: name, switches, export, import and start over. @returns {void} */
   function showSettings() {
     const s = show(createSettingsScreen({
-      t, reducedMotion: still(), playerName: save.playerName, settings: save.settings,
+      t, reducedMotion: still(), osStill: osPrefersStill(), playerName: save.playerName, settings: save.settings,
       onName: (name) => persist(L.setName(save, name)),
       onToggle: (key, value) => {
         persist(L.setSetting(save, key, value));
         if (key === 'sound') sound.setOn(value);
         if (key === 'music') { sound.setMusicOn(value); sound.unlock(); setMusic({ screen: 'menu' }); }
-        if (key === 'reducedMotion') s.node.classList.toggle('app-still', value);
+        if (key === 'reducedMotion') s.node.classList.toggle('app-still', value || osPrefersStill());
         if (key === 'vibration') { try { globalThis.navigator?.vibrate?.(value ? 40 : 0); } catch { /* not allowed here */ } } // a tiny buzz to feel it; off stops any buzz
       },
       onVolume: (key, value, final) => { // a volume slider moved: apply at once, save, and let a let-go effects slider be heard
@@ -748,7 +857,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         boot();
       },
       onBack: showMenu,
-    }));
+    }), { back: showMenu });
   }
 
   /** The first screen: the name screen on a first start, the title otherwise. @returns {void} */

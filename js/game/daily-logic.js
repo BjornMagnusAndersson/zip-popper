@@ -193,18 +193,37 @@ export function goalPossible(goal, kinds) {
 }
 
 /**
+ * The goal of a day for a player (D27c): "No Ows" only when she owns the warm cloth (or nothing is known about her
+ * tools); otherwise "3 stars" or "Beat the clock", whichever is not the day before's or the day after's goal. Only
+ * these two, because they keep the same face (dailySpec lays the face out without knowing her tools; Combo master and
+ * Gold rush may need another face).
+ * @param {number} day day number from the epoch
+ * @param {string} id the day's goal in the rotation (goalIdFor)
+ * @param {string[]|null} ownedTools the tools she owns, or null
+ * @returns {string} a goal id
+ */
+export function noOwSwap(day, id, ownedTools) {
+  if (id !== 'noOw' || !Array.isArray(ownedTools) || ownedTools.includes('warmCloth')) return id;
+  const near = [goalIdFor(day - 1), goalIdFor(day + 1)];
+  return ['stars3', 'clock'].find((g) => !near.includes(g)) ?? 'stars3';
+}
+
+/**
  * The daily challenge of a date, the same for every player: the customer (a named regular about DAILY.regularChance
  * of the days, else a walk-in), the face seed, how many bumps (the career's last block, as in Keep working), the goal
  * and the twist (from the goal's list; 'hurry' only on a clock day). A day whose first face cannot do its goal looks at
  * the next candidate face (up to DAILY.tries). Not a real date = the epoch's challenge.
+ * D27c (R5-pop B75): "No Ows" always brings sensitive skin, which is close to impossible without the warm cloth, so a
+ * player who does not own one gets another goal that day (noOwSwap).
  * @param {string} date 'YYYY-MM-DD'
+ * @param {string[]|null} [ownedTools] the tools she owns (left out = the plain rotation, as for every player)
  * @returns {{date: string, day: number, seed: number, entry: object, bumpCount: number, goal: {id: string, n?: number},
  *   twist: string, mix: Object<string, number>|null}} the challenge (mix = the Gold rush bump mix, else null)
  */
-export function dailyFor(date) {
+export function dailyFor(date, ownedTools = null) {
   const key = isDateKey(date) ? date : DAILY.epoch;
   const day = dayNumber(key) - dayNumber(DAILY.epoch);
-  const id = goalIdFor(day);
+  const id = noOwSwap(day, goalIdFor(day), ownedTools);
   const goal = id === 'combo' ? { id, n: DAILY.comboLength } : id === 'gold' ? { id, n: DAILY.goldCount } : { id };
   const band = CAREER_BANDS[CAREER_BANDS.length - 1];
   const pickRng = makeRng(DAILY.seedBase * 5 + day);

@@ -442,9 +442,10 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
   if (!plain) return null;
   const { holdFactors, roughReductions } = masteryTables(save);
   const career = getChapter(step.chapter)?.kind === 'career';
-  const daily = step.daily ? dailyFor(step.daily) : null; // the daily challenge (T8.5): its own seed, twist and goal
-  const seed = daily ? daily.seed : kw ? keepWorkingSeed(step.n, forcedSeed) : roundSeed(step.chapter, step.n, forcedSeed);
   const unlockedTools = [...economyFromSave(save).unlockedTools];
+  // the daily challenge (T8.5): its own seed, twist and goal ("No Ows" only with a warm cloth, D27c)
+  const daily = step.daily ? dailyFor(step.daily, unlockedTools) : null;
+  const seed = daily ? daily.seed : kw ? keepWorkingSeed(step.n, forcedSeed) : roundSeed(step.chapter, step.n, forcedSeed);
   const bossId = daily ? null : isBoss(forcedBoss) ? forcedBoss : bossFor({ chapter: step.chapter, n: step.n, keepWorking: kw, ownedTools: unlockedTools });
   const spec = bossId ? bossSpec(plain, bossId, seed) : plain; // a boss or event customer (T8.4)
   const decoys = career && (kw || step.n >= 4);
@@ -478,12 +479,15 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
 
 /**
  * What "Next customer" after a fail would cost in reputation right now (the ladder 2, 3, 4, 5 by skips in a row,
- * economy-data.js SKIP_PENALTIES; the same number applyRound takes off).
+ * economy-data.js SKIP_PENALTIES; the same number applyRound takes off). Never more than the reputation she has,
+ * because reputation stops at 0 (B31a): with 1 point the choice says -1, with none it shows no cost.
  * @param {object} save the save
  * @returns {number} reputation points
  */
 export function skipPenaltyNow(save) {
-  return SKIP_PENALTIES[Math.min(economyFromSave(save).skipStreak, SKIP_PENALTIES.length - 1)];
+  const state = economyFromSave(save);
+  const ladder = SKIP_PENALTIES[Math.min(state.skipStreak, SKIP_PENALTIES.length - 1)];
+  return Math.max(0, Math.min(ladder, Math.floor(state.reputation)));
 }
 
 /**

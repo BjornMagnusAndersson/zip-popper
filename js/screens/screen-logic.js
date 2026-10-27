@@ -287,6 +287,56 @@ export function osPrefersStill(env = globalThis) {
   try { return Boolean(env?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches); } catch { return false; }
 }
 
+/**
+ * How the Reduced motion switch should look (B63): On when the player chose it OR the phone asks for it (the screens go calm
+ * either way), plus a note line saying so when the phone is the reason, and the player's own saved choice for that note.
+ * @param {unknown} own the player's own saved choice
+ * @param {boolean} osStill true when the phone's own setting asks for less motion
+ * @returns {{on: boolean, noteKey: string|null, choiceKey: string}} the switch state, the note's string key (or null) and the key of On/Off for the player's own choice
+ */
+export function reducedMotionView(own, osStill) {
+  return { on: Boolean(own) || Boolean(osStill), noteKey: osStill ? 'ui.settings.reducedMotionPhone' : null, choiceKey: own ? 'ui.settings.on' : 'ui.settings.off' };
+}
+
+/** How long taps are ignored on a screen that has just come up (B85: a fast double tap must not land on the next screen). */
+export const TAP_GUARD_MS = 250;
+
+/**
+ * Whether a tap or key should be ignored (B85). A finger or mouse click in the first TAP_GUARD_MS after a screen
+ * change is the second half of a double tap meant for the old screen; a held Enter or Space key's repeats must not press
+ * button after button. One keyboard press (its click has no pointer), clicks made by code (the test bots) and keys in
+ * the pop scene (Enter and Space hold a press there) always go through. The pop scene's finger input is pointer events,
+ * which this guard never sees.
+ * @param {{type: string, trusted?: boolean, pointer?: boolean, repeat?: boolean, key?: string, onButton?: boolean,
+ *   inPop?: boolean, msSinceChange?: number}} e type = 'click', 'keydown' or 'keypress'; trusted = made by the person (isTrusted);
+ *   pointer = a click from a finger or mouse (detail > 0); repeat = a key held down; onButton = the key is on a button or
+ *   link; inPop = inside the pop scene; msSinceChange = ms since the last screen change
+ * @returns {boolean} true = ignore it
+ */
+export function ignoreInput({ type, trusted = false, pointer = false, repeat = false, key = '', onButton = false, inPop = false, msSinceChange = Infinity } = {}) {
+  if (!trusted) return false;
+  if (type === 'click') return pointer && msSinceChange >= 0 && msSinceChange < TAP_GUARD_MS;
+  if (type === 'keydown' || type === 'keypress') return repeat && onButton && !inPop && (key === 'Enter' || key === ' ');
+  return false;
+}
+
+/**
+ * What the phone's Back button (or the browser's) does now (B87): 'leave' on the menu, title and name screen (the
+ * player may leave the game; nothing to do), 'overlay' closes the Field guide over the pop scene, 'back' runs the
+ * screen's own Back or Menu button action (a round: the same as its Menu button), 'stay' where there is no such button
+ * (a comic, a result, a scrub job) or in the short pause after a finished customer (leaving would lose the pay).
+ * @param {{root?: boolean, overlay?: boolean, hasBack?: boolean, ending?: boolean}} o root = a top screen (menu, title,
+ *   name); overlay = the Field guide is open over the pop scene; hasBack = the screen has a Back or Menu button;
+ *   ending = the pop scene's end pause
+ * @returns {'leave'|'overlay'|'back'|'stay'} what to do
+ */
+export function backRoute({ root = false, overlay = false, hasBack = false, ending = false } = {}) {
+  if (overlay) return 'overlay';
+  if (root) return 'leave';
+  if (ending || !hasBack) return 'stay';
+  return 'back';
+}
+
 /** Input types where Escape is not needed for typing. */
 const NON_TEXT_INPUTS = ['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color'];
 

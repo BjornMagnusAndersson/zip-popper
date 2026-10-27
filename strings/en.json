@@ -737,6 +737,7 @@
   "ui.settings.music": "Music",
   "ui.settings.vibration": "Vibration",
   "ui.settings.reducedMotion": "Reduced motion",
+  "ui.settings.reducedMotionPhone": "Your phone asks for less motion, so the game stays calm. Your own choice here: {choice}.",
   "ui.settings.squeeze": "Squeeze with two fingers",
   "ui.settings.squeezeHint": "Put two fingers near a bump and pinch a little to pop it. To zoom, use the + and - buttons, or two fingers away from the bumps.",
   "ui.settings.musicVolume": "Music volume",

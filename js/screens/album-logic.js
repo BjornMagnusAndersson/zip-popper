@@ -63,6 +63,7 @@ export function faceSetup(args, stage = null) {
   const s = roundFaceSetup({
     customer: a.customer, bumpCount: a.bumpCount, allowedTypes: a.allowedTypes,
     unlockedTools: roundTools(a.unlockedTools ?? ['fingers']), decoys: a.decoys, boss: a.boss ?? null,
+    seed: a.seed, request: a.request ?? null, // the same seed and request as the round, so the nose strip toss matches (B59)
   });
   const seed = Number.isFinite(a.seed) && a.seed > 0 ? Math.floor(a.seed) : 1;
   const { w, h } = stageOrDefault(stage);

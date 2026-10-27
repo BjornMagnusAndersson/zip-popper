@@ -46,8 +46,8 @@ export const BOSSES = {
     kind: 'event', needs: [], mix: { gold: 4, whitehead: 5 }, stripAlways: false, grownHorns: 0,
     accessory: 'tiara', difficulty: 0.8, reward: { flat: 0, payScale: null, popScale: 1.25 },
   },
-  horn: { // Big Evil Horn: two horns grown big plus reds; the warm cloth is the way in
-    kind: 'boss', needs: [], mix: { horn: 2, red: 4, whitehead: 2 }, stripAlways: false, grownHorns: 1.2,
+  horn: { // Big Evil Horn: two horns grown big plus reds; the warm cloth is the way in, so it needs one (D27c, B75)
+    kind: 'boss', needs: ['warmCloth'], mix: { horn: 2, red: 4, whitehead: 2 }, stripAlways: false, grownHorns: 1.2,
     accessory: 'sunglasses', difficulty: null, reward: { flat: 15, payScale: null, popScale: 1 },
   },
 };

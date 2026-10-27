@@ -4,7 +4,7 @@
 
 import { el, button, icon, header, screenShell } from './dom.js';
 import { createNameField } from './name.js';
-import { visibleToggles, SETTING_SLIDERS, volumePercent } from './screen-logic.js';
+import { visibleToggles, SETTING_SLIDERS, volumePercent, reducedMotionView } from './screen-logic.js';
 
 /**
  * Build the settings screen.
@@ -12,18 +12,19 @@ import { visibleToggles, SETTING_SLIDERS, volumePercent } from './screen-logic.j
  *   settings?: {sound?: boolean, music?: boolean, vibration?: boolean, reducedMotion?: boolean},
  *   onName?: (name: string) => void, onToggle?: (key: string, value: boolean) => void, onExport?: () => void,
  *   onImport?: (text: string) => void, onReset?: () => void, onBack?: () => void, reducedMotion?: boolean,
- *   onVolume?: (key: string, value: number, final: boolean) => void, canVibrate?: boolean}} opts
+ *   onVolume?: (key: string, value: number, final: boolean) => void, canVibrate?: boolean, osStill?: boolean}} opts
  *   t = string function; playerName = the name now; settings = the switches and the two volumes (musicVolume, sfxVolume,
  *   0 to 1); onName = a clean name was confirmed;
  *   onToggle = a switch changed (setting name, new value); onExport = Export save; onImport = the text of the chosen save
  *   file; onReset = the player confirmed "Start over"; onBack = Back; onVolume = a volume slider moved (setting name,
- *   0 to 1, final = true when the finger or key was let go)
+ *   0 to 1, final = true when the finger or key was let go); osStill = the phone's own reduced-motion setting is on
+ *   (B63: the Reduced motion switch then shows On with a note, while the saved value stays the player's own choice)
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, settings?: object, notice?: {key: string, vars?: object}|null}) => void,
  *   dispose: () => void}} the screen. update can also show a notice line (a string key), such as the result of an import.
  */
 export function createSettingsScreen({
   t, playerName = '', settings = {}, onName, onToggle, onVolume, onExport, onImport, onReset, onBack, reducedMotion = false,
-  canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
+  canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function', osStill = false,
 }) {
   const shell = screenShell('settings', { label: t('ui.settings.title'), reducedMotion });
   let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, ...settings };
@@ -53,9 +54,11 @@ export function createSettingsScreen({
   const switches = visibleToggles(canVibrate).map((tog) => {
     const row = el('div', 'app-switchrow');
     let label = el('span', 'app-switchrow__label', t(tog.labelKey));
-    if (tog.hintKey) { // a switch with a short explanation under its name (the two-finger squeeze, T1.7)
+    let note = null; // the phone-setting note under Reduced motion (B63)
+    if (tog.hintKey || (tog.id === 'reducedMotion' && osStill)) { // a switch with a short explanation under its name (the two-finger squeeze, T1.7)
       const text = el('div', 'app-switchrow__text');
-      text.append(label, el('span', 'app-switchrow__hint', t(tog.hintKey)));
+      note = el('span', 'app-switchrow__hint', tog.hintKey ? t(tog.hintKey) : '');
+      text.append(label, note);
       label = text;
     }
     const sw = el('button', 'app-switch');
@@ -71,13 +74,18 @@ export function createSettingsScreen({
     }, { signal: shell.signal });
     row.append(label, sw);
     switchCard.append(row);
-    return { tog, sw, state };
+    return { tog, sw, state, note };
   });
 
   /** Show every switch as on or off. @returns {void} */
   function paint() {
-    for (const { tog, sw, state } of switches) {
-      const on = Boolean(values[tog.id]);
+    for (const { tog, sw, state, note } of switches) {
+      let on = Boolean(values[tog.id]);
+      if (tog.id === 'reducedMotion') { // On also when only the phone asks (B63); the note shows the player's own saved choice
+        const view = reducedMotionView(values.reducedMotion, osStill);
+        on = view.on;
+        if (note && view.noteKey) note.textContent = t(view.noteKey, { choice: t(view.choiceKey) });
+      }
       sw.setAttribute('aria-checked', String(on));
       sw.classList.toggle('app-switch--on', on);
       state.textContent = t(on ? 'ui.settings.on' : 'ui.settings.off');

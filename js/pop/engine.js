@@ -28,7 +28,7 @@ import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
-  wipeReach, autoWipeSeconds, padRestSpot, popStepOver, stripBusy, wipeStripPress,
+  wipeReach, autoWipeSeconds, padStartSpot, popStepOver, stripBusy, wipeStripPress,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import {
@@ -41,7 +41,7 @@ import {
   gooLook, capList,
 } from './art.js';
 import { SWAY, TICKLE, SENSITIVE } from '../data/twists.js';
-import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset } from './twist-logic.js';
+import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset, ticklishZone } from './twist-logic.js';
 
 const GRID = 8; // mesh cells across the squeezed area
 const WIPE_CELL = 10; // px; goo coverage is counted in cells this size
@@ -174,7 +174,10 @@ export function createPopScene(canvas, o) {
   let warmHold = null; // {id, x, y} the warm cloth held on the face
   let irr = irritationStart(); // the irritation meter (T1.2b): Ows and cold pops fill it, it calms by itself
   // How touchy this customer is (T3.1b, round-logic.js irritationScales): rises are multiplied by rise, calming by drain.
+  // cold = the rise of a cold pop (D27c: softer than an Ow's on hard customers; left out = the same as rise).
   const irrScale = { rise: o.irritation?.rise > 0 ? o.irritation.rise : 1, drain: o.irritation?.drain > 0 ? o.irritation.drain : 1 };
+  irrScale.cold = o.irritation?.cold > 0 ? o.irritation.cold : irrScale.rise;
+  irrScale.calm = Number.isFinite(o.irritation?.calm) && o.irritation.calm >= 0 ? o.irritation.calm : undefined; // seconds before it calms (D27c)
   let irrSent = 0; // the level last told to onIrritation
   let halted = false; // true after halt(): the customer stormed off, presses do nothing
   const roll = typeof o.random === 'function' ? o.random : Math.random; // the rough-press dice
@@ -289,7 +292,11 @@ export function createPopScene(canvas, o) {
     }
     if (twist === 'ticklish' && step === 'pop' && !halted) {
       const held = hold ? { p: hold.p, since: hold.since } : squeeze ? { p: squeeze.p, since: squeeze.since ?? time } : null;
-      if (held && !held.p.popped && tickleDue(time - held.since, held.p.zone, time - giggleAt)) giggle(held.p);
+      const due = held && !held.p.popped && tickleDue(time - held.since, held.p.zone, time - giggleAt);
+      // B74: a squeeze that pops in this very frame pops; she does not giggle first (a plain whitehead's 1.1 s squeeze
+      // is exactly the giggle time, so on a cheek it always giggled away at the last moment and needed a second press).
+      const popsNow = due && pressureStep(held.p.pressure, dt, true, effectiveHold(held.p.hold, held.p.tool ?? START_TOOL, held.p.type, warmth)) >= 1;
+      if (due && !popsNow) giggle(held.p);
     }
     const rx = face ? face.rx : Math.min(w, h) / 3;
     let next = swayOffset(time, swayAmplitude(rx, room, reduced) * swayK);
@@ -301,6 +308,18 @@ export function createPopScene(canvas, o) {
     const moved = next.x !== off.x || next.y !== off.y;
     off = next;
     return swayK > 0 || moved || giggleBlocks(time, giggleAt);
+  }
+
+  /**
+   * Whether a press is only the same squeeze carried on (B73): on a ticklish customer, a new press on a ticklish spot
+   * whose bump still has press progress (she giggled it away, or the player made the short squeezes the hint asks for)
+   * is not a fresh rough-press roll. Before, every forced re-press rolled again, so a cold Evil Horn or big bump on a
+   * cheek collected Ow after Ow and could never be popped by a careful player.
+   * @param {object} p the bump pressed
+   * @returns {boolean} true = no new rough-press roll
+   */
+  function pressAgain(p) {
+    return twist === 'ticklish' && ticklishZone(p.zone) && p.pressure >= 0.05;
   }
 
   /**
@@ -629,7 +648,10 @@ export function createPopScene(canvas, o) {
   function pop(p) {
     if (squeeze?.p === p) { p.gooDir = gooDirection(p.axis); endSqueeze(); } // squeezed out: the goo squirts across
     if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
-      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth) * (p.roughMul ?? 1));
+      // B72: the pop that clears the face stops the meter just under full, so a customer whose every bump is out
+      // never storms off in that same moment (that counted as a fail with no pay, even with no Ow at all).
+      const last = pimples.every((q) => q === p || q.popped);
+      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth) * (p.roughMul ?? 1), last, irrScale.cold);
       if (p.tool === 'cottonPad') irr = irritationSoothe(irr, 'pad');
     }
     p.popped = true;
@@ -701,12 +723,14 @@ export function createPopScene(canvas, o) {
     for (const s of strands) drawStrand(dc, s);
     for (const b of blobs) drawDrop(dc, b);
     let found = scanGoo(dirt, dc);
-    if (!found) {
-      // No pixel access: count the goo by its positions instead.
+    // No pixel access, or a blank picture back (some privacy settings do that; B71: the goo then counted as 0 cells and
+    // the wipe could never reach WIPE_DONE, so the round stuck in the wipe): count the goo by its positions instead.
+    if (!found || found.count === 0) {
       const cols = Math.ceil(w / WIPE_CELL);
       const cells = new Uint8Array(cols * Math.ceil(h / WIPE_CELL));
       let count = 0;
       for (const s of [...strands.flatMap((st) => st.pts), ...blobs]) {
+        if (!(s.x >= 0 && s.x < w && s.y >= 0 && s.y < h)) continue; // goo that flew off the scene cannot be wiped
         const i = Math.floor(s.y / WIPE_CELL) * cols + Math.floor(s.x / WIPE_CELL);
         if (cells[i] === 0) { cells[i] = 1; count += 1; }
       }
@@ -718,9 +742,10 @@ export function createPopScene(canvas, o) {
     const corner = 40 * scale * wipeReach(tool); // the pad waits in the bottom corner (further in when it is the big one)
     let covered = [];
     try { covered = o.covered?.() ?? []; } catch (e) { console.warn('covered failed:', e); }
-    // ...but never behind the tool bar or other buttons (B13 round 2c); the boxes are screen px, so at zoom 1 only.
-    const pad = padRestSpot(w, h, 26 * scale * wipeReach(tool), corner, view.z === 1 ? covered : []);
-    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: 0 };
+    // ...but never behind the tool bar or other buttons (B13 round 2c); the boxes are screen px, so it is found in screen px (B43a).
+    const pad = padStartSpot(shown(), w, h, 26 * scale * wipeReach(tool), corner, covered);
+    // No goo cell on the scene at all (it all flew off): nothing to wipe, the wipe fades out by itself (B71).
+    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: count === 0 ? 0.0001 : 0 };
     setStep('wipe');
   }
 
@@ -935,7 +960,7 @@ export function createPopScene(canvas, o) {
     if (warmth > 0 || warmHold) busy = true;
     // The irritation meter calms by itself after a quiet while, faster with the warm cloth or after a cotton pad.
     if (step === 'pop' && irr.level > 0) {
-      irr = irritationStep(irr, dt, { warm: Boolean(warmHold), drain: irrScale.drain });
+      irr = irritationStep(irr, dt, { warm: Boolean(warmHold), drain: irrScale.drain, calmDelay: irrScale.calm });
       busy = true;
       tellIrritation();
     }
@@ -1275,11 +1300,14 @@ export function createPopScene(canvas, o) {
   /**
    * Raise the irritation meter and tell the controller.
    * @param {number} amount how much, 0..1
+   * @param {boolean} [spare] true = it stops just under full (the pop that clears the face never makes her storm off)
+   * @param {number} [scale] the customer's multiplier for this rise (irrScale.rise; a cold pop uses irrScale.cold)
    * @returns {void}
    */
-  function raiseIrritation(amount) {
+  function raiseIrritation(amount, spare = false, scale = irrScale.rise) {
     if (!(amount > 0)) return;
-    irr = irritationRise(irr, amount * irrScale.rise);
+    irr = irritationRise(irr, amount * scale);
+    if (spare && irr.level >= 1) irr = { ...irr, level: 0.99 };
     tellIrritation(true);
   }
 
@@ -1373,7 +1401,7 @@ export function createPopScene(canvas, o) {
     const out = pressOutcome(tool, p.type);
     if (out === 'ow') { ow(p); return false; }
     if (out !== 'squeeze' && out !== 'pull') return false;
-    if (roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
+    if (!pressAgain(p) && roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
     if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
     delete p.sqReach; // a one-finger hold uses the drawn fingers again (not a two-finger squeeze's ghost pads)
     hold = { p, id: e.pointerId, since: time };
@@ -1504,7 +1532,7 @@ export function createPopScene(canvas, o) {
       const out = pressOutcome(tool, p.type);
       if (out === 'ow') { ow(p); return; }
       if (out !== 'squeeze' && out !== 'pull') return;
-      if (roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
+      if (!pressAgain(p) && roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
     }
     stale = false;
     p.tool = tool;

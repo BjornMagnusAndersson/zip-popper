@@ -8,7 +8,7 @@ import { resolveFaceSpec, characterLayout } from './characters.js';
 
 const POP_SOUND_KEY = 'popper.popSound'; // "on" or "off"; nothing stored = on
 
-/** How much one tap or key press (without holding) adds to the pressure: three of them pop a bump. */
+/** How much one key press (Enter or Space) adds to the pressure: three of them pop a bump. A quick pointer tap adds less (engine.js onUp), so on touch it takes about 4 to 6 taps (TOOLS.md). */
 export const TAP_STEP = 0.34;
 
 /** The face half-width (px) at which the bump radii in data/bumps.js are used as they are; bigger faces get bigger bumps. */
@@ -513,6 +513,26 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allo
     }
     return null;
   };
+  /**
+   * The roomiest bare-skin spot for a bump that found no free place at all (R5-pop, B70: on a small face, a phone held
+   * sideways or a small phone, 9 to 12 bumps cannot all keep a whole fingertip apart, and the last ones used to be put
+   * in their zone's middle with no check, often right on top of another bump): of many random points on bare skin, off
+   * the eyes, mouth, accessories and nose strip, the one whose edge is farthest from every bump already placed.
+   * @param {number} r radius
+   * @param {number} tries how many random points to try
+   * @returns {{x: number, y: number}|null} the point, or null when none is on bare skin
+   */
+  const roomiest = (r, tries) => {
+    let best = null;
+    let bestRoom = -Infinity;
+    for (let k = 0; k < tries; k += 1) {
+      const pt = facePoint(face, ANYWHERE.u[0] + rand() * (ANYWHERE.u[1] - ANYWHERE.u[0]), ANYWHERE.v[0] + rand() * (ANYWHERE.v[1] - ANYWHERE.v[0]));
+      if (!onSkin(face, pt.x, pt.y, r) || face.keepOut.some((kb) => hitsBox(pt.x, pt.y, r * 1.1, kb, 2)) || hitsBox(pt.x, pt.y, r, box, 8)) continue;
+      const room = placed.reduce((m, p) => Math.min(m, Math.hypot(p.x - pt.x, p.y - pt.y) - p.r - r), Infinity);
+      if (room > bestRoom) { best = pt; bestRoom = room; }
+    }
+    return best;
+  };
   for (const it of order) {
     let r = it.r;
     let pt = null;
@@ -522,7 +542,8 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allo
     }
     if (!pt) pt = search(ANYWHERE, r, 600);
     if (!pt) { r = MIN_BUMP_R; pt = search(ANYWHERE, r, 1200); }
-    if (!pt) pt = facePoint(face, (it.zone.u[0] + it.zone.u[1]) / 2, (it.zone.v[0] + it.zone.v[1]) / 2); // never seen in tests
+    if (!pt) pt = roomiest(r, 1500); // no fully free spot: the one with the most room (B70)
+    if (!pt) pt = facePoint(face, (it.zone.u[0] + it.zone.u[1]) / 2, (it.zone.v[0] + it.zone.v[1]) / 2); // no bare skin at all
     placed.push({ ...it, x: pt.x, y: pt.y, r });
   }
   placed.sort((p, q) => p.i - q.i);
@@ -648,7 +669,7 @@ export function holdTime(type) {
 }
 
 /**
- * Pressure after one key press or tap without holding (three presses pop a bump).
+ * Pressure after one key press (three presses pop a bump; a pointer tap is counted in engine.js onUp).
  * @param {number} pressure now
  * @returns {number} the new pressure
  */

@@ -80,6 +80,15 @@ export const DIFFICULTY_BANDS = [
   { upTo: 15, value: 1.5 },
 ];
 
+/**
+ * How the irritation meter reads the difficulty in a customer round (SPEC D27c, R5-pop sweep B75): a cold pop (a red,
+ * big or horn bump squeezed without the warm cloth) is multiplied by the difficulty only up to coldPopMax, so the late
+ * customers stay touchy about Ows (those still use the full difficulty) but a careful player who never makes one can
+ * finish at a normal pace without the warm cloth; and the meter starts to calm calmDelay seconds after the last rise
+ * (data/tools.js IRRITATION.calmDelay, 5 s, is only the fallback outside a round).
+ */
+export const ROUND_IRRITATION = { coldPopMax: 1, calmDelay: 1.5 };
+
 /** Difficulty of the chapter 2 and 3 special customers, and of anything outside the career. */
 export const SPECIAL_DIFFICULTY = 1.0;
 /** Difficulty New Game Plus starts at (after v1). */

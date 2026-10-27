@@ -140,6 +140,24 @@ export function padRestSpot(w, h, radius, corner, covered = []) {
 }
 
 /**
+ * Where the wiping pad waits when the wipe starts, at any zoom (B43a). The controls sit at fixed places on the screen, so
+ * the spot is found in screen px (the pad and the corner grow with the zoom) and then turned back into scene px.
+ * At zoom 1 this is exactly padRestSpot.
+ * @param {{z: number, x: number, y: number}} view the zoom view as drawn (z = zoom, x and y = the scene point at the top left)
+ * @param {number} w scene width
+ * @param {number} h scene height
+ * @param {number} radius the pad's radius in scene px
+ * @param {number} corner how far in from the bottom right corner the pad's middle starts, scene px
+ * @param {{x: number, y: number, w: number, h: number}[]} [covered] boxes of controls over the scene, screen px
+ * @returns {{x: number, y: number}} the pad's middle, scene px
+ */
+export function padStartSpot(view, w, h, radius, corner, covered = []) {
+  const z = view?.z > 0 ? view.z : 1;
+  const s = padRestSpot(w, h, radius * z, corner * z, covered);
+  return { x: (view?.x ?? 0) + s.x / z, y: (view?.y ?? 0) + s.y / z };
+}
+
+/**
  * Seconds the keyboard's automatic wipe takes with this tool in hand: shorter with the cotton pad (PAD_WIPE.autoTime).
  * @param {string} toolId the tool in hand during the wipe
  * @param {number} baseSeconds the usual time
@@ -249,14 +267,16 @@ export function irritationRise(s, amount) {
  * or for a few seconds after a cotton pad pop, it calms faster and at once.
  * @param {{level: number, quiet: number, soothe: number}} s the meter now
  * @param {number} dt seconds since the last step
- * @param {{warm?: boolean, drain?: number}} [o] warm = the warm cloth is held on the face; drain = how fast it calms
- *   compared with normal (1; a harder customer calms slower, see pop/round-logic.js irritationScales)
+ * @param {{warm?: boolean, drain?: number, calmDelay?: number}} [o] warm = the warm cloth is held on the face; drain =
+ *   how fast it calms compared with normal (1; a harder customer calms slower, see pop/round-logic.js
+ *   irritationScales); calmDelay = seconds without a rise before it calms (left out = IRRITATION.calmDelay)
  * @returns {{level: number, quiet: number, soothe: number}} a new state
  */
-export function irritationStep(s, dt, { warm = false, drain = 1 } = {}) {
+export function irritationStep(s, dt, { warm = false, drain = 1, calmDelay = IRRITATION.calmDelay } = {}) {
   const d = Math.max(0, Number(dt) || 0);
   const quiet = s.quiet + d;
-  let rate = quiet >= IRRITATION.calmDelay ? IRRITATION.drainPerSecond : 0;
+  const wait = Number.isFinite(calmDelay) && calmDelay >= 0 ? calmDelay : IRRITATION.calmDelay;
+  let rate = quiet >= wait ? IRRITATION.drainPerSecond : 0;
   if (s.soothe > 0) rate = Math.max(rate, IRRITATION.padDrain);
   if (warm) rate = Math.max(rate, IRRITATION.warmDrain);
   const k = Number.isFinite(drain) && drain > 0 ? drain : 1;

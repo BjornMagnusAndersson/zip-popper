@@ -13,7 +13,12 @@
   padding: calc(6px + env(safe-area-inset-top)) 10px 6px 14px; background: rgba(16, 42, 40, 0.88); color: #fff;
 }
 .pop-titles { flex: 1; min-width: 0; }
-.pop-title { margin: 0; font-weight: 800; font-size: 1.05rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* R5 (B80): a long customer name ("Popping Marta the Mailperson") wraps to a second line instead of being cut to
+   "Popping M..." on a phone; the text is a little smaller on narrow phones. */
+.pop-title {
+  margin: 0; font-weight: 800; font-size: clamp(0.9rem, 0.6rem + 1.6vw, 1.05rem); line-height: 1.2; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
 .pop-count { margin: 2px 0 0; font-size: 0.85rem; color: #f3d9cf; min-height: 1.3em; white-space: nowrap; }
 
 .pop-btn {
@@ -98,7 +103,7 @@
 .pop-done[hidden] { display: none; }
 .pop-done__text { margin: 0; font-size: 1.25rem; font-weight: 800; }
 /* The irritation meter beside the counter line (T1.2b): a small bar that turns hot pink when nearly full. */
-.pop-countline { display: flex; align-items: center; gap: 8px; }
+.pop-countline { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; } /* B80: the twist label goes under the meter when there is no room beside it */
 .pop-irr { flex: none; position: relative; width: 56px; height: 7px; margin-top: 2px; border-radius: 4px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
 .pop-irr__fill { display: block; height: 100%; background: #ffb07a; transform: scaleX(0); transform-origin: left; transition: transform 0.2s linear, background 0.2s; }
 .pop-irr--high .pop-irr__fill { background: #ff4f7b; }
@@ -149,6 +154,13 @@
 }
 .pop-btn--main { color: #062b2b; background: #5eead4; border-color: #5eead4; }
 .pop-btn--main:hover { background: #7ff0de; }
+/* B80: free play on a narrow phone has four header buttons (Menu, sound, ?, New face), which left the title one letter
+   wide: the buttons keep the first row and the title and counter take a row of their own under them. */
+@media (orientation: portrait) and (max-width: 400px) {
+  .pop-head:has(.pop-new:not([hidden])) { flex-wrap: wrap; row-gap: 2px; }
+  .pop-head:has(.pop-new:not([hidden])) .pop-titles { order: 1; flex: 1 0 100%; }
+  .pop-head:has(.pop-new:not([hidden])) .pop-sound { margin-left: auto; }
+}
 
 /* A phone held sideways: the room and face use the whole height; the header splits into a small title card at the
    top left and the buttons at the top right; the hint is a small card at the bottom left. The face sits in the middle
@@ -161,10 +173,12 @@
   }
   .pop-head > * { pointer-events: auto; }
   .pop-titles {
-    flex: 0 1 auto; max-width: 28%; margin-right: auto; padding: 5px 12px 6px; border-radius: 14px;
+    /* B49: the card (after the Menu button, about 86 px in, its padding 24 px) stops before the face's left edge, which is 25 percent of the
+       height left of the middle, so a request banner never covers a forehead bump; the title may wrap to two lines. */
+    flex: 0 1 auto; max-width: max(100px, min(28%, calc(50vw - 25vh - 124px))); margin-right: auto; padding: 5px 12px 6px; border-radius: 14px;
     background: rgba(16, 42, 40, 0.82);
   }
-  .pop-title { font-size: 0.95rem; }
+  .pop-title { font-size: 0.95rem; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .pop-count { font-size: 0.8rem; min-height: 1.2em; }
   .pop-head .pop-btn { background: rgba(16, 42, 40, 0.82); }
   .pop-head .pop-btn:hover { background: rgba(40, 72, 68, 0.9); }

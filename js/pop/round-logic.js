@@ -7,6 +7,7 @@ import { FACE_BUMPS, holdTime, faceGeometry, layoutFace } from './logic.js';
 import { toolBarIds, START_TOOL, bestToolFor, effectiveHold } from './tool-logic.js';
 import { isImplemented } from '../data/bumps.js';
 import { makeRng } from '../data/customers.js';
+import { ROUND_IRRITATION } from '../data/economy-data.js';
 import { describeRequest, requestProgress, requestResult } from '../game/requests.js';
 import { starsFor } from '../game/scoring.js';
 
@@ -130,12 +131,15 @@ export function stripChance(seed) {
  * How a customer's difficulty changes the irritation meter (ECONOMY.md section 7, SPEC D15): every rise (an Ow or a
  * cold pop) is multiplied by the difficulty, and the meter calms at 1 / difficulty of its normal speed. So 1.0 is
  * the meter as it was built, 0.6 is very forgiving and 1.3 is touchy. Not a number = 1.
+ * D27c (data/economy-data.js ROUND_IRRITATION): a cold pop's rise uses the difficulty only up to coldPopMax (cold), and
+ * the meter starts to calm calm seconds after the last rise.
  * @param {number} difficulty from chapter-logic.js customerSpec (or economy.js difficultyFor)
- * @returns {{rise: number, drain: number}} multipliers for the rise and the calming speed
+ * @returns {{rise: number, drain: number, cold: number, calm: number}} multipliers for an Ow's rise, the calming speed
+ *   and a cold pop's rise, and the seconds before it calms
  */
 export function irritationScales(difficulty) {
   const d = clamp(positive(difficulty, 1), DIFFICULTY_MIN, DIFFICULTY_MAX);
-  return { rise: d, drain: 1 / d };
+  return { rise: d, drain: 1 / d, cold: Math.min(d, ROUND_IRRITATION.coldPopMax), calm: ROUND_IRRITATION.calmDelay };
 }
 
 /**
@@ -251,6 +255,30 @@ export function requestView(request, roundState, elapsedSeconds) {
   const secondsLeft = request.type === 'hurry' && status === 'open'
     ? Math.max(0, Math.ceil(positive(request.timeLimit, 0) - Math.max(0, Number(elapsedSeconds) || 0))) : null;
   return { ...text, status, secondsLeft };
+}
+
+/**
+ * How long the page has been hidden (B83, phone call, app switch, lock screen): the time since it went hidden, or 0
+ * when it is not hidden (hiddenSince null). On return this is added to a clock's start, so the hidden time never counts.
+ * @param {number|null} hiddenSince when the page went hidden (ms, performance.now), or null when it is on show
+ * @param {number} now the time now (ms, same clock)
+ * @returns {number} ms hidden (never below 0)
+ */
+export function hiddenMs(hiddenSince, now) {
+  if (hiddenSince === null || hiddenSince === undefined || !Number.isFinite(hiddenSince)) return 0;
+  return Math.max(0, (Number(now) || 0) - hiddenSince);
+}
+
+/**
+ * Seconds a round clock shows (B83): from its start to now, standing still while the page is hidden (the hidden part
+ * is not counted yet; on return the start moves on by hiddenMs, so the clock goes on from where it stopped).
+ * @param {number} startAt when the clock started (ms, performance.now; already moved on for earlier hidden times)
+ * @param {number} now the time now (ms)
+ * @param {number|null} [hiddenSince] when the page went hidden, or null when it is on show
+ * @returns {number} seconds (never below 0)
+ */
+export function clockSeconds(startAt, now, hiddenSince = null) {
+  return Math.max(0, (Number(now) || 0) - hiddenMs(hiddenSince, now) - (Number(startAt) || 0)) / 1000;
 }
 
 /**
