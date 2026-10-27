@@ -53,10 +53,17 @@ export const TOOLS = {
   cream: { // the cleanup cream: today it goes on by itself after the wipe (engine.js), no button
     implemented: false, bar: false, unlockChapter: 1, use: 'cleanup', works: [], holdScale: { default: 1 }, roughScale: 0,
   },
-  gloves: { // removes the hidden "ick"; looks silly and professional (data only until the ick exists)
+  gloves: { // worn, no button (SPEC D32e): blue gloves on her fingertips and a calmer customer (GLOVES); later removes the "ick"
     implemented: false, bar: false, unlockChapter: 5, unlockAtEnd: true, use: 'wear', works: [], holdScale: { default: 1 }, roughScale: 0,
   },
 };
+
+/**
+ * What the gloves do once she owns them (after the hygiene scare, SPEC D32e): customers relax a bit, so the round's
+ * difficulty is multiplied by calm (0.9: the irritation meter fills 10% slower and calms a little faster). Better glove
+ * tiers with bigger bonuses come after v1 (BUILD-PLAN P11).
+ */
+export const GLOVES = { calm: 0.9 };
 
 /** Every tool id, in table order (also the order of the buttons in the tool bar). */
 export const TOOL_IDS = Object.keys(TOOLS);

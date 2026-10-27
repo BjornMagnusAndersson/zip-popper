@@ -1,4 +1,4 @@
-// Chapter 0 strip "Happy hands" (T4.2): how the Great Popping Ban began. 11 panels.
+// Chapter 0 strip "Happy hands" (T4.2): how the Great Popping Ban began. 11 panels, played in two parts (see PANELS).
 // Beginning: {name} pops everything (bubble wrap, then a week-long montage: balloons, peas, his football).
 // Middle: she spots a teeny bump on his chin, the happy hands come, POP. End: the Great Popping Ban, rule by rule.
 // Button: that very night, a torch glows under the blanket. Running gag: everything she asks, he answers "No."
@@ -33,10 +33,11 @@ const balloon = (x, y, fill) => [
   { shape: 'ellipse', x: x - 20, y: y - 26, rx: 12, ry: 20, fill: '#ffffff', opacity: 0.6 },
 ];
 
-export const STRIP = {
-  id: 'strip0',
-  title: 'comic.s0.title',
-  panels: [
+// SPEC D32a (owner, 2026-10-27): the strip is played in two parts around the husband round, so the first pop happens
+// in play and the ban comes after it: STRIP = panels 1 to 7 (up to "Not the happy hands!"), then the round, then
+// STRIP_BAN = panels 9 to 11 (the ban, "No.", that very night). Panel 8 (the POP splash) is kept here but not played:
+// the round is the pop now.
+const PANELS = [
     {
       // 1. Meet {name}: popping bubble wrap with joy. He watches TV with the patience of a saint.
       layout: 'wide',
@@ -229,5 +230,10 @@ export const STRIP = {
         { kind: 'caption', key: 'comic.s0.p11.end', at: [450, 1140], w: 780 },
       ],
     },
-  ],
-};
+];
+
+/** Part 1 (chapter 0's opening strip): panels 1 to 7, up to the moment before the pop. */
+export const STRIP = { id: 'strip0', title: 'comic.s0.title', panels: PANELS.slice(0, 7) };
+
+/** Part 2 (after the husband round, SPEC D32a): panels 9 to 11, the Great Popping Ban and that very night. */
+export const STRIP_BAN = { id: 'strip0b', title: 'comic.s0b.title', panels: PANELS.slice(8) };

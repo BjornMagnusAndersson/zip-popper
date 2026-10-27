@@ -76,13 +76,11 @@ const banner = (x, y, k) => [
 /** Her husband in his fanciest armor yet: six plumes and Greta's knitted hat (cape and banner are separate layers). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
 const knight = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, outfit: 'armor', visor: 'down', plumes: 6, cozy: '#f27eb2', ...o });
 
-/** Yellow highlighter stripes across the plant's leaves (she highlighted everything). @param {number} x plant x @param {number} F floor y @returns {object[]} layers */
-const highlightedPlant = (x, F) => [-120, -170, -220].map((dy, i) => ({ shape: 'path', d: `M${x - 70 + i * 10} ${F + dy} L${x + 70 - i * 10} ${F + dy - 14}`, stroke: '#e9f542', sw: 16, opacity: 0.75 }));
-
 export const STRIP = {
   id: 'books',
   title: 'comic.books.title',
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
   panels: [
     {
       // 1. After closing. The studio is still shabby, but there is a patch of new paint. Some customers still run away.
@@ -152,7 +150,7 @@ export const STRIP = {
           studio(1000, 1000, { floorY: 700, windowX: 0.56, door: false, leak: false, sign: false, bulbX: 0.82, plantX: 0.22, plantEyes: 'smug', lamp: false }),
           night(1000, 1000),
           ...bookTower(880, 990, 6, 0.8),
-          { id: 'plant', shape: 'rect', x: 180, y: 520, w: 80, h: 60, opacity: 0, mouth: [220, 560] },
+          { id: 'plant', shape: 'rect', x: 180, y: 440, w: 80, h: 60, opacity: 0, mouth: [220, 460] }, // the top of the plant (shelf or floor)
           { id: 'her', art: 'heroine', x: 620, y: 990, scale: 0.85, pose: 'wave', hold: 'highlighter', expr: 'happy', flip: true },
         ],
       },
@@ -160,7 +158,7 @@ export const STRIP = {
       bubbles: [
         { kind: 'caption', key: 'comic.books.p4.cap', at: [250, 60], w: 420 },
         { kind: 'say', key: 'comic.books.p4.her', at: [780, 200], to: 'her', w: 360 },
-        { kind: 'say', key: 'comic.books.p4.plant', at: [220, 330], to: 'plant', w: 120 },
+        { kind: 'say', key: 'comic.books.p4.plant', at: [220, 240], to: 'plant', w: 120 }, // above the plant (shelf or floor)
       ],
     },
     {
@@ -168,8 +166,8 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, door: false, windowX: 0.5, leakX: 0.8, bulbX: 0.35, signX: 0.58, signTilt: 10, plantX: 0.14, plantEyes: 'sad', lamp: false }),
-          ...highlightedPlant(224, 600),
+          // The plant has been highlighted too (plantHighlight: the stripes follow whichever plant she has, SPEC D32j).
+          studio(1600, 900, { floorY: 600, door: false, windowX: 0.5, leakX: 0.8, bulbX: 0.35, signX: 0.58, signTilt: 10, plantX: 0.14, plantEyes: 'sad', plantHighlight: true, lamp: false }),
           night(1600, 900),
           { art: 'bucket', x: 1460, y: 830, scale: 0.5 },
           ...bookTower(1180, 880, 8, 0.8),

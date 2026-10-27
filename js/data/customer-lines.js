@@ -29,6 +29,12 @@ export const OLD_STYLE_KINDS = ['intro', 'happy', 'ok', 'ow', 'deadline'];
  */
 export const WALK_IN_LINES = { firstOnly: [2, 6], clockOnly: [8], intro: 12, back: 10, aside: 14 };
 
+/**
+ * Plain "hello again" intros (customer.again.1 to N, SPEC D32f) for anyone whose last visit ended with them storming
+ * off: no praise for a "last time" that went wrong. Used instead of every other intro on that return visit.
+ */
+export const AGAIN_LINES = { count: 4 };
+
 /** The husband (chapters 0 and 2) keeps his lines; his second line is this aside unless he has a clock (never in v1). */
 export const HUSBAND_ASIDES = { husband: 'chapter.0.husband.aside', husbandArmor: 'chapter.2.husband.aside' };
 

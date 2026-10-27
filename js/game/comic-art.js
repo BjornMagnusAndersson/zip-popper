@@ -12,6 +12,7 @@
 // expression or pose by adding a row to those tables. Every art function returns { node, mouth } (mouth in panel units).
 
 export const INK = '#2a211d'; // the outline colour (face.js 'black')
+export const GLOVE_BLUE = '#6fc3ef'; // her rubber gloves, the same blue as the inspector's glove box (SPEC D32e)
 /** Skin tones, the same middle colours as face.js SKIN_TONES. */
 export const SKIN = { fair: '#f6d6c2', light: '#ebb795', tan: '#d29a6c', olive: '#c09468', brown: '#946040', deep: '#62402e' };
 /** Hair colours, the same as face.js HAIR_COLOURS. */
@@ -683,7 +684,7 @@ function arm(sh, elb, hand, out, skinFill, o) {
   }
   if (out.armor) g.appendChild(el('circle', { cx: elb[0] * 0.5 + (sh[0] + hand[0]) * 0.25, cy: elb[1] * 0.5 + (sh[1] + hand[1]) * 0.25, r: 22, fill: '#aeb9c6', ...ink(4.5) }));
   if (o.hold) return g; // a hand holding something is drawn over the thing instead (see drawCharacter)
-  const hf = out.armor ? '#aeb9c6' : skinFill;
+  const hf = out.armor ? '#aeb9c6' : o.handFill ?? skinFill; // handFill = her blue gloves (SPEC D32e)
   if (o.open || o.wiggle) {
     g.appendChild(el('g', { transform: `translate(${hand[0]} ${hand[1]})` }, [openHand(hf, o)]));
   } else {
@@ -862,7 +863,7 @@ function heldThing(what, at, k = 1) {
  */
 function gloveBox() {
   const g = el('g');
-  const blue = '#6fc3ef';
+  const blue = GLOVE_BLUE;
   // The glove sticking out of the top: palm and four fingers, slightly puffed with air.
   for (const [a, len] of [[-34, 54], [-12, 66], [10, 62], [32, 50]]) g.appendChild(el('rect', { x: -12, y: -len, width: 24, height: len, rx: 12, fill: blue, ...ink(4), transform: `translate(${a * 1.4 + 4} -150) rotate(${a * 0.6})` }));
   g.appendChild(el('ellipse', { cx: 6, cy: -142, rx: 58, ry: 28, fill: blue, ...ink(4.5) }));
@@ -915,6 +916,8 @@ export function drawCharacter(who, l) {
   const sy = -385 + down;
   const headY = -515 + down;
   const skinFill = shading(body, SKIN[c.skin] ?? c.skin);
+  // Gloves (SPEC D32e): true = her blue gloves, or a colour; the hands are drawn in it instead of skin.
+  const handFill = c.gloves ? (c.gloves === true ? GLOVE_BLUE : c.gloves) : skinFill;
   const shoulders = [[-b.shoulder + 22, sy + 26], [b.shoulder - 22, sy + 26]];
   const legNode = legs(pose.legs, hy, b, out);
   if (legNode) body.appendChild(legNode);
@@ -932,13 +935,13 @@ export function drawCharacter(who, l) {
       const side = i ? 1 : -1;
       const dy = [elb[1] + down, hand[1] + down];
       const held = i === 1 && c.hold ? heldThing(c.hold, [hand[0], dy[1]], c.holdScale) : null;
-      const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side, hold: !!held };
+      const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side, hold: !!held, handFill };
       body.appendChild(arm(shoulders[i], [elb[0], dy[0]], [hand[0], dy[1]], out, skinFill, o));
       if (held) {
         // The fist goes over the thing, fingers wrapped across it and the thumb on top, so it looks gripped.
         const turn = 90 + (c.hold === 'torch' ? -35 : 0);
         body.appendChild(held);
-        body.appendChild(el('g', { transform: `translate(${hand[0]} ${dy[1]}) rotate(${turn}) scale(0.9)` }, [closedHand(out.armor ? '#aeb9c6' : skinFill, { side })]));
+        body.appendChild(el('g', { transform: `translate(${hand[0]} ${dy[1]}) rotate(${turn}) scale(0.9)` }, [closedHand(out.armor ? '#aeb9c6' : handFill, { side })]));
       }
     });
   }
@@ -1335,7 +1338,9 @@ function laundry(g, r, w, F) {
  * @param {object} l layer: kind (a key of ROOMS), w and h (the panel size), floorY (height of the floor line),
  *   windowX (0..1 across), and any ROOMS field to switch an item on or off; plantSill (true or a scale) draws the
  *   sad little plant from the plan strip on the window sill instead of the big floor plant (it keeps plantEyes and
- *   plantScarf, and droops when its eyes are sad)
+ *   plantScarf, and droops when its eyes are sad); plantShelf (true or a scale) puts that little plant, drooping, on
+ *   a small crate at plantX instead (comic-art.js studioKit, SPEC D32j); plantHighlight draws yellow highlighter
+ *   stripes across whichever plant is there
  * @returns {{node: SVGElement}} the room
  */
 function room(l) {
@@ -1402,10 +1407,25 @@ function room(l) {
     g.appendChild(el('rect', { x: px - 10, y: py - 10, width: 220, height: 170, fill: 'none', stroke: '#b07a4a', 'stroke-width': 12 }));
     g.appendChild(el('rect', { x: px - 16, y: py - 16, width: 232, height: 182, fill: 'none', ...ink(4) }));
   }
-  if (r.plant && l.plantSill) {
-    // R8: the small plant she adopted in the plan strip, on the sill where she put it (not yet the shop's living plant).
-    const s = typeof l.plantSill === 'number' ? l.plantSill : 0.32 * F / 600;
-    g.appendChild(plant({ x: wx + ww * 0.74, y: wy + wh + 2, scale: s, eyes: l.plantEyes, scarf: l.plantScarf || undefined, droop: l.plantEyes === 'sad' }).node);
+  if (r.plant && (l.plantSill || l.plantShelf)) {
+    // R8: the small plant she adopted in the plan strip (not yet the shop's living plant): on the window sill where she
+    // put it (strip 5), or later on a small crate at plantX (SPEC D32j).
+    const want = l.plantSill || l.plantShelf;
+    const s = typeof want === 'number' ? want : 0.32 * F / 600;
+    let x = wx + ww * 0.74;
+    let y = wy + wh + 2;
+    if (!l.plantSill) {
+      // On a small wooden crate on the floor, where the big plant's pot stands: below the speech bubbles, and in the
+      // same spot the strips aim their jokes and eyes at.
+      x = w * (l.plantX ?? 0.06);
+      const k = F / 600;
+      y = F - 14 * k;
+      g.appendChild(el('rect', { x: x - 62 * k, y, width: 124 * k, height: 36 * k, rx: 4 * k, fill: '#a07a48', ...ink(4) }));
+      g.appendChild(line(`M${x - 52 * k} ${y + 18 * k} L${x + 52 * k} ${y + 18 * k}`, 3, { opacity: 0.5 }));
+    }
+    g.appendChild(plant({ x, y: y + 2, scale: s, eyes: l.plantEyes, scarf: l.plantScarf || undefined, droop: l.plantSill ? l.plantEyes === 'sad' : true }).node);
+    // She highlighted everything (strip "books"): yellow stripes across the leaves.
+    if (l.plantHighlight) for (const [dy, i] of [[160, 0], [205, 1], [250, 2]]) g.appendChild(el('path', { d: `M${x - (100 - i * 14) * s} ${y - dy * s} L${x + (100 - i * 14) * s} ${y - dy * s - 20 * s}`, stroke: '#e9f542', 'stroke-width': 22 * s, opacity: 0.75, 'stroke-linecap': 'round' }));
   } else if (r.plant) {
     const px = w * (l.plantX ?? 0.06);
     for (const [a, len] of [[-40, 150], [-15, 190], [10, 170], [35, 140], [-60, 110], [55, 105]]) {
@@ -1429,6 +1449,8 @@ function room(l) {
       g.appendChild(el('path', { d: `M${px + 18} ${F - 120} L${px + 46} ${F - 50} L${px + 70} ${F - 60} L${px + 38} ${F - 126}Z`, fill: l.plantScarf, ...ink(4) }));
       g.appendChild(line(`M${px - 10} ${F - 140} l0 30 M${px + 12} ${F - 142} l0 30 M${px + 36} ${F - 90} l20 -8`, 5, { stroke: '#ffffff', opacity: 0.8 }));
     }
+    // She highlighted everything (strip "books"): yellow stripes across the leaves.
+    if (l.plantHighlight) for (const [dy, i] of [[-120, 0], [-170, 1], [-220, 2]]) g.appendChild(el('path', { d: `M${px - 70 + i * 10} ${F + dy} L${px + 70 - i * 10} ${F + dy - 14}`, stroke: '#e9f542', 'stroke-width': 16, opacity: 0.75 }));
   }
   if (r.board) {
     // A cork notice board with pinned papers and doodles (no words: words go in bubbles).
@@ -1860,6 +1882,29 @@ export function dressHeroine(arts, outfit) {
   /** Her layer in the outfit; with a cap outfit the cap comes off when she relaxes (capOnFor, T5.2b). @param {object} l @returns {object} */
   const dress = (l) => (cap ? { ...l, outfit, cap: capOnFor(l) } : { ...l, outfit });
   return { ...arts, heroine: (l, kit) => arts.heroine(l.outfit === undefined ? dress(l) : l, kit) };
+}
+
+/**
+ * The art kit with her studio and hands as she has them now (SPEC D32e and D32j), for strips set in her studio after
+ * the shop opens:
+ * - gloves: true = every heroine layer that does not say otherwise wears her blue gloves (she owns them, after the scare);
+ * - livingPlant: false = the studio's plant is the sad little plant (the one the game's tier-0 studio shows) on a
+ *   small crate at its spot, and a plant on its own droops (she has not bought the living plant yet); true = the strips draw the
+ *   big plant as they are.
+ * @param {Record<string, Function>} arts an art kit (usually ARTS, maybe already dressed)
+ * @param {{gloves?: boolean, livingPlant?: boolean}|null} [o] what she has (null or nothing = the kit unchanged)
+ * @returns {Record<string, Function>} the art kit to hand the comic player
+ */
+export function studioKit(arts, o = null) {
+  if (!o) return arts;
+  const kit = { ...arts };
+  if (o.gloves && typeof arts.heroine === 'function') kit.heroine = (l, k) => arts.heroine(l.gloves === undefined ? { ...l, gloves: true } : l, k);
+  if (o.livingPlant === false) {
+    // A studio room keeps its own plantSill if it sets one, else its plant sits on the shelf; a stand-alone plant droops.
+    if (typeof arts.room === 'function') kit.room = (l, k) => arts.room(l.kind === 'studio' && l.plantSill === undefined && l.plantShelf === undefined ? { ...l, plantShelf: true } : l, k);
+    if (typeof arts.plant === 'function') kit.plant = (l, k) => arts.plant(l.droop === undefined ? { ...l, droop: true } : l, k);
+  }
+  return kit;
 }
 
 /** Poses where she is relaxed, celebrating or seen close up: in a `dressed` strip her scrub cap is off there (T5.2b). */

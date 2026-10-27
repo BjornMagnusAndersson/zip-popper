@@ -10,6 +10,7 @@
 
 import { REGULARS, makeCustomer } from '../data/customers.js';
 import { getChapter, CAREER_BANDS } from '../data/chapters.js';
+import { progressFromSave } from '../game/chapter-logic.js';
 import { roundFaceSetup, roundTools } from '../pop/round-logic.js';
 import { faceMood } from '../pop/logic.js';
 
@@ -300,28 +301,45 @@ export function entryNameKey(entry) {
   return REGULARS.find((r) => r.id === entry.id)?.nameKey ?? entry.nameKey ?? 'ui.album.stranger';
 }
 
+/** The regulars she meets in the strips before she ever pops them: the support group of strip 3 (SPEC D32g). */
+export const STRIP_FRIENDS = ['greta', 'nils', 'penny'];
+
 /**
- * What the album screen shows: every named regular in the order she meets them (met = their entry, not met = a locked
- * "?" tile), then the strangers, the most recently seen first, and the counts for the header.
+ * Whether the story has shown the support group (strip 3 "The meeting"), so its members count as met in the album.
+ * @param {object} save the save
+ * @returns {boolean} true = Greta, Nils and Penny are known friends
+ */
+export function stripFriendsMet(save) {
+  if (save?.endingSeen || (save?.seenComics ?? []).includes('strip3')) return true;
+  return progressFromSave(save).chapter > 3;
+}
+
+/**
+ * What the album screen shows: every named regular in the order she meets them (met = their entry, a support-group
+ * friend from the strips not popped yet = a named friend tile, not met = a locked "?" tile), then the strangers, the
+ * most recently seen first, and the counts for the header.
  * Boss and event faces (T8.4, entries with a stamp) are their own entries: a regular's tile shows their plain entry,
  * or their stamped one when she has only met them on an event day (so they count as met); every other stamped face
  * goes into `events` (most recently seen first).
  * @param {object[]|undefined} list the album (save.albumFaces)
- * @returns {{regulars: {id: string, nameKey: string, entry: object|null}[], strangers: object[], events: object[],
- *   met: number, total: number, faces: number}} the view
+ * @param {{friendsMet?: boolean}} [o] friendsMet = the strips have shown the support group (stripFriendsMet)
+ * @returns {{regulars: {id: string, nameKey: string, entry: object|null, friend: boolean}[], strangers: object[],
+ *   events: object[], met: number, total: number, faces: number}} the view (friend = met in the strips, no face yet)
  */
-export function albumView(list) {
+export function albumView(list, { friendsMet = false } = {}) {
   const faces = Array.isArray(list) ? list : [];
-  const regulars = REGULARS.map((r) => ({
-    id: r.id, nameKey: r.nameKey, entry: faces.find((e) => e.id === r.id && !e.stamp) ?? faces.find((e) => e.id === r.id) ?? null,
-  }));
+  const regulars = REGULARS.map((r) => {
+    const entry = faces.find((e) => e.id === r.id && !e.stamp) ?? faces.find((e) => e.id === r.id) ?? null;
+    return { id: r.id, nameKey: r.nameKey, entry, friend: !entry && friendsMet && STRIP_FRIENDS.includes(r.id) };
+  });
   /** Most recently seen first. @param {object} a an entry @param {object} b an entry @returns {number} sort order */
   const newest = (a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0);
   const shown = new Set(regulars.map((r) => r.entry).filter(Boolean));
   const strangers = faces.filter((e) => !e.stamp && !REGULARS.some((r) => r.id === e.id)).sort(newest);
   const events = faces.filter((e) => e.stamp && !shown.has(e)).sort(newest);
-  const met = regulars.filter((r) => r.entry).length;
-  return { regulars, strangers, events, met, total: REGULARS.length, faces: met + strangers.length + events.length };
+  const met = regulars.filter((r) => r.entry || r.friend).length;
+  const popped = regulars.filter((r) => r.entry).length;
+  return { regulars, strangers, events, met, total: REGULARS.length, faces: popped + strangers.length + events.length };
 }
 
 /**

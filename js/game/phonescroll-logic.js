@@ -2,7 +2,7 @@
 // test them. 2:42 am: she scrolls a feed of cartoon face videos on her phone. Each video card has a few tiny bumps to
 // tap pop-it style (no score, no money, no failing). The feed moves on by itself after a while (later if she is
 // popping, sooner when every bump is done); she may also flick, but only slowly. Likes tick up on the other people's
-// videos, the "videos watched" counter and the phone clock creep up, and her tea goes cold. After the last video comes
+// videos, the "videos watched" counter and the phone clock creep up, and her cold tea gets colder. After the last video comes
 // the idea card ("I could do this for a living") and its Continue goes on to strip 5.
 // Everything here is pure: plain objects in, new plain objects out (screens/phone-scroll.js draws it).
 
@@ -24,6 +24,7 @@ export const PHONE = {
   hairStyles: 4, // how many hair shapes the screen can draw
   minBumps: 3,
   maxBumps: 5,
+  teaStart: 0.3, // the tea's warmth at the first card: already cold (strip 4: "The tea went cold on Tuesday", SPEC D32b)
 };
 
 /** Where tiny bumps can sit on a video face (0..1 of the face picture; away from the eyes and the mouth). */
@@ -223,14 +224,15 @@ export function likeText(n) {
 }
 
 /**
- * How warm her tea still is on a card: 1 = steaming at the first card, 0 = stone cold by the idea card.
+ * How warm her tea still is on a card: PHONE.teaStart (already cold, no steam) at the first card, 0 = stone cold
+ * by the idea card.
  * @param {number} index the card index
  * @param {number} total how many cards the feed has (the idea card included)
  * @returns {number} warmth 0..1
  */
 export function teaWarmth(index, total) {
   if (total <= 1) return 0;
-  return Math.max(0, Math.min(1, 1 - index / (total - 1)));
+  return Math.max(0, Math.min(1, 1 - index / (total - 1))) * PHONE.teaStart;
 }
 
 /**

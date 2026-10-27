@@ -97,15 +97,17 @@ function makeRoster(count, baseSeed, regulars, seeds = {}) {
  * - special: for kind 'special', the id of the small special mode played after the strip (no customers).
  * - customers: roster (see makeRoster); empty for special chapters.
  * - difficulty: the irritation difficulty of every customer (career chapters use CAREER_BANDS instead).
- * - after: steps that come after the last customer or the special mode. Chapter 4: the bridge strip "The plan" (type
- *   'bridge', STORY.md strip 4b: she finds and rents the place between "I will do it for a living!" and opening day).
+ * - after: steps that come after the last customer or the special mode. Chapter 0: the second part of strip 0, the ban
+ *   (type 'bridge', SPEC D32a). Chapter 4: the second part of strip 4, the idea (SPEC D32b), then the bridge strip "The
+ *   plan" (STORY.md strip 4b: she finds and rents the place between "I will do it for a living!" and opening day).
  *   Chapter 5: the hygiene scare (gloves unlock), the teaser strip, then the "To be continued" screen.
  * - shop: tool ids that become buyable when the chapter starts.
  */
 export const CHAPTERS = [
   {
     id: 0, titleKey: 'chapter.0.title', strip: 'strip0', kind: 'tutorial',
-    customers: [{ who: 'husband' }], difficulty: 0.6, after: [], shop: [],
+    // SPEC D32a: strip 0 up to the moment before the pop, the round (the first pop), then the ban (strip0b).
+    customers: [{ who: 'husband' }], difficulty: 0.6, after: [{ type: 'bridge', strip: 'strip0b' }], shop: [],
   },
   {
     id: 1, titleKey: 'chapter.1.title', strip: 'strip1', kind: 'special', special: 'torchlight',
@@ -121,9 +123,9 @@ export const CHAPTERS = [
   },
   {
     id: 4, titleKey: 'chapter.4.title', strip: 'strip4', kind: 'special', special: 'phoneScroll',
-    // After the phone scroll: the bridge strip "The plan" (a save already in chapter 5 never gets it in the story;
-    // it can be replayed from the Comics list).
-    customers: [], difficulty: 1.0, after: [{ type: 'bridge', strip: 'plan' }], shop: [],
+    // After the phone scroll: the rest of strip 4, the idea at 2:51 am (strip4b, SPEC D32b), then the bridge strip "The
+    // plan" (a save already in chapter 5 never gets them in the story; they can be replayed from the Comics list).
+    customers: [], difficulty: 1.0, after: [{ type: 'bridge', strip: 'strip4b' }, { type: 'bridge', strip: 'plan' }], shop: [],
   },
   {
     id: 5, titleKey: 'chapter.5.title', strip: 'strip5', kind: 'career',

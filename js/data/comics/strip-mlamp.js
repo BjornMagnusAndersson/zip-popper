@@ -81,6 +81,7 @@ export const STRIP = {
   id: 'mlamp',
   title: 'comic.mlamp.title',
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
   panels: [
     {
       // 1. Closing time, the bulb has given up. She squints at a pore; Nils squints back.

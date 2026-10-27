@@ -660,9 +660,10 @@ export function drawSplat(ctx, s, now) {
  * @param {number} angle direction from the tip towards the hand (radians)
  * @param {number} width finger width
  * @param {number} alpha opacity (fades in as the squeeze starts)
+ * @param {boolean} [glove] true = in her blue rubber glove (SPEC D32e): blue, no nail, a long rubber shine
  * @returns {void}
  */
-export function drawFinger(ctx, x, y, angle, width, alpha) {
+export function drawFinger(ctx, x, y, angle, width, alpha, glove = false) {
   if (alpha <= 0) return;
   const len = width * 3.2;
   const hw = width / 2;
@@ -674,10 +675,8 @@ export function drawFinger(ctx, x, y, angle, width, alpha) {
   ctx.shadowBlur = width * 0.35;
   ctx.shadowOffsetY = width * 0.12;
   const g = ctx.createLinearGradient(0, -hw, 0, hw);
-  g.addColorStop(0, '#d5937a');
-  g.addColorStop(0.35, '#f5c8ad');
-  g.addColorStop(0.7, '#eab196');
-  g.addColorStop(1, '#c98068');
+  const stops = glove ? ['#4d9fcc', '#9ad9f7', '#74c2ea', '#3f8dba'] : ['#d5937a', '#f5c8ad', '#eab196', '#c98068'];
+  [0, 0.35, 0.7, 1].forEach((at, i) => g.addColorStop(at, stops[i]));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.moveTo(len, -hw);
@@ -687,6 +686,16 @@ export function drawFinger(ctx, x, y, angle, width, alpha) {
   ctx.closePath();
   ctx.fill();
   ctx.shadowColor = 'transparent';
+  if (glove) {
+    // Rubber: a long soft shine along the finger and a cuff ring near the hand, no nail.
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath(); ctx.ellipse(width * 1.3, -hw * 0.42, width * 1.05, hw * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,90,130,0.45)';
+    ctx.lineWidth = Math.max(1, width * 0.08);
+    ctx.beginPath(); ctx.moveTo(width * 2.7, -hw * 0.95); ctx.quadraticCurveTo(width * 2.6, 0, width * 2.7, hw * 0.95); ctx.stroke();
+    ctx.restore();
+    return;
+  }
   // The nail, near the tip.
   const ng = ctx.createLinearGradient(0, -hw * 0.6, 0, hw * 0.6);
   ng.addColorStop(0, '#f3cfc4');

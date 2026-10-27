@@ -26,7 +26,7 @@ import { createPopMode } from '../pop/pop-mode.js';
 import { faceGeometry } from '../pop/logic.js';
 import { makeFaceTexture } from '../pop/face.js';
 import { playComic } from './comic.js';
-import { ARTS, dressHeroine } from './comic-art.js';
+import { ARTS, dressHeroine, studioKit } from './comic-art.js';
 import { describeRequest } from './requests.js';
 import { economyFromSave } from './economy.js';
 import { getChapter } from '../data/chapters.js';
@@ -51,7 +51,7 @@ import { createGuideScreen } from '../screens/guide.js';
 import { guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists, bossCards, addSeenBosses } from '../screens/guide-logic.js';
 import { createReveal } from '../screens/reveal.js';
 import { createAlbumScreen } from '../screens/album.js';
-import { faceSetup, recordFace, revealOn } from '../screens/album-logic.js';
+import { faceSetup, recordFace, revealOn, stripFriendsMet } from '../screens/album-logic.js';
 import { describeTwist } from '../data/twists.js';
 import { describeBoss } from '../data/bosses.js';
 import * as L from './app-logic.js';
@@ -345,7 +345,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     setMusic({ screen: 'comic' });
     screenChanged(); // a comic: Back stays (it has no Back or Menu button, B87)
     playComic(strip, {
-      name: playerName(), reducedMotion: still() || undefined, sound, arts: dressHeroine(ARTS, L.comicOutfit(strip, save)),
+      name: playerName(), reducedMotion: still() || undefined, sound,
+      arts: studioKit(dressHeroine(ARTS, L.comicOutfit(strip, save)), L.comicStudio(strip, save)), // outfit, gloves, plant
       onSeen: (sid) => persist(L.markSeen(save, sid)),
       onClose: then,
     });
@@ -479,7 +480,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showAlbum(back) {
-    show(createAlbumScreen({ t, reducedMotion: still(), faces: save.albumFaces, onBack: back }), { back });
+    show(createAlbumScreen({ t, reducedMotion: still(), faces: save.albumFaces, friendsMet: stripFriendsMet(save), onBack: back }), { back });
   }
 
   /**

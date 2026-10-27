@@ -1,4 +1,4 @@
-// Chapter 4 strip "Rock bottom" (T4.3b): after the meeting, a few days of nothing. 9 panels.
+// Chapter 4 strip "Rock bottom" (T4.3b): after the meeting, a few days of nothing. 9 panels, played in two parts (see PANELS).
 // Beginning: late at night {name} sinks into the sofa, scrolling pop videos she may not do; her thumb pops the
 // bubbles on the screen. Cold tea, a pity party for one. Middle: down the hall, he sleeps in bedtime armor.
 // The spark: a thought cloud with a customer, a chair, a lamp; she sits up, the lamp clicks on. Splash: her
@@ -121,10 +121,10 @@ function idea() {
   ];
 }
 
-export const STRIP = {
-  id: 'strip4',
-  title: 'comic.s4.title',
-  panels: [
+// SPEC D32b (owner, 2026-10-27): the strip is played in two parts around the phone scroll: STRIP = panels 1 to 5 (the
+// sofa, the videos, the cold tea, the pity party, him asleep), then the phone scroll (2:42 to 2:51 am, ends on the idea
+// card), then STRIP_IDEA = panels 6 to 9 (2:51 am, the click, "I will do it for a living!", the tea).
+const PANELS = [
     {
       // 1. Late night. The sofa is slowly swallowing her. Cold tea on the armrest, the plant looks worried.
       layout: 'wide',
@@ -290,5 +290,10 @@ export const STRIP = {
         { kind: 'say', key: 'comic.s4.p9.tea', at: [600, 210], to: 'tea', w: 300, sound: 'laugh_evil' },
       ],
     },
-  ],
-};
+];
+
+/** Part 1 (chapter 4's opening strip): panels 1 to 5, before the phone scroll. */
+export const STRIP = { id: 'strip4', title: 'comic.s4.title', panels: PANELS.slice(0, 5) };
+
+/** Part 2 (after the phone scroll, SPEC D32b): panels 6 to 9, the idea at 2:51 am. */
+export const STRIP_IDEA = { id: 'strip4b', title: 'comic.s4b.title', panels: PANELS.slice(5) };

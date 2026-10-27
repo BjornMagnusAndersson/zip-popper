@@ -862,6 +862,7 @@ export function createPopMode({
       twist: round ? cfg.twist : null, // the customer's twist (T8.3; the hurry twist is the request banner)
       onGiggle: (at) => { if (current === c) showGiggle(c, at); },
       refuse: round && cfg.escape ? () => { if (current === c && !c.failed) armorEscape(c); } : undefined, // chapter 2: the armor wins
+      gloves: round && cfg.gloves, // her blue gloves on the fingertips once she owns them (SPEC D32e)
       onOw: (at) => {
         if (current !== c) return;
         showOw(c, at);
@@ -1013,6 +1014,7 @@ export function createPopMode({
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
         hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
         escape: o.customer?.escape === true, // the husband in armor (chapter 2) refuses the first pop and runs off
+        gloves: o.gloves === true, // she owns the gloves (app-logic.js roundArgs, SPEC D32e)
         twist: typeof o.twist === 'string' ? o.twist : null, // T8.3: the customer's twist
         twistHint: typeof o.twistHintKey === 'string' ? o.twistHintKey : null,
       };

@@ -104,6 +104,7 @@ export const STRIP = {
   id: 'mmastery',
   title: 'comic.mmastery.title',
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
   panels: [
     {
       // 1. Training week. Nils holds up the stopwatch, Greta knits, she squints at the next bump, tweezers ready.

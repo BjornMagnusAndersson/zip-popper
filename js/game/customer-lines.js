@@ -13,7 +13,7 @@
 import { REGULARS, GENERIC_COUNTS, genericKey, makeRng } from '../data/customers.js';
 import { CHAPTERS } from '../data/chapters.js';
 import {
-  REGULAR_LINE_COUNTS, OLD_STYLE_KINDS, WALK_IN_LINES, HUSBAND_ASIDES, HURRY_LINE, HURRY_LINE_TIERS,
+  REGULAR_LINE_COUNTS, OLD_STYLE_KINDS, WALK_IN_LINES, HUSBAND_ASIDES, HURRY_LINE, HURRY_LINE_TIERS, AGAIN_LINES,
 } from '../data/customer-lines.js';
 import { hurryLimit } from './requests.js';
 import { progressFromSave } from './chapter-logic.js';
@@ -73,6 +73,14 @@ export function hurryIntroKeys() {
 }
 
 /**
+ * The plain "hello again" intro keys (customer.again.1 to N) for a return after a visit that went wrong (SPEC D32f).
+ * @returns {string[]} string keys
+ */
+export function againKeys() {
+  return Array.from({ length: AGAIN_LINES.count }, (_, i) => `customer.again.${i + 1}`);
+}
+
+/**
  * The intro keys that are only for a first visit (a regular's old intro, the walk-in "First time here" lines).
  * @returns {string[]} string keys
  */
@@ -101,7 +109,7 @@ export function allLineKeys() {
   for (const r of REGULARS) for (const kind of Object.keys(REGULAR_LINE_COUNTS)) keys.push(...regularKeys(r.id, kind));
   for (const kind of ['intro', 'back', 'aside']) keys.push(...walkInKeys(kind));
   for (const kind of ['intro', 'deadline', ...REACTION_KINDS]) keys.push(...genericKeys(kind));
-  keys.push(...hurryIntroKeys(), ...Object.values(HUSBAND_ASIDES));
+  keys.push(...hurryIntroKeys(), ...againKeys(), ...Object.values(HUSBAND_ASIDES));
   return [...new Set(keys)];
 }
 
@@ -204,6 +212,7 @@ export function customerLines(save, customer, { seed, step = null, timed = false
     seconds = timed ? genericKeys('deadline') : walkInKeys('aside');
     for (const r of REACTION_KINDS) results[r] = genericKeys(r);
   }
+  if (met && memo.failed) intros = againKeys(); // last visit they stormed off: no "last time was amazing" (D32f)
   if (hurryLine) intros = hurryIntroKeys();
   const resultKeys = {};
   for (const r of REACTION_KINDS) resultKeys[r] = pickLine(results[r], seed, SALT[r], memo.result);
@@ -219,9 +228,10 @@ export function customerLines(save, customer, { seed, step = null, timed = false
  * @param {object} save the save
  * @param {{id: string|null, introKey: string, secondKey: string|null}|null|undefined} lines what customerLines gave
  * @param {string|undefined} [resultKey] the result line shown (none when the customer stormed off)
+ * @param {boolean} [failed] the customer stormed off (the next visit then starts with a plain "hello again", D32f)
  * @returns {object} a new save (the same one when there is nothing to remember)
  */
-export function recordLines(save, lines, resultKey) {
+export function recordLines(save, lines, resultKey, failed = false) {
   if (!lines?.id) return save;
   const memo = { ...(save?.customerLines ?? {}) };
   const old = memo[lines.id] ?? {};
@@ -231,6 +241,7 @@ export function recordLines(save, lines, resultKey) {
   if (lines.secondKey) entry.second = lines.secondKey;
   const result = resultKey ?? old.result;
   if (result) entry.result = result;
+  if (failed) entry.failed = true;
   memo[lines.id] = entry;
   const ids = Object.keys(memo);
   for (const drop of ids.slice(0, Math.max(0, ids.length - LINE_MEMO_MAX))) delete memo[drop];

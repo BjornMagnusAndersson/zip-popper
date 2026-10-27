@@ -69,13 +69,14 @@ function silhouette() {
 
 /**
  * Build the Face album screen.
- * @param {{t: (key: string, vars?: object) => string, faces?: object[], onBack?: () => void, reducedMotion?: boolean}} opts
- *   t = string function; faces = the saved album (save.albumFaces); onBack = Back (or Escape) was pressed
+ * @param {{t: (key: string, vars?: object) => string, faces?: object[], onBack?: () => void, reducedMotion?: boolean,
+ *   friendsMet?: boolean}} opts t = string function; faces = the saved album (save.albumFaces); onBack = Back (or
+ *   Escape) was pressed; friendsMet = the strips have shown the support group (album-logic.js stripFriendsMet)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
-export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false }) {
+export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false, friendsMet = false }) {
   const shell = screenShell('album', { label: t('ui.album.title'), reducedMotion });
-  const view = albumView(faces);
+  const view = albumView(faces, { friendsMet });
   const head = header(t, t('ui.album.title'), onBack, shell.signal);
   const count = el('p', 'app-album__count'); // two short lines, so the title keeps its room
   count.append(el('span', '', t('ui.album.faces', { n: view.faces })), el('span', '', t('ui.album.met', { met: view.met, total: view.total })));
@@ -139,6 +140,23 @@ export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false
   }
 
   /**
+   * A tile for a support-group friend she knows from the strips but has not popped yet (SPEC D32g): the silhouette,
+   * their name and "Not popped yet" (no "?": she has met them).
+   * @param {{nameKey: string}} r the regular's row from albumView
+   * @returns {HTMLElement} the tile
+   */
+  function friendTile(r) {
+    const name = t(r.nameKey);
+    const tile = el('div', 'app-albumtile app-albumtile--locked app-albumtile--friend');
+    tile.setAttribute('role', 'img');
+    tile.setAttribute('aria-label', t('ui.album.friendHint', { name }));
+    const holder = el('span', 'app-albumtile__frame');
+    holder.append(silhouette());
+    tile.append(holder, el('span', 'app-albumtile__name', name), el('span', 'app-albumtile__note', t('ui.album.friendNote')));
+    return tile;
+  }
+
+  /**
    * One section: a heading and its grid of tiles.
    * @param {string} titleKey heading string key
    * @param {HTMLElement[]} tiles the tiles
@@ -152,7 +170,7 @@ export function createAlbumScreen({ t, faces = [], onBack, reducedMotion = false
     return sec;
   }
 
-  panel.append(section('ui.album.regulars', view.regulars.map((r) => (r.entry ? faceTile(r.entry) : lockedTile()))));
+  panel.append(section('ui.album.regulars', view.regulars.map((r) => (r.entry ? faceTile(r.entry) : r.friend ? friendTile(r) : lockedTile()))));
   if (view.strangers.length) panel.append(section('ui.album.strangers', view.strangers.map(faceTile)));
   else panel.append(el('p', 'app-album__empty', t(view.met || view.events.length ? 'ui.album.noStrangers' : 'ui.album.empty')));
   if (view.events.length) panel.append(section('ui.album.events', view.events.map(faceTile))); // T8.4

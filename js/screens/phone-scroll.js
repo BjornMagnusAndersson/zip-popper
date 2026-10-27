@@ -98,7 +98,8 @@ function videoFace(card) {
 }
 
 /**
- * Her cup of tea on the nightstand: the mug has a little face; its steam fades and its face drops as it goes cold.
+ * Her cup of tea on the side table: the mug has a little face; it drops as the tea goes cold (steam only above 0.3
+ * warmth; in chapter 4 the tea starts at 0.3, already cold, SPEC D32b).
  * @returns {{node: SVGElement, set: (warmth: number) => void}} the mug and how to show its warmth (1 hot .. 0 cold)
  */
 function teaMug() {
@@ -123,7 +124,7 @@ function teaMug() {
     node,
     /** Show how warm the tea is. @param {number} w warmth 1 (steaming) .. 0 (stone cold) @returns {void} */
     set(w) {
-      steam.setAttribute('opacity', String(Math.max(0, w - 0.1).toFixed(2)));
+      steam.setAttribute('opacity', String(Math.max(0, w - 0.3).toFixed(2)));
       surface.setAttribute('fill', w > 0.5 ? '#a8673a' : w > 0.2 ? '#97735a' : '#8c8a86');
       body.setAttribute('fill', w > 0.2 ? '#f2a0c0' : '#c9d6f0');
       mouth.setAttribute('d', w > 0.6 ? 'M44 72 Q50 77 56 72' : w > 0.25 ? 'M44 74 L56 74' : 'M43 76 Q46 72 50 75 Q54 72 57 76');
@@ -190,7 +191,7 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
   screenEl.append(track);
   phone.append(status, screenEl);
 
-  // The nightstand with the tea, and the foot: the how-to line and Next.
+  // The side table with the tea, and the foot: the how-to line and Next.
   const side = el('div', 'ps-side');
   const tea = el('div', 'ps-tea');
   tea.setAttribute('role', 'img');

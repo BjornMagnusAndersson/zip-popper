@@ -52,16 +52,18 @@ export function createResultScreen({
   if (failed) {
     main.append(el('p', 'app-result__text', t('ui.result.fail.text')));
   } else {
-    const coins = el('div', 'app-card app-coins');
-    coins.setAttribute('role', 'table');
-    coins.setAttribute('aria-label', t('ui.result.coins'));
-    for (const row of coinRows(payout)) {
-      const line = el('div', `app-coins__row${row.id === 'total' ? ' app-coins__row--total' : ''}`);
-      line.setAttribute('role', 'row');
-      line.append(el('span', 'app-coins__label', t(row.key)), coinPill(String(row.amount)));
-      coins.append(line);
+    if (payout) { // no payout = a round before the studio opens (chapters 0 to 4, SPEC D32h): no coin card
+      const coins = el('div', 'app-card app-coins');
+      coins.setAttribute('role', 'table');
+      coins.setAttribute('aria-label', t('ui.result.coins'));
+      for (const row of coinRows(payout)) {
+        const line = el('div', `app-coins__row${row.id === 'total' ? ' app-coins__row--total' : ''}`);
+        line.setAttribute('role', 'row');
+        line.append(el('span', 'app-coins__label', t(row.key)), coinPill(String(row.amount)));
+        coins.append(line);
+      }
+      main.append(coins);
     }
-    main.append(coins);
     if (stampKey) { // a finished boss or event (T8.4): its stamp went into the Face album
       const stamp = el('p', 'app-result__stamp');
       stamp.append(starIcon(true, 24), el('span', '', t('ui.result.stamp', { name: t(stampKey) })));

@@ -135,6 +135,7 @@ function affine(s, d) {
  *   twist?: string|null (the customer's twist, T8.3: 'fidgety', 'ticklish' or 'sensitive'; anything else = none),
  *   onGiggle?: (at: {x: number, y: number}) => void (the ticklish customer giggled at this bump, scene px),
  *   refuse?: (p: object) => void (the husband in armor, ch 2: the first pop is NOT done, popping stops and this is told which bump),
+ *   gloves?: boolean (she owns the gloves, SPEC D32e: the squeezing fingertips are drawn in blue rubber gloves),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
@@ -204,6 +205,7 @@ export function createPopScene(canvas, o) {
   // the sway is on (fades in at the start, out after the pops), room = how far the face may move (twist-logic.js
   // swayRoom; worked out again on every pop and resize), giggleAt = the time of the last giggle.
   const twist = ['fidgety', 'ticklish', 'sensitive'].includes(o.twist) ? o.twist : null;
+  const gloves = o.gloves === true; // her blue gloves on the fingertips (SPEC D32e)
   let off = { x: 0, y: 0 };
   let swayK = 0;
   let room = 0;
@@ -541,7 +543,7 @@ export function createPopScene(canvas, o) {
     for (const side of p.sqReach ? [] : [-1, 1]) {
       const fx = p.x + ax * side * (reach + p.r * 0.1);
       const fy = p.y + ay * side * (reach + p.r * 0.1);
-      drawFinger(ctx, fx, fy, p.axis + (side < 0 ? Math.PI : 0), Math.max(18, p.r * 1.7), Math.min(1, a * 3));
+      drawFinger(ctx, fx, fy, p.axis + (side < 0 ? Math.PI : 0), Math.max(18, p.r * 1.7), Math.min(1, a * 3), gloves);
       if (p.tool === 'cottonPad') { // a cotton pad wrapped round each fingertip
         ctx.save();
         ctx.globalAlpha = Math.min(1, a * 3);

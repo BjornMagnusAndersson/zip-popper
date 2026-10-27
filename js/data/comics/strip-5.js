@@ -44,6 +44,7 @@ export const STRIP = {
   id: 'strip5',
   title: 'comic.s5.title',
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  bareHands: true, // no gloves here even on a replay: the words are about her bare hands (SPEC D32e)
   panels: [
     {
       // 1. Opening day: one chair, one bucket under the leak, one cheap lamp. She hangs the "Clean!" sign. It is not.

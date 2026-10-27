@@ -21,16 +21,16 @@ import { bossFor, bossSpec, describeBoss, isBoss, BOSS_IDS, BOSSES } from '../da
 import { STUDIO_LAYERS, studioTier, studioLayersShown, heroOutfit, OUTFIT_TIERS, OUTFIT_ITEMS } from './studio.js';
 import { hurryHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
-import { TOOL_IDS } from '../data/tools.js';
+import { TOOL_IDS, GLOVES } from '../data/tools.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
 import { GUIDE_KINDS } from '../screens/guide-logic.js';
 import { demoAlbum } from '../screens/album-logic.js';
-import { STRIP as strip0 } from '../data/comics/strip-0.js';
+import { STRIP as strip0, STRIP_BAN as strip0b } from '../data/comics/strip-0.js';
 import { STRIP as strip1 } from '../data/comics/strip-1.js';
 import { STRIP as strip2 } from '../data/comics/strip-2.js';
 import { STRIP as strip3 } from '../data/comics/strip-3.js';
-import { STRIP as strip4 } from '../data/comics/strip-4.js';
+import { STRIP as strip4, STRIP_IDEA as strip4b } from '../data/comics/strip-4.js';
 import { STRIP as plan } from '../data/comics/strip-plan.js';
 import { STRIP as strip5 } from '../data/comics/strip-5.js';
 import { STRIP as scare } from '../data/comics/strip-scare.js';
@@ -44,7 +44,8 @@ import { STRIP as mmastery } from '../data/comics/strip-mmastery.js';
 
 /** Every strip of version 1 in the order the Comics screen lists them, with its kind (chapter, teaser or milestone). */
 export const STRIP_LIST = [
-  [strip0, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'], [plan, 'chapter'],
+  [strip0, 'chapter'], [strip0b, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'],
+  [strip4b, 'chapter'], [plan, 'chapter'],
   [strip5, 'chapter'], [scare, 'chapter'], [books, 'teaser'], [mlamp, 'milestone'], [mplant, 'milestone'],
   [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'],
 ].map(([strip, kind]) => ({ strip, id: strip.id, titleKey: strip.title, kind }));
@@ -175,6 +176,23 @@ export function comicOutfit(strip, save) {
   if (!strip?.dressed) return null;
   const outfit = heroOutfit(save);
   return outfit === 'everyday' ? null : outfit;
+}
+
+/**
+ * What the comic player draws of her studio and hands for a strip (SPEC D32e and D32j, comic-art.js studioKit):
+ * - gloves: in `dressed` strips she wears her blue gloves once she owns them (after the hygiene scare), except in
+ *   strips marked `bareHands` (opening day and the scare itself: their words are about bare hands);
+ * - livingPlant: in strips marked `studio: 'owned'` (set in her studio after the shop opens) the plant follows the
+ *   shop: the sad little plant on the sill until the living plant is bought and scrubbed.
+ * @param {object|null} strip the strip data
+ * @param {object} save the save
+ * @returns {{gloves: boolean, livingPlant?: boolean}|null} what to draw, or null = draw the strip as it is
+ */
+export function comicStudio(strip, save) {
+  if (!strip) return null;
+  const gloves = Boolean(strip.dressed && !strip.bareHands && Object.hasOwn(economyFromSave(save).items, 'gloves'));
+  if (strip.studio !== 'owned') return gloves ? { gloves } : null;
+  return { gloves, livingPlant: backdropLayers(save).includes('plant') };
 }
 
 /**
@@ -481,7 +499,10 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
   });
   const customer = { ...spec.customer, introKey: lines.introKey, deadlineKey: lines.secondKey, resultKeys: { ...lines.resultKeys } };
   return {
-    customer, lines, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
+    // Gloves (SPEC D32e): once she owns them her fingertips are blue and the customer relaxes a bit (data/tools.js GLOVES).
+    customer, lines, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes],
+    difficulty: unlockedTools.includes('gloves') ? spec.difficulty * GLOVES.calm : spec.difficulty,
+    gloves: unlockedTools.includes('gloves'),
     seed, holdFactors, roughReductions, unlockedTools,
     request, room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), career: true,
@@ -491,6 +512,16 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
     // T8.5: the daily challenge's date and goal (a clock goal carries its limit, the same as the hurry request's).
     daily: daily ? { date: daily.date, goal: request ? { ...daily.goal, timeLimit: request.timeLimit } : { ...daily.goal } } : null,
   };
+}
+
+/**
+ * Whether a finished round pays coins and reputation: only from the studio on (the career chapter, Keep working and
+ * the daily challenge). Before the studio opens (chapters 0 to 4, SPEC D32h) she pops her husband for love, not money.
+ * @param {{chapter?: number, keepWorking?: boolean, daily?: object}} step the customer step
+ * @returns {boolean} true = the round pays
+ */
+export function paysMoney(step) {
+  return Boolean(step?.keepWorking || step?.daily) || getChapter(step?.chapter)?.kind === 'career';
 }
 
 /**
@@ -618,6 +649,10 @@ export function applyRound(save, payload, step) {
     for (const type of payload.cleanBumpTypes ?? []) after = recordCleanPop(after, type);
     payout = result.payout;
     stars = result.stars;
+    if (!paysMoney(step)) { // SPEC D32h: no coins, tip or reputation (and no first 3-star day) before the studio opens
+      after = { ...after, money: before.money, reputation: before.reputation, threeStarDone: before.threeStarDone };
+      payout = null;
+    }
     // A hurry-line customer whose clock ran out (R6-lines): the tier's missPenalty in reputation (0 in v1: only the
     // request bonus is lost, as with any missed request).
     const miss = Number(step?.lines?.hurryLine?.missPenalty) || 0;
@@ -631,7 +666,7 @@ export function applyRound(save, payload, step) {
   // R6-lines: the visit's own lines (step.lines = roundArgs lines, app.js passes them) or the customer's plain keys.
   const said = failed ? undefined : reactionKey(step?.lines?.resultKeys ? { resultKeys: step.lines.resultKeys } : spec?.customer, payload.owCount ?? 0);
   // The line memory counts this visit (finished or skipped), so the next one is a return with other lines.
-  const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }, step?.lines, said); // strips kept until played (B4)
+  const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }, step?.lines, said, failed); // strips kept until played (B4)
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
     strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),

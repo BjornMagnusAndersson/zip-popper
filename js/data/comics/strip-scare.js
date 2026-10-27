@@ -11,6 +11,8 @@ export const STRIP = {
   id: 'scare',
   title: 'comic.scare.title',
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
+  bareHands: true, // no gloves here even on a replay: the words are about her bare hands (SPEC D32e)
   panels: [
     {
       // 1. The door creaks: the inspector is back, clipboard ready. She freezes mid-pop.
@@ -68,7 +70,8 @@ export const STRIP = {
         layers: [
           studio(1000, 1000, { floorY: 640, windowX: 0.5, door: false, leak: false, sign: false, bulbX: 0.2, plantX: 0.92, plantEyes: 'happy' }),
           { id: 'insp', art: 'inspector', x: 220, y: 1000, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'neutral', look: 1 },
-          { id: 'her', art: 'heroine', x: 700, y: 1000, scale: 0.85, pose: 'wave', hold: 'gloves', expr: 'bliss', look: -1 },
+          // "Gloves on!": her hands are in the blue gloves now (SPEC D32e), the box held up in one of them.
+          { id: 'her', art: 'heroine', x: 700, y: 1000, scale: 0.85, pose: 'wave', hold: 'gloves', gloves: true, expr: 'bliss', look: -1 },
           { art: 'sparkles', x: 840, y: 360, r: 120 },
         ],
       },
@@ -76,7 +79,7 @@ export const STRIP = {
       sound: 'cheer',
       bubbles: [
         { kind: 'say', key: 'comic.scare.p4.her', at: [640, 180], to: 'her', w: 380 },
-        { kind: 'say', key: 'comic.scare.p4.insp', at: [240, 300], to: 'insp', w: 400 },
+        { kind: 'say', key: 'comic.scare.p4.insp', at: [250, 300], to: 'insp', w: 470 }, // wide enough for "...Acceptable." in one line
         { kind: 'caption', key: 'comic.scare.p4.end', at: [500, 940], w: 860 },
       ],
     },

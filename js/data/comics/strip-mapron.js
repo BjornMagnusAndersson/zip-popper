@@ -88,6 +88,7 @@ function fallenSign(x, y, k) {
 export const STRIP = {
   id: 'mapron',
   title: 'comic.mapron.title',
+  studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
   panels: [
     {
       // 1. Montage, step 1: the new apron. She ties the strings round her neck like a cape. The plant watches.
