@@ -152,18 +152,19 @@ export const STRIP = {
       ],
     },
     {
-      // 6. She stands up, very nervous. The group answers as one.
+      // 6. She stands up, very nervous, the talking sock in her raised hand (R8: it no longer vanishes). The group answers as one.
       layout: 'small',
       scene: {
         layers: [
           hall(800, 600, { floorY: 520, windowX: 0.82, plant: false, board: false }),
           { art: 'chair', x: 330, y: 600, scale: 0.72, color: '#3fae8c' },
+          ...talkingSock(492, 196, 0.42),
           { id: 'her', art: 'heroine', x: 330, y: 610, scale: 0.75, pose: 'wave', expr: 'shocked' },
         ],
       },
       camera: { move: 'pushIn', focus: [330, 240], amount: 0.12, ms: 2200 },
       bubbles: [
-        { kind: 'say', key: 'comic.s3.p6.her', at: [600, 110], to: 'her', w: 330 },
+        { kind: 'say', key: 'comic.s3.p6.her', at: [190, 90], to: 'her', w: 330 },
         { kind: 'say', key: 'comic.s3.p6.group', at: [640, 400], to: [800, 560], w: 230 },
       ],
     },

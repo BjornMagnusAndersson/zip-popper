@@ -64,9 +64,10 @@ export const REGULARS = [
     shape: 'square', skinTone: 'light', hair: 'short', hairColor: 'grey',
     eyes: 'wide', brows: 'thick', mouth: 'flat', accessories: ['pilot-cap', 'moustache'],
   }),
+  // Nils and Penny look as in the comics (R8): Nils bald with ginger tufts and a ginger moustache, no glasses.
   regular('nils', 2, 7, ['whitehead', 'red'], {
-    shape: 'long', skinTone: 'fair', hair: 'curly', hairColor: 'ginger',
-    eyes: 'tiny', brows: 'worried', mouth: 'wobbly', accessories: ['glasses'],
+    shape: 'long', skinTone: 'fair', hair: 'bald', hairColor: 'ginger',
+    eyes: 'tiny', brows: 'worried', mouth: 'wobbly', accessories: ['moustache'],
   }),
   regular('cora', 3, 7, ['whitehead', 'red', 'blackhead'], {
     shape: 'oval', skinTone: 'tan', hair: 'bun', hairColor: 'brown',
@@ -77,7 +78,7 @@ export const REGULARS = [
     eyes: 'sparkly', brows: 'thin', mouth: 'grin', accessories: ['glasses', 'flower'],
   }),
   regular('penny', 5, 8, ['whitehead', 'red', 'big'], {
-    shape: 'heart', skinTone: 'olive', hair: 'ponytail', hairColor: 'pink',
+    shape: 'heart', skinTone: 'deep', hair: 'bob', hairColor: 'pink', // comic Penny: deep skin, pink bob (tiara for prom)
     eyes: 'sparkly', brows: 'arched', mouth: 'open', accessories: ['tiara'],
   }),
   regular('dave', 5, 9, ['red', 'blackhead', 'big'], {

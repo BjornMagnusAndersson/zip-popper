@@ -4,8 +4,8 @@
 // (the visual surprise). Button: Nils stops the watch for a record, but she finished ages ago and is on her second
 // tea; the worn-out plant asks for a day off. Running gag: the plant, silent, eyes on its pot. Format: docs/COMIC-FORMAT.md.
 
-/** The dingy studio filling a panel (tier 0). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
-const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, lamp: false, ...o });
+/** The dingy studio filling a panel (tier 0; the plant wears Greta's scarf, as in every strip after strip 5, R8). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
+const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, lamp: false, plantScarf: '#e8505b', ...o });
 
 /**
  * Nils's big stopwatch: a silver case, a white face with ticks, a button on top and one hand.

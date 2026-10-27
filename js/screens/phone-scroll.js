@@ -1,5 +1,5 @@
 // The phone-scroll special mode (T4.6, chapter 4 "Rock bottom"; replaces the Coming soon screen for this chapter).
-// 2:42 am in bed: a close-up of her phone, its blue glow on her face, her tea going cold on the nightstand. A feed of
+// 2:42 am on the sofa (as in strip 4): a close-up of her phone, its blue glow on her face, her tea going cold on the side table. A feed of
 // cartoon face videos scrolls by on its own (game/phonescroll-logic.js says when); she can only flick slowly (or tap
 // Next) and tap the tiny bumps on each video, pop-it style: tiny pops, soft sounds, no score, no money, no failing.
 // Likes tick up on the other people's videos, the "videos watched" counter and the phone clock creep up. After the

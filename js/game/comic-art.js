@@ -1333,7 +1333,9 @@ function laundry(g, r, w, F) {
  * A room filling the panel: wall with soft stripes, floor boards, a window with curtains (sky, cloud or moon and
  * stars), and optionally a picture, a plant and a floor lamp.
  * @param {object} l layer: kind (a key of ROOMS), w and h (the panel size), floorY (height of the floor line),
- *   windowX (0..1 across), and any ROOMS field to switch an item on or off
+ *   windowX (0..1 across), and any ROOMS field to switch an item on or off; plantSill (true or a scale) draws the
+ *   sad little plant from the plan strip on the window sill instead of the big floor plant (it keeps plantEyes and
+ *   plantScarf, and droops when its eyes are sad)
  * @returns {{node: SVGElement}} the room
  */
 function room(l) {
@@ -1400,7 +1402,11 @@ function room(l) {
     g.appendChild(el('rect', { x: px - 10, y: py - 10, width: 220, height: 170, fill: 'none', stroke: '#b07a4a', 'stroke-width': 12 }));
     g.appendChild(el('rect', { x: px - 16, y: py - 16, width: 232, height: 182, fill: 'none', ...ink(4) }));
   }
-  if (r.plant) {
+  if (r.plant && l.plantSill) {
+    // R8: the small plant she adopted in the plan strip, on the sill where she put it (not yet the shop's living plant).
+    const s = typeof l.plantSill === 'number' ? l.plantSill : 0.32 * F / 600;
+    g.appendChild(plant({ x: wx + ww * 0.74, y: wy + wh + 2, scale: s, eyes: l.plantEyes, scarf: l.plantScarf || undefined, droop: l.plantEyes === 'sad' }).node);
+  } else if (r.plant) {
     const px = w * (l.plantX ?? 0.06);
     for (const [a, len] of [[-40, 150], [-15, 190], [10, 170], [35, 140], [-60, 110], [55, 105]]) {
       g.appendChild(el('ellipse', { cx: 0, cy: -len / 2, rx: 24, ry: len / 2, fill: a % 20 ? '#3fae8c' : '#59b85f', ...ink(4), transform: `translate(${px} ${F - 80}) rotate(${a})` }));

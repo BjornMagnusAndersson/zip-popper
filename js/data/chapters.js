@@ -79,12 +79,13 @@ export const CAREER_SHOP_TOOLS = ['cottonPad', 'tweezers', 'noseStrip', 'patch',
  * @param {number} count how many customers
  * @param {number} baseSeed seeds are baseSeed + n
  * @param {Object<number, string>} regulars customer number (1 based) to regular id
+ * @param {Object<number, number>} [seeds] customer number to its own seed, in place of baseSeed + n
  * @returns {object[]} the roster
  */
-function makeRoster(count, baseSeed, regulars) {
+function makeRoster(count, baseSeed, regulars, seeds = {}) {
   const roster = [];
   for (let n = 1; n <= count; n++) {
-    roster.push(regulars[n] ? { who: 'regular', id: regulars[n] } : { who: 'generic', seed: baseSeed + n });
+    roster.push(regulars[n] ? { who: 'regular', id: regulars[n] } : { who: 'generic', seed: seeds[n] ?? baseSeed + n });
   }
   return roster;
 }
@@ -127,7 +128,9 @@ export const CHAPTERS = [
   {
     id: 5, titleKey: 'chapter.5.title', strip: 'strip5', kind: 'career',
     // 15 customers: the support-group friend first, the named regulars spread out, Pete, Dave and Cleo close the chapter.
-    customers: makeRoster(15, 1000, { 1: 'cora', 5: 'penny', 8: 'gus', 13: 'pete', 14: 'dave', 15: 'cleo' }),
+    // Customer 7 gets seed 1016 (R8): seed 1007 drew the same name as customer 2 (a different face), so the line memory
+    // took him for a return visit and he said "Back again".
+    customers: makeRoster(15, 1000, { 1: 'cora', 5: 'penny', 8: 'gus', 13: 'pete', 14: 'dave', 15: 'cleo' }, { 7: 1016 }),
     difficulty: 1.0,
     after: [
       { type: 'scare', unlocks: ['gloves'] },

@@ -7,8 +7,8 @@
 // scarf), the armor (four plumes, knitted hat, shield and banner), his "No.". Visual surprise: the knight in the
 // doorway as the first "customer". Format: docs/COMIC-FORMAT.md.
 
-/** The dingy studio filling a panel (tier 0; the plant wears Greta's scarf from panel 5, when she brings it: panels 1 and 2 pass plantScarf false). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
-const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', ...o });
+/** The dingy studio filling a panel (tier 0; the sad little plant from the plan strip sits on the window sill, R8; it wears Greta's scarf from panel 5, when she brings it: panels 1 and 2 pass plantScarf false). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
+const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', plantSill: true, ...o });
 
 /** The one chair with someone sitting on it. @param {object} who the character layer (art, x, y, scale...) @returns {object[]} layers */
 const seated = (who) => [{ art: 'chair', x: who.x, y: who.y, scale: who.scale, color: '#9a8f6a' }, { pose: 'sit', ...who }];
@@ -67,7 +67,7 @@ export const STRIP = {
       layout: 'small',
       scene: {
         layers: [
-          studio(800, 600, { floorY: 470, windowX: 0.16, leakX: 0.5, plantX: 0.86, plantEyes: 'sad', plantScarf: false, door: false, sign: false, bulb: false, lamp: false }),
+          studio(800, 600, { floorY: 470, windowX: 0.78, leakX: 0.5, plantEyes: 'sad', plantScarf: false, plantSill: 0.5, door: false, sign: false, bulb: false, lamp: false }),
           { art: 'drip', x: 400, y: 230, r: 22 },
           { art: 'bucket', x: 400, y: 590, scale: 0.95 },
         ],
@@ -119,7 +119,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.66, leakX: 0.47, bulbX: 0.3, signX: 0.89, plantX: 0.97, lamp: false }),
+          studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.56, leakX: 0.47, bulbX: 0.3, signX: 0.89, lamp: false }),
           { art: 'bucket', x: 820, y: 830, scale: 0.55 },
           { id: 'greta', art: 'greta', x: 170, y: 870, scale: 0.85, pose: 'wave', expr: 'happy' },
           { id: 'penny', art: 'penny', x: 420, y: 880, scale: 0.85, pose: 'stand', hold: 'snack', expr: 'happy', look: 1 },
@@ -211,7 +211,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.12, doorOpen: true, windowX: 0.56, leakX: 0.32, bulbX: 0.66, signX: 0.84, plantX: 0.97, plantEyes: 'wide', lamp: false }),
+          studio(1600, 900, { floorY: 600, doorX: 0.12, doorOpen: true, windowX: 0.3, leakX: 0.32, bulbX: 0.66, signX: 0.84, plantEyes: 'wide', lamp: false }),
           { art: 'bucket', x: 512, y: 830, scale: 0.5 },
           { id: 'insp', art: 'inspector', x: 192, y: 870, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'grumpy', look: 1 },
           ...seated({ id: 'nils', art: 'nils', x: 760, y: 870, scale: 0.72, expr: 'shocked', look: -1 }),
@@ -250,7 +250,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, windowX: 0.45, door: false, leakX: 0.264, signX: 0.7, signTilt: 26, bulbX: 0.56, plantX: 0.92, plantEyes: 'smug', lamp: false }),
+          studio(1600, 900, { floorY: 600, windowX: 0.85, door: false, leakX: 0.264, signX: 0.64, signTilt: 26, bulbX: 0.5, plantEyes: 'smug', lamp: false }),
           { id: 'insp', art: 'inspector', x: 520, y: 880, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'neutral', flip: true },
           { art: 'drip', x: 423, y: 578, r: 18, splash: true },
           { id: 'her', art: 'heroine', x: 1000, y: 880, scale: 0.8, pose: 'wave', hold: 'gloves', expr: 'bliss', flip: true },
