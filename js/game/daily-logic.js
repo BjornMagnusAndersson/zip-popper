@@ -23,6 +23,7 @@ import { bestToolFor, effectiveHold } from '../pop/tool-logic.js';
 
 /** One day in ms (dates are counted on UTC midnights, so summer time never makes a day 23 or 25 hours long). */
 const DAY_MS = 86400000;
+const CLOCK_SLACK_DAYS = 1; // a saved day further ahead than this is taken as a wrong phone clock (dailyFields)
 /** Seconds a quick player needs to move to the next bump and aim (the same as the hurry test's fastest player). */
 const MOVE_SECONDS = 0.8;
 /** The studio chapter (5): the daily customer is in her studio with the career rules, like Keep working. */
@@ -297,17 +298,28 @@ export function judgeDaily(goal, result) {
 
 /**
  * The daily fields of a save, cleaned (core/save.js keeps them; this also copes with a hand-made test save).
+ * A last-played or last-rewarded day more than CLOCK_SLACK_DAYS after the date asked about can only come from a phone
+ * clock that was wrong when it was saved (R4 finding 1): those two days are brought back to the day before the date, so
+ * the daily challenge is not locked until the wrong date. (A try made on the wrong date itself still counted as a skipped
+ * stretch, so that streak restarted.)
  * @param {object} save the save
+ * @param {string} [date] 'YYYY-MM-DD' the date asked about (today)
  * @returns {{streak: number, best: number, attempts: number, lastDone: string, lastPlayed: string}} the fields
  */
-function dailyFields(save) {
+function dailyFields(save, date) {
   /** A whole number of at least 0. @param {unknown} v value @returns {number} the number or 0 */
   const whole = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
-  return {
+  const f = {
     streak: whole(save?.dailyStreak), best: whole(save?.dailyBest), attempts: whole(save?.dailyAttempts),
     lastDone: isDateKey(save?.dailyLastDone) ? save.dailyLastDone : '',
     lastPlayed: isDateKey(save?.dailyLastPlayed) ? save.dailyLastPlayed : '',
   };
+  if (isDateKey(date) && f.lastPlayed && dayNumber(f.lastPlayed) - dayNumber(date) > CLOCK_SLACK_DAYS) {
+    const yesterday = addDays(date, -1);
+    f.lastPlayed = yesterday;
+    if (f.lastDone > yesterday) f.lastDone = yesterday;
+  }
+  return f;
 }
 
 /**
@@ -343,7 +355,7 @@ function dateOpen(f, date) {
  *   (done = the day's reward was given, or the clock was moved back to a day already played)
  */
 export function dailyState(save, date) {
-  const f = dailyFields(save);
+  const f = dailyFields(save, date);
   const open = dateOpen(f, date);
   return { date, open, done: !open, streak: isDateKey(date) ? liveStreak(f, date) : f.streak, best: f.best, attempts: f.attempts };
 }
@@ -360,7 +372,7 @@ export function dailyState(save, date) {
  *   milestone's extra coins)
  */
 export function settleDaily(save, { date, reached }) {
-  const f = dailyFields(save);
+  const f = dailyFields(save, date);
   const ok = Boolean(reached);
   if (!dateOpen(f, date)) return { save, refused: true, reached: ok, coins: 0, bonus: 0, streak: isDateKey(date) ? liveStreak(f, date) : f.streak, milestone: null };
   const base = liveStreak(f, date);

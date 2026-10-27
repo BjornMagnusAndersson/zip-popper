@@ -697,3 +697,18 @@ export function setName(save, name) {
   const clean = sanitizeName(name);
   return clean ? { ...save, playerName: clean } : save;
 }
+
+/**
+ * The buzz function the game puts in place of navigator.vibrate (T6.1): it only buzzes while the Settings switch is on;
+ * when it is off it buzzes nothing and stops a buzz that is running.
+ * @param {(pattern: number|number[]) => boolean} real the phone's own vibrate function (already bound)
+ * @param {() => boolean} isOn reads the saved vibration switch right now
+ * @returns {(pattern: number|number[]) => boolean} the guarded vibrate function
+ */
+export function guardVibrate(real, isOn) {
+  return (pattern) => {
+    if (isOn()) return real(pattern);
+    real(0);
+    return false;
+  };
+}

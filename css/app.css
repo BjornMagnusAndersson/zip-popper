@@ -17,6 +17,7 @@
 .app-screen [hidden] { display: none !important; }
 .app-screen h1, .app-screen h2, .app-screen p { margin: 0; }
 .app-screen :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.app-screen:focus, .app-screen:focus-visible { outline: none; } /* the screen itself takes focus after a change (app.js show): no ring on the whole page */
 .app-icon { display: block; width: 24px; height: 24px; flex: none; }
 
 /* ---------- Shared pieces ---------- */
@@ -611,7 +612,7 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
 @media (prefers-reduced-motion: reduce) {
   .app-shopmore { animation: none; }
   .app-mascot__face, .app-mascot__sparkle, .app-title__start, .app-star--on { animation: none; }
-  .app-switch__knob { transition: none; }
+  .app-switch__knob, .app-scrub__fill { transition: none; }
 }
 .app-still .app-mascot__face, .app-still .app-mascot__sparkle, .app-still .app-title__start, .app-still .app-star--on { animation: none; }
 .app-still .app-switch__knob { transition: none; }

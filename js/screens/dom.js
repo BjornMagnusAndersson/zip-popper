@@ -1,7 +1,7 @@
 // Small DOM helpers shared by the non-pop screens (T3.1a): make elements, small cartoon icons, the screen shell and the
 // header with a Back button. All text is set as plain text (textContent), never as HTML. Needs css/app.css.
 
-import { starPoints } from './screen-logic.js';
+import { starPoints, escapeMeansBack } from './screen-logic.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 export const INK = '#2a211d'; // the game's outline colour (as in comic.js and face.js)
@@ -98,6 +98,7 @@ export function screenShell(name, { label, reducedMotion } = {}) {
   const ac = new AbortController();
   const node = el('section', `app-screen app-screen--${name}${reducedMotion ? ' app-still' : ''}`);
   if (label) node.setAttribute('aria-label', label);
+  node.tabIndex = -1; // the game can park keyboard focus on the screen itself after a change (app.js show), so Tab starts at its first control
   return {
     node,
     signal: ac.signal,
@@ -124,6 +125,8 @@ export function header(t, title, onBack, signal) {
   back.setAttribute('aria-label', t('ui.back'));
   back.appendChild(icon('back'));
   back.addEventListener('click', () => onBack?.(), { signal });
+  // Escape works as Back (T6.1) unless the screen used it first (a confirm or a big picture closing); gone with the screen.
+  document.addEventListener('keydown', (e) => { if (head.isConnected && escapeMeansBack(e)) { e.preventDefault(); onBack?.(); } }, { signal });
   head.append(back, el('h1', 'app-head__title', title));
   return head;
 }

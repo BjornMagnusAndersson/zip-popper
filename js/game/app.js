@@ -31,7 +31,7 @@ import { describeRequest } from './requests.js';
 import { economyFromSave } from './economy.js';
 import { getChapter } from '../data/chapters.js';
 import { SHOP_ITEMS } from '../data/economy-data.js';
-import { importNoticeKey } from '../screens/screen-logic.js';
+import { importNoticeKey, osPrefersStill } from '../screens/screen-logic.js';
 import { createTitleScreen } from '../screens/title.js';
 import { createNameScreen } from '../screens/name.js';
 import { createMenuScreen } from '../screens/menu.js';
@@ -124,8 +124,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     setItem: (_k, v) => { persist(L.setSetting(save, 'sound', v !== 'off')); sound.setOn(v !== 'off'); },
   };
 
-  /** Whether the calm version is on (the player's switch). @returns {boolean} true = reduced motion */
-  const still = () => Boolean(save.settings.reducedMotion);
+  /** Whether the calm version is on (the player's switch, or the phone's own reduced-motion setting). @returns {boolean} true = reduced motion */
+  const still = () => Boolean(save.settings.reducedMotion) || osPrefersStill();
   /** The player's name for {name} in texts. @returns {string} the name (the default name when empty) */
   const playerName = () => save.playerName || t('name.default');
   /**
@@ -174,7 +174,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     if (!nav || typeof nav.vibrate !== 'function') return;
     const real = nav.vibrate.bind(nav);
     try {
-      Object.defineProperty(nav, 'vibrate', { configurable: true, value: (pattern) => (save.settings.vibration ? real(pattern) : false) });
+      Object.defineProperty(nav, 'vibrate', { configurable: true, value: L.guardVibrate(real, () => Boolean(save.settings.vibration)) });
     } catch { /* cannot wrap here: vibration then always follows the phone */ }
   }
 
@@ -220,6 +220,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     setMusic({ screen: 'menu' });
     screen = next;
     root.append(next.node);
+    // The old screen (and the button that was focused on it) is gone: keep keyboard focus in the new screen, so Tab starts
+    // at its first control and a screen reader reads its name. Screens that focus a control themselves do so a moment later.
+    const doc = root.ownerDocument ?? document;
+    if (!root.contains(doc.activeElement) || doc.activeElement === root) next.node.focus?.({ preventScroll: true });
     return next;
   }
 
@@ -460,7 +464,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     guideOverlay = null;
     if (!pop) return;
     pop.node.inert = false;
-    if (refocus) pop.node.querySelector('.pop-guide')?.focus({ preventScroll: true });
+    if (refocus) { // the "?" button, or the face when that button is hidden
+      const btn = pop.node.querySelector('.pop-guide');
+      (btn && !btn.hidden ? btn : pop.node.querySelector('.pop-canvas'))?.focus({ preventScroll: true });
+    }
   }
 
   /**
@@ -711,6 +718,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         if (key === 'sound') sound.setOn(value);
         if (key === 'music') { sound.setMusicOn(value); sound.unlock(); setMusic({ screen: 'menu' }); }
         if (key === 'reducedMotion') s.node.classList.toggle('app-still', value);
+        if (key === 'vibration') { try { globalThis.navigator?.vibrate?.(value ? 40 : 0); } catch { /* not allowed here */ } } // a tiny buzz to feel it; off stops any buzz
       },
       onVolume: (key, value, final) => { // a volume slider moved: apply at once, save, and let a let-go effects slider be heard
         persist(L.setSetting(save, key, value));

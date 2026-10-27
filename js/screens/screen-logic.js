@@ -23,6 +23,15 @@ export const SETTING_TOGGLES = [
   { id: 'squeeze', labelKey: 'ui.settings.squeeze', hintKey: 'ui.settings.squeezeHint' }, // T1.7
 ];
 
+/**
+ * The settings switches to show: all of them, except Vibration on a device that cannot vibrate (iPhone, computers; B62).
+ * @param {boolean} canVibrate true when the device has navigator.vibrate
+ * @returns {{id: string, labelKey: string, hintKey?: string}[]} the switches in order
+ */
+export function visibleToggles(canVibrate) {
+  return SETTING_TOGGLES.filter((tog) => canVibrate || tog.id !== 'vibration');
+}
+
 /** The settings volume sliders in order: the settings field, its string key and the volume used before one is saved. */
 export const SETTING_SLIDERS = [
   { id: 'musicVolume', labelKey: 'ui.settings.musicVolume', fallback: 0.7 },
@@ -266,4 +275,30 @@ export function comicEntries(strips, seen) {
 export function importNoticeKey(result) {
   if (result?.ok) return 'ui.settings.imported';
   return result?.error === 'tooNew' ? 'ui.settings.importTooNew' : 'ui.settings.importFailed';
+}
+
+/**
+ * Whether the phone or computer itself asks for less motion (the operating system's reduced-motion setting). The game
+ * treats this like its own Reduced motion switch (T6.1), so screens built from JavaScript also go calm.
+ * @param {{matchMedia?: (query: string) => {matches: boolean}}} [env] where to ask (the page by default; tests pass a fake)
+ * @returns {boolean} true = the system asks for reduced motion
+ */
+export function osPrefersStill(env = globalThis) {
+  try { return Boolean(env?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches); } catch { return false; }
+}
+
+/** Input types where Escape is not needed for typing. */
+const NON_TEXT_INPUTS = ['range', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'color'];
+
+/**
+ * Whether a keypress should act as "Back" on a list-style screen: the Escape key, not already used by something that
+ * closed first (a confirm, a big picture), and not typed into a text field (a slider, checkbox or button input does not count).
+ * @param {{key?: string, defaultPrevented?: boolean, target?: {tagName?: string, type?: string, isContentEditable?: boolean}|null}} e the keydown event
+ * @returns {boolean} true = go back
+ */
+export function escapeMeansBack(e) {
+  if (!e || e.key !== 'Escape' || e.defaultPrevented) return false;
+  const tag = String(e.target?.tagName ?? '').toUpperCase();
+  const typing = tag === 'INPUT' && !NON_TEXT_INPUTS.includes(String(e.target?.type ?? '').toLowerCase());
+  return !(typing || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable);
 }

@@ -893,9 +893,11 @@ export function createPopMode({
    */
   function startNow(focus) {
     if (ready && !disposed) newFace(focus);
+    else if (focus) wantFocus = true; // asked before the first measure: the face takes keyboard focus once it is there
   }
 
   let resizeTimer = 0;
+  let wantFocus = false; // a round or free play asked for the face before the scene was measured (see startNow)
   /** Window or stage size changed: lay the scene out again a moment later (once the size has settled). @returns {void} */
   const onResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(relayout, 120); };
   const watcher = typeof ResizeObserver === 'function' ? new ResizeObserver(onResize) : null; // also catches bar size changes
@@ -911,7 +913,7 @@ export function createPopMode({
       host.append(root);
       globalThis.addEventListener?.('resize', onResize);
       watcher?.observe(stage);
-      requestAnimationFrame(() => { ready = true; newFace(false); }); // the demo face, or a round/free play asked for before
+      requestAnimationFrame(() => { ready = true; newFace(wantFocus); wantFocus = false; }); // the demo face, or a round/free play asked for before
     },
     /**
      * Play ONE customer (T3.1b). Their face, exactly bumpCount bumps of the allowed kinds (decoys and the Evil Horn

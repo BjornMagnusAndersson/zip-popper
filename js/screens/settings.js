@@ -4,7 +4,7 @@
 
 import { el, button, icon, header, screenShell } from './dom.js';
 import { createNameField } from './name.js';
-import { SETTING_TOGGLES, SETTING_SLIDERS, volumePercent } from './screen-logic.js';
+import { visibleToggles, SETTING_SLIDERS, volumePercent } from './screen-logic.js';
 
 /**
  * Build the settings screen.
@@ -12,7 +12,7 @@ import { SETTING_TOGGLES, SETTING_SLIDERS, volumePercent } from './screen-logic.
  *   settings?: {sound?: boolean, music?: boolean, vibration?: boolean, reducedMotion?: boolean},
  *   onName?: (name: string) => void, onToggle?: (key: string, value: boolean) => void, onExport?: () => void,
  *   onImport?: (text: string) => void, onReset?: () => void, onBack?: () => void, reducedMotion?: boolean,
- *   onVolume?: (key: string, value: number, final: boolean) => void}} opts
+ *   onVolume?: (key: string, value: number, final: boolean) => void, canVibrate?: boolean}} opts
  *   t = string function; playerName = the name now; settings = the switches and the two volumes (musicVolume, sfxVolume,
  *   0 to 1); onName = a clean name was confirmed;
  *   onToggle = a switch changed (setting name, new value); onExport = Export save; onImport = the text of the chosen save
@@ -23,6 +23,7 @@ import { SETTING_TOGGLES, SETTING_SLIDERS, volumePercent } from './screen-logic.
  */
 export function createSettingsScreen({
   t, playerName = '', settings = {}, onName, onToggle, onVolume, onExport, onImport, onReset, onBack, reducedMotion = false,
+  canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
 }) {
   const shell = screenShell('settings', { label: t('ui.settings.title'), reducedMotion });
   let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, ...settings };
@@ -49,7 +50,7 @@ export function createSettingsScreen({
 
   // Switches
   const switchCard = el('section', 'app-card app-setcard');
-  const switches = SETTING_TOGGLES.map((tog) => {
+  const switches = visibleToggles(canVibrate).map((tog) => {
     const row = el('div', 'app-switchrow');
     let label = el('span', 'app-switchrow__label', t(tog.labelKey));
     if (tog.hintKey) { // a switch with a short explanation under its name (the two-finger squeeze, T1.7)
@@ -157,7 +158,7 @@ export function createSettingsScreen({
   confirmRow.append(keepBtn, button('app-btn app-btn--danger app-reset-yes', t('ui.settings.resetYes'), () => { askReset(false); onReset?.(); }, shell.signal));
   confirm.append(el('p', 'app-confirm__ask', t('ui.settings.resetAsk')), el('p', 'app-confirm__warn', t('ui.settings.resetWarn')), confirmRow);
   resetCard.append(resetBtn, confirm);
-  shell.node.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !confirm.hidden) askReset(false); }, { signal: shell.signal });
+  shell.node.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !confirm.hidden) { e.preventDefault(); askReset(false); } }, { signal: shell.signal });
 
   /** Show or hide the "are you sure" step; the safe button gets the focus. @param {boolean} on true = ask @returns {void} */
   function askReset(on) {
