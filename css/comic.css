@@ -64,8 +64,8 @@
   color: rgba(255, 243, 230, 0.7); font-size: 0.85rem;
 }
 .comic-end {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
-  background: rgba(30, 22, 32, 0.72); cursor: default;
+  position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: rgba(30, 22, 32, 0.72); cursor: default; /* z-index: above the bubble bands of the last panel (R7: they covered Replay and Continue) */
 }
 .comic-end[hidden] { display: none; }
 .comic-end__text {

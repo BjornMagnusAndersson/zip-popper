@@ -1,8 +1,9 @@
 // Chapter 1 strip "The secret" (T4.3a): after the ban, {name} pops in secret. 10 panels.
 // Beginning: night one of the ban, a torch and one bubble of bubble wrap under the duvet; he asks why the bed glows.
 // Middle: night two, a sock puppet decoy ("Decoy {name}") takes her place while she pops in the wardrobe.
-// End: his phone light finds the sock, then her, mid-pop. Button: night three, he sleeps in his helmet and the sock
-// guards him. Running gag: his "No." (and once hers). Armor gag: helmet on the bedpost, then on his head.
+// End: his phone light finds the sock, then her, mid-pop. Button: night three, he lies awake and the sock
+// guards him. Running gag: his "No." (and once hers). No armor yet (R7): the helmet first shows in strip 2, the morning after
+// the torchlight night pop, so she is surprised by it.
 // Visual surprise: the phone light shows a sock on her pillow. The plant watches from the corner. Format: docs/COMIC-FORMAT.md.
 
 const NIGHT = ['#1d1e42', '#2f2e63']; // dark night sky colours for plain backgrounds
@@ -93,13 +94,12 @@ export const STRIP = {
   title: 'comic.s1.title',
   panels: [
     {
-      // 1. Night one of the ban. He sleeps (helmet on the bedpost, just in case); she lies awake. The plant watches.
+      // 1. Night one of the ban. He sleeps; she lies awake. The plant watches.
       layout: 'wide',
       scene: {
         layers: [
           bedroom(1600, 900, { floorY: 640, windowX: 0.84, plant: true, plantX: 0.07 }),
           { art: 'bed', x: 800, y: 900, w: 1000 },
-          ...miniHelmet(345, 262, 0.62),
           { id: 'him', art: 'husband', x: 560, y: 690, pose: 'lie', expr: 'sleepy', outfit: 'pajamas' },
           { id: 'her', art: 'heroine', x: 1040, y: 690, pose: 'lie', expr: 'sneaky', outfit: 'pajamas', look: -1 },
           { art: 'blanket', x: 800, y: 900, w: 1000, color: '#7b6ad8' },
@@ -200,7 +200,6 @@ export const STRIP = {
           { shape: 'path', d: 'M1230 150 L1130 110 L1130 690 L1230 650Z', fill: '#8a6a3a', stroke: true, sw: 6 },
           { shape: 'circle', x: 1150, y: 410, r: 12, fill: '#ffd25a', stroke: true, sw: 4 },
           { art: 'bed', x: 560, y: 900, w: 900 },
-          ...miniHelmet(160, 302, 0.55),
           { id: 'him', art: 'husband', x: 344, y: 690, pose: 'lie', expr: 'sleepy', outfit: 'pajamas' },
           ...sockPuppet(776, 440, 0.95, { id: 'sock' }),
           { art: 'blanket', x: 560, y: 900, w: 900, color: '#7b6ad8' },
@@ -286,14 +285,14 @@ export const STRIP = {
       ],
     },
     {
-      // 10. Button: night three. He sleeps in his helmet, wide awake; Decoy {name} guards him (in a tiny helmet).
+      // 10. Button: night three. He lies in his pyjamas, wide awake; Decoy {name} guards him. (No helmet yet: it comes in strip 2, after the night popping.)
       layout: 'tall',
       scene: {
         layers: [
           bedroom(900, 1200, { floorY: 760, windowX: 0.5, plant: true, plantX: 0.93 }),
           { art: 'bed', x: 450, y: 1190, w: 820 },
-          ...sockPuppet(140, 470, 0.55, { body: true, helmet: true }),
-          { id: 'him', art: 'husband', x: 253, y: 980, pose: 'lie', expr: 'grumpy', outfit: 'armor', visor: 'up' },
+          ...sockPuppet(140, 470, 0.55, { body: true }),
+          { id: 'him', art: 'husband', x: 253, y: 980, pose: 'lie', expr: 'grumpy', outfit: 'pajamas' },
           { id: 'her', art: 'heroine', x: 647, y: 980, pose: 'lie', expr: 'sad', outfit: 'pajamas' },
           { art: 'blanket', x: 450, y: 1190, w: 820, color: '#7b6ad8' },
         ],

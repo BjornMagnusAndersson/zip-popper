@@ -89,8 +89,12 @@ export const POSES = {
   hips: { arms: [[[-175, -280], [-90, -205]], [[175, -280], [90, -205]]], legs: 'stand' },
   pop: { arms: [[[-175, -320], [-128, -470]], [[175, -320], [128, -470]]], legs: 'stand', wiggle: true },
   shrug: { arms: [[[-165, -290], [-200, -380]], [[165, -290], [200, -380]]], legs: 'stand', open: [true, true] },
+  // The hand cups the chin (R7: after the pop on his chin he used to cover an eye with the facepalm).
+  chin: { arms: [[[-112, -270], [-116, -175]], [[135, -300], [22, -392]]], legs: 'stand' },
   facepalm: { arms: [[[-112, -270], [-116, -175]], [[150, -320], [40, -505]]], legs: 'stand' },
   sit: { arms: [[[-118, -230], [-104, -150]], [[118, -230], [104, -150]]], legs: 'sit', hipY: -100, down: 75 },
+  // Sitting with no arms drawn, for scenes that draw the arms themselves (strip 'plan' panel 1: his hands hold the plan).
+  sitHands: { arms: null, legs: 'sit', hipY: -100, down: 75 },
   bust: { arms: [[[-112, -270], [-116, -175]], [[112, -270], [116, -175]]], legs: 'none', shift: 260 },
   lie: { arms: null, legs: 'none', shift: 260 },
 };
@@ -1570,14 +1574,17 @@ function gloves(l) {
  * The plant on its own (milestone "First plant" on): a lush leafy plant in a terracotta pot, for close-ups and for
  * carrying around. Same look as the room's plant, but it scales. Running gag: it watches with eyes on the pot.
  * @param {object} l layer: x, y (floor, middle of the pot), scale, eyes ('sad' | 'wide' | 'smug' | 'happy'),
- *   scarf (colour of Greta's knitted scarf), bud (true or a colour: a round pink bud on top), sweat (a worried drop)
+ *   scarf (colour of Greta's knitted scarf), bud (true or a colour: a round pink bud on top), sweat (a worried drop),
+ *   droop (true: a limp, pale plant with leaves flopping sideways)
  * @returns {{node: SVGElement}} the plant
  */
 function plant(l) {
   const g = el('g');
-  for (const [a, len] of [[-72, 130], [-48, 190], [-24, 240], [0, 270], [24, 235], [48, 185], [72, 125]]) {
+  // A drooping plant (R7, droop: the sad plant in the dump): fewer, shorter leaves that flop sideways, a duller green.
+  const leaves = l.droop ? [[-112, 110], [-86, 150], [-58, 125], [60, 125], [88, 150], [114, 105]] : [[-72, 130], [-48, 190], [-24, 240], [0, 270], [24, 235], [48, 185], [72, 125]];
+  for (const [a, len] of leaves) {
     const lg = el('g', { transform: `translate(0 -130) rotate(${a})` });
-    lg.appendChild(el('ellipse', { cx: 0, cy: -len / 2, rx: 28, ry: len / 2, fill: Math.abs(a) % 48 ? '#3fae8c' : '#59b85f', ...ink(5) }));
+    lg.appendChild(el('ellipse', { cx: 0, cy: -len / 2, rx: 28, ry: len / 2, fill: l.droop ? '#8aa86a' : Math.abs(a) % 48 ? '#3fae8c' : '#59b85f', ...ink(5) }));
     lg.appendChild(line(`M0 -8 L0 ${-len * 0.8}`, 3.5, { stroke: '#2e8a6c', opacity: 0.6 }));
     g.appendChild(lg);
   }

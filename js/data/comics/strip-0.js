@@ -163,7 +163,7 @@ export const STRIP = {
         layers: [
           { art: 'rays', w: 1000, h: 1000, x: 330, y: 260, colors: ['#ffe9a8', '#ffd25a'] },
           { art: 'burst', x: 300, y: 240, r: 210, color: '#ff9cbc' },
-          { id: 'him', art: 'husband', x: 300, y: 1000, pose: 'facepalm', expr: 'shocked' },
+          { id: 'him', art: 'husband', x: 300, y: 1000, pose: 'chin', expr: 'shocked' },
           { art: 'sparkles', x: 330, y: 560, r: 100 },
           { id: 'her', art: 'heroine', x: 720, y: 1000, pose: 'cheer', expr: 'bliss' },
         ],

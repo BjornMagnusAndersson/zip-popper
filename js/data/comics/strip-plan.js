@@ -5,7 +5,7 @@
 // as a clean, sparkling studio. She signs the lease without reading it ("the roof is not included"). End: the huge
 // rusty key, moving in (one chair, one bucket, one lamp, and the sad plant she adopts), and the evening outside:
 // "Tomorrow." Tone (owner): HOPEFUL; nobody is mean. Greta and Nils are NOT in this strip (they come in strip 5).
-// Running gags: his helmet gets fancier (three plumes, now a cereal spoon tucked in like a feather), the plant (sad,
+// Running gags: his helmet gets fancier (three plumes, now with cereal loops still stuck on it), the plant (sad,
 // then amazed, then happy and greener), the roof. Visual surprise: the dream studio. Format: docs/COMIC-FORMAT.md.
 
 /** Her husband in his helmet over the hoodie, three plumes (the helmet ladder, see STORY.md). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
@@ -19,20 +19,15 @@ function headOf(l) {
 }
 
 /**
- * The running gag this time: a cereal spoon tucked into the side of his helmet like a feather (the helmet was his
- * cereal bowl), and optionally a few cereal loops still stuck on it.
+ * The running gag this time: his helmet was the cereal bowl, so a few cereal loops and a drip of milk are still stuck
+ * on it (the spoon feather was dropped in R7: it looked like an antenna).
  * @param {object} him the husband layer @param {boolean} [loops] cereal loops and a drop of milk on the helmet
  * @returns {object[]} shape layers (put them after him)
  */
 function spoon(him, loops = false) {
   const { x, y, k } = headOf(him);
   const f = him.flip ? -1 : 1;
-  const out = [
-    { shape: 'path', d: `M${x + f * 112 * k} ${y - 30 * k} L${x + f * 178 * k} ${y - 170 * k}`, stroke: true, sw: 18 * k + 4 },
-    { shape: 'path', d: `M${x + f * 112 * k} ${y - 30 * k} L${x + f * 178 * k} ${y - 170 * k}`, stroke: '#d7dee7', sw: 18 * k },
-    { shape: 'ellipse', x: x + f * 190 * k, y: y - 204 * k, rx: 26 * k, ry: 40 * k, rotate: f * 26, fill: '#d7dee7', stroke: true, sw: 5 },
-    { shape: 'ellipse', x: x + f * 184 * k, y: y - 214 * k, rx: 8 * k, ry: 16 * k, rotate: f * 26, fill: '#ffffff', opacity: 0.8 },
-  ];
+  const out = []; // R7: the spoon that used to stick out of the side read as an antenna, so only the cereal remains
   if (loops) {
     for (const [dx, dy, c] of [[-60, -110, '#f3a33a'], [40, -128, '#e66a8f'], [-10, -140, '#ffd25a'], [70, -96, '#f3a33a']]) {
       out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 15 * k, fill: c, stroke: true, sw: 4 });
@@ -106,7 +101,7 @@ function phoneWall(x, y, k) {
 }
 
 /** A small art layer helper: the sad plant she adopts, on its own. @param {number} x @param {number} y pot bottom @param {number} s scale @param {string} eyes face @returns {object} layer */
-const littlePlant = (x, y, s, eyes) => ({ id: 'plant', art: 'plant', x, y, scale: s, eyes, mouth: [x, y - 150 * s] });
+const littlePlant = (x, y, s, eyes) => ({ id: 'plant', art: 'plant', x, y, scale: s, eyes, droop: eyes === 'sad', mouth: [x, y - 150 * s] });
 
 /** Where a figure's raised hand is in the 'wave' pose (comic-art POSES.wave: hand at 190, -530). @param {object} l the figure layer @returns {number[]} [x, y] in panel units */
 const waveHand = (l) => [l.x + (l.flip ? -190 : 190) * (l.scale ?? 1), l.y - 530 * (l.scale ?? 1)];
@@ -160,17 +155,17 @@ function lease(x, y) {
 }
 
 /**
- * Her arm reaching over the lease to sign (drawn over the pages, since she stands behind the machine): pink sleeve,
+ * Her arm reaching over the lease to sign (drawn over the pages, since she stands behind the machine; a bent arm about as long as her real one, R7): pink sleeve,
  * hand and a pen whose tip sits at the end of her big loop.
  * @returns {object[]} shape layers
  */
 const signingHand = () => [
-  { shape: 'path', d: 'M690 700 Q820 660 950 712', stroke: true, sw: 48 },
-  { shape: 'path', d: 'M690 700 Q820 660 950 712', stroke: '#e66a8f', sw: 36 },
-  { shape: 'rect', x: 984, y: 700, w: 15, h: 100, rx: 6, fill: '#6a7be6', stroke: true, sw: 4, rotate: -20 },
-  { shape: 'path', d: 'M1004 790 L1018 788 L1006 812Z', fill: '#fff8ee', stroke: true, sw: 3 },
-  { shape: 'ellipse', x: 974, y: 726, rx: 25, ry: 23, fill: '#ebb795', stroke: true, sw: 5 },
-  { shape: 'path', d: 'M1030 760 l20 -10 M1036 786 l22 0', stroke: true, sw: 4, opacity: 0.6 },
+  { shape: 'path', d: 'M694 700 Q770 778 876 724', stroke: true, sw: 48 },
+  { shape: 'path', d: 'M694 700 Q770 778 876 724', stroke: '#e66a8f', sw: 36 },
+  { shape: 'rect', x: 884, y: 700, w: 15, h: 100, rx: 6, fill: '#6a7be6', stroke: true, sw: 4, rotate: -20 },
+  { shape: 'path', d: 'M904 790 L918 788 L906 812Z', fill: '#fff8ee', stroke: true, sw: 3 },
+  { shape: 'ellipse', x: 874, y: 726, rx: 25, ry: 23, fill: '#ebb795', stroke: true, sw: 5 },
+  { shape: 'path', d: 'M930 760 l20 -10 M936 786 l22 0', stroke: true, sw: 4, opacity: 0.6 },
 ];
 
 /**
@@ -260,7 +255,7 @@ export const STRIP = {
         layers: [
           { art: 'room', kind: 'kitchen', w: 1600, h: 900, floorY: 600, windowX: 0.5, plant: false },
           { id: 'her', art: 'heroine', x: 420, y: 860, pose: 'sit', expr: 'happy', look: 1 },
-          { id: 'him', art: 'husband', x: 1170, y: 860, pose: 'sit', expr: 'neutral', look: -1 },
+          { id: 'him', art: 'husband', x: 1170, y: 860, pose: 'sitHands', expr: 'neutral', look: -1 },
           ...table(-20, 1620, 640, 900),
           // His arms reach up to the plan; the plan is upside down.
           { shape: 'path', d: 'M1098 590 Q1040 640 1018 620', stroke: true, sw: 52 },
@@ -355,7 +350,7 @@ export const STRIP = {
           { id: 'her', art: 'heroine', x: 600, y: 1000, scale: 0.9, pose: 'stand', expr: 'proud' },
           { id: 'landlord', art: 'landlord', x: 1230, y: 960, pose: 'wave', flip: true, expr: 'happy', look: -1 },
           ...counter(300, 1360, 700, 900),
-          ...lease(900, 610),
+          ...lease(800, 610),
           ...signingHand(),
         ],
       },
