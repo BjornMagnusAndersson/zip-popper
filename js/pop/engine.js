@@ -134,6 +134,7 @@ function affine(s, d) {
  *   squeeze?: boolean (two fingers round a bump squeeze it, T1.7; off = two fingers always zoom),
  *   twist?: string|null (the customer's twist, T8.3: 'fidgety', 'ticklish' or 'sensitive'; anything else = none),
  *   onGiggle?: (at: {x: number, y: number}) => void (the ticklish customer giggled at this bump, scene px),
+ *   refuse?: (p: object) => void (the husband in armor, ch 2: the first pop is NOT done, popping stops and this is told which bump),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
@@ -641,11 +642,31 @@ export function createPopScene(canvas, o) {
   }
 
   /**
+   * Stop all popping at once: let go of every press and ignore new ones (a storm-off, or the armor's refusal).
+   * @returns {void}
+   */
+  function haltAll() {
+    halted = true;
+    hold = null;
+    keyHold = null;
+    resetSqueeze();
+    forget();
+    warmHold = null;
+    for (const p of pimples) if (!p.popped) p.pressure = 0;
+    kick();
+  }
+
+  /**
    * Pop a pimple: goo (or the tweezers pull a blackhead), sound, buzz, wobble, and a pink mark left behind.
    * @param {object} p the pimple
    * @returns {void}
    */
   function pop(p) {
+    if (typeof o.refuse === 'function' && !halted) { // the husband in armor (ch 2): the first pop is refused and popping stops
+      haltAll();
+      try { o.refuse(p); } catch (e) { console.warn('refuse failed:', e); }
+      return;
+    }
     if (squeeze?.p === p) { p.gooDir = gooDirection(p.axis); endSqueeze(); } // squeezed out: the goo squirts across
     if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
       // B72: the pop that clears the face stops the meter just under full, so a customer whose every bump is out
@@ -1952,16 +1973,7 @@ export function createPopScene(canvas, o) {
     /** The irritation meter now (T1.2b). @returns {number} 0..1 */
     irritation: () => irr.level,
     /** Stop all popping (the customer stormed off): let go of every press, ignore new ones. @returns {void} */
-    halt() {
-      halted = true;
-      hold = null;
-      keyHold = null;
-      resetSqueeze();
-      forget();
-      warmHold = null;
-      for (const p of pimples) if (!p.popped) p.pressure = 0;
-      kick();
-    },
+    halt() { haltAll(); },
     /** Stop the loop and the listeners. @returns {void} */
     dispose() {
       disposed = true;

@@ -568,6 +568,7 @@ export function reactionKey(customer, owCount) {
 /**
  * Applies the end of a customer round (pop-mode.js onFinish payload) to the save.
  * - Failed + Try again ('again'): nothing changes, retry is true (the game starts the same customer again).
+ * - Failed + escape ('escape', the husband in armor, chapter 2): nothing is paid or lost, no retry, the story moves on.
  * - Failed + Next customer ('next'): the skip costs reputation (2, 3, 4, 5 in a row), the story moves on.
  * - Finished: coins (roundPayout), reputation from stars, stats, mastery for every clean pop, the story moves on.
  * Also says which milestone strips became playable (careerStrips) and what the result screen shows.
@@ -588,6 +589,12 @@ export function reactionKey(customer, owCount) {
 export function applyRound(save, payload, step) {
   const failed = Boolean(payload?.failed);
   const kw = Boolean(step?.keepWorking);
+  if (failed && payload.failChoice === 'escape') {
+    // The husband in armor gets away unharmed (owner 2026-10-27): no pay, no stars, no reputation change, no skip cost and
+    // no retry; the story simply moves on.
+    const moved = progressToSave(advance(progressFromSave(save), 'done'));
+    return { save: { ...save, ...moved }, retry: false, failed, escaped: true, stars: 0, payout: null, reputationChange: 0, skipPenalty: 0, strips: [], factKey: null, reactionKey: undefined };
+  }
   if (failed && payload.failChoice !== 'next') {
     return { save, retry: true, failed, stars: 0, payout: null, reputationChange: 0, skipPenalty: 0, strips: [], factKey: null, reactionKey: undefined };
   }

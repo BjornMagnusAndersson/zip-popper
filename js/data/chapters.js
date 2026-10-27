@@ -26,7 +26,8 @@ export const HUSBAND = {
 
 /**
  * The husband in his armor for chapter 2 (Sir Zitsalot): the only customer of that chapter, a small pop through the
- * gap in the armor. Two whitehead bumps. His lines are chapter keys (chapter.2.husband.*). The pop scene draws him
+ * gap in the armor, which he refuses: the first pop does not happen, he slams the visor and runs off unharmed (escape).
+ * Two whitehead bumps. His lines are chapter keys (chapter.2.husband.*). The pop scene draws him
  * in his helmet (T2.4); the same armor option (plumes, cozy hat, cracks) serves the last boss later.
  */
 export const HUSBAND_ARMOR = {
@@ -41,6 +42,7 @@ export const HUSBAND_ARMOR = {
   bumps: 2,
   bumpTypes: ['whitehead'],
   chapter: 2,
+  escape: true, // owner 2026-10-27: the armor wins; the first pop is refused and he runs off unharmed (no pay, no retry)
 };
 
 /**

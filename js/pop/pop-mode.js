@@ -262,6 +262,17 @@ export function createPopMode({
     button('pop-btn pop-btn--main', t('pop.fail.again'), () => (cfg.kind === 'round' ? finishRound(current, 'again') : newFace(true, true))),
     failNext,
   );
+  // The escape overlay (the husband in armor, chapter 2): the first pop is refused, he runs off unharmed. One button,
+  // no retry, no cost, no pay.
+  const escape = el('div', 'pop-fail pop-fail--escape');
+  escape.hidden = true;
+  escape.setAttribute('role', 'dialog');
+  escape.setAttribute('aria-label', t('pop.escape.title'));
+  escape.append(
+    el('p', 'pop-fail__title', t('pop.escape.title')),
+    el('p', 'pop-fail__text', t('pop.escape.text')),
+    button('pop-btn pop-btn--main', t('pop.escape.next'), () => finishRound(current, 'escape')),
+  );
   /**
    * Set the header and the fail choice texts for what is being played (B3, B5): a customer round shows the customer's
    * name and what "Next customer" costs in reputation; free play and the demo show the plain texts.
@@ -285,7 +296,7 @@ export function createPopMode({
   const zoomOut = zoomButton('out', '<path d="M5 12h14"/>', () => current?.scene?.zoomBy(1 / ZOOM_STEP));
   const zoomReset = zoomButton('reset', '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>', () => current?.scene?.resetView());
   zoomBox.append(zoomIn, zoomOut, zoomReset);
-  root.append(head, stage, bar, foot, done, fail);
+  root.append(head, stage, bar, foot, done, fail, escape);
   root.addEventListener('keydown', onZoomKey);
   root.addEventListener('pointerdown', () => sound.unlock(), true);
 
@@ -509,6 +520,32 @@ export function createPopMode({
     }, still() ? 250 : 700);
   }
 
+  /**
+   * The husband in armor refuses the first pop (chapter 2): the visor slams shut, the face slides away unharmed, and a
+   * single Continue button follows. No stars, no pay, no reputation change, no retry (applyRound's escape branch).
+   * @param {object} c the current face
+   * @returns {void}
+   */
+  function armorEscape(c) {
+    c.failed = true;
+    c.escaped = true;
+    newBtn.disabled = true;
+    c.round = registerFail(c.round);
+    c.popEnd ??= elapsedFor(c);
+    clearTimeout(c.winceTimer);
+    sound.play('splat'); // CLANK
+    buzz([40, 30, 90]);
+    c.canvas.classList.add('pop-canvas--storm');
+    foot.hidden = true;
+    bar.hidden = true;
+    zoomBox.hidden = true;
+    c.failTimer = setTimeout(() => {
+      if (current !== c) return;
+      escape.hidden = false;
+      escape.querySelector('button')?.focus({ preventScroll: true });
+    }, still() ? 250 : 700);
+  }
+
   /** After a fail: take the reputation hit (a hook for now) and show the next customer. @returns {void} */
   function nextAfterFail() {
     const c = current;
@@ -632,7 +669,7 @@ export function createPopMode({
    * End a customer round (round mode only) and tell the game, once: after the cleanup, or after a storm-off when the
    * player picked Try again ('again') or Next customer ('next'). The face stays on screen; the game decides what next.
    * @param {object|null} c the face of the round
-   * @param {'again'|'next'|null} [choice] the fail choice (null for a finished customer)
+   * @param {'again'|'next'|'escape'|null} [choice] the fail choice (null for a finished customer; 'escape' = the armor's refusal)
    * @returns {void}
    */
   function finishRound(c, choice = null) {
@@ -641,6 +678,7 @@ export function createPopMode({
     clearTimeout(c.endTimer);
     clearInterval(c.reqTimer);
     fail.hidden = true;
+    escape.hidden = true;
     if (!c.counted) { results.push(c.round); c.counted = true; }
     const payload = finishPayload({
       round: c.round, elapsedSeconds: elapsedFor(c), cleanBumpTypes: c.cleanTypes, cleanBumpTools: c.cleanTools,
@@ -765,6 +803,7 @@ export function createPopMode({
     clearInterval(prev?.reqTimer);
     root.classList.remove('pop-game--ending'); // a new face: the game's Menu button may show again
     fail.hidden = true;
+    escape.hidden = true;
     showIrritation(0);
     newBtn.disabled = false;
     newBtn.hidden = cfg.kind === 'round'; // a customer round has no "New face" (the game picks the next customer)
@@ -822,6 +861,7 @@ export function createPopMode({
       irritation: round ? cfg.irritation : undefined,
       twist: round ? cfg.twist : null, // the customer's twist (T8.3; the hurry twist is the request banner)
       onGiggle: (at) => { if (current === c) showGiggle(c, at); },
+      refuse: round && cfg.escape ? () => { if (current === c && !c.failed) armorEscape(c); } : undefined, // chapter 2: the armor wins
       onOw: (at) => {
         if (current !== c) return;
         showOw(c, at);
@@ -972,6 +1012,7 @@ export function createPopMode({
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {}, irritation: irritationScales(o.difficulty),
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
         hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
+        escape: o.customer?.escape === true, // the husband in armor (chapter 2) refuses the first pop and runs off
         twist: typeof o.twist === 'string' ? o.twist : null, // T8.3: the customer's twist
         twistHint: typeof o.twistHintKey === 'string' ? o.twistHintKey : null,
       };
