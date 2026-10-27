@@ -63,6 +63,8 @@ const PRECACHE = [
   './js/data/facts.js',
   './js/data/tools.js',
   './js/data/twists.js',
+  './js/data/customer-lines.js',
+  './js/game/customer-lines.js',
   './js/data/bosses.js',
   './js/pop/twist-logic.js',
   './js/game/chapter-logic.js',
@@ -109,7 +111,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v42';
+const CACHE_VERSION = 'v43';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

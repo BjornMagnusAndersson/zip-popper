@@ -51,6 +51,9 @@ export function defaultSave(now = Date.now()) {
     albumFaces: [], // Face album (T8.2): small recipes of the faces she has cleared, no pictures (old saves load [])
     seenTwists: [], // Field guide (T8.3): the customer twists she has met (fidgety, ticklish, sensitive, hurry; old saves load [])
     seenBosses: [], // Field guide (T8.4): the boss and event customers she has met (hairday, nosestrip, golden, horn; old saves load [])
+    // Line memory (R6-lines, game/customer-lines.js): per regular id or walk-in name key, the visits and the line keys
+    // said last time {visits, intro?, second?, result?}, so a return visit says other lines (old saves load {})
+    customerLines: {},
   };
 }
 
@@ -183,7 +186,26 @@ export function normalizeSave(raw, now = Date.now()) {
     albumFaces: albumList(s.albumFaces),
     seenTwists: words(s.seenTwists, d.seenTwists),
     seenBosses: words(s.seenBosses, d.seenBosses),
+    customerLines: lineMemo(s.customerLines),
   };
+}
+
+/**
+ * The line memory (R6-lines), cleaned: at most 60 customers (ids of up to 60 characters), each with a visit count and
+ * the short line keys said last time; anything else is dropped.
+ * @param {unknown} v the stored table
+ * @returns {Object<string, {visits: number, intro?: string, second?: string, result?: string}>} the memory
+ */
+function lineMemo(v) {
+  const out = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [id, e] of Object.entries(v).slice(-60)) {
+    if (id.length > 60 || id === '__proto__' || !e || typeof e !== 'object') continue;
+    const entry = { visits: count(e.visits, 0) };
+    for (const k of ['intro', 'second', 'result']) if (shortText(e[k], 60)) entry[k] = e[k];
+    out[id] = entry;
+  }
+  return out;
 }
 
 /** A short text, or undefined. @param {unknown} v value @param {number} max longest length @returns {string|undefined} */

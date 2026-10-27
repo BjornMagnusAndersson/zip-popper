@@ -710,7 +710,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function finishRound(step, payload, again, args) {
-    const out = L.applyRound(save, payload, args?.boss ? { ...step, boss: args.boss.id } : step); // a boss pays its bonus (T8.4)
+    // A boss pays its bonus (T8.4); the visit's lines go along so the line memory counts the visit (R6-lines).
+    const out = L.applyRound(save, payload, { ...step, ...(args?.boss ? { boss: args.boss.id } : {}), ...(args?.lines ? { lines: args.lines } : {}) });
     if (out.retry) { again(); return; }
     // T8.5: a daily challenge try (finished or skipped) settles the goal reward and the streak, once per day.
     const daily = step.daily

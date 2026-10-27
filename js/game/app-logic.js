@@ -14,12 +14,14 @@ import {
   SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL, KEEP_WORKING_PAY,
 } from '../data/economy-data.js';
 import { pickRequest, hurryLimit } from './requests.js';
+import { customerLines, hurryLineRequest, recordLines } from './customer-lines.js';
 import { dailyFor, dailySpec, dailyRequest, isDateKey, addDays } from './daily-logic.js';
 import { twistFor, shownTwist, describeTwist, isTwist, TWIST_IDS, CAREER_HURRY } from '../data/twists.js';
 import { bossFor, bossSpec, describeBoss, isBoss, BOSS_IDS, BOSSES } from '../data/bosses.js';
 import { STUDIO_LAYERS, studioTier, studioLayersShown, heroOutfit, OUTFIT_TIERS, OUTFIT_ITEMS } from './studio.js';
 import { hurryHolds } from '../pop/round-logic.js';
 import { BUMP_IDS } from '../data/bumps.js';
+import { TOOL_IDS } from '../data/tools.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
 import { GUIDE_KINDS } from '../screens/guide-logic.js';
@@ -434,6 +436,10 @@ export function backdropRoom(chapter) {
  * customer. Same person, the event's bumps and accessory (bossSpec), no twist and no request; boss = the face rules
  * and the event id (applyRound pays its bonus when the step carries `boss`), bossNameKey = its name for the chip,
  * twistHintKey = the event's tip.
+ * Lines (R6-lines, SPEC D28, game/customer-lines.js): `lines` = this visit's line keys (also copied into customer's
+ * introKey, deadlineKey = the second line, and resultKeys); a customer who may ask for a request can instead be the
+ * "Hurry, hurry, hurry!" customer (hurryLineRequest: a hurry request with line: true and an easy clock). step.hurryTier
+ * picks a harder tier for a later game (data/customer-lines.js HURRY_LINE_TIERS); v1 never sets it.
  * @returns {object|null} startRound arguments, or null when the chapter has no such customer
  */
 export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, forcedBoss = null) {
@@ -461,11 +467,21 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
   let request = null; // one extra per customer (T8.3): a twist customer has no request
   if (daily) request = dailyRequest(daily.goal, holds); // a daily clock day: the hurry clock with the daily limit (T8.5)
   else if (own === 'hurry') request = { type: 'hurry', timeLimit: hurryLimit(holds) };
-  else if (!own && !bossId) request = pickRequest(spec, holds, seed + 101, requestNumber); // a boss has no request (T8.4)
+  else if (!own && !bossId) { // a boss has no request (T8.4)
+    // R6-lines (SPEC D28): about 1 in 20 of these says "Hurry, hurry, hurry!" and gets an easy clock; step.hurryTier
+    // is the hook for a harder later game (data/customer-lines.js HURRY_LINE_TIERS).
+    request = hurryLineRequest({ allowed: Boolean(spec.requestAllowed), holds, seed, tier: step.hurryTier })
+      ?? pickRequest(spec, holds, seed + 101, requestNumber);
+  }
   const twist = shownTwist(own, request);
   const boss = describeBoss(bossId);
+  // R6-lines: this visit's lines (first visit or return, a clock joke only with a real clock, never the same twice).
+  const lines = customerLines(save, spec.customer, {
+    seed, step, timed: request?.type === 'hurry', hurryLine: request?.line ? { tier: request.tier, missPenalty: request.missPenalty } : null,
+  });
+  const customer = { ...spec.customer, introKey: lines.introKey, deadlineKey: lines.secondKey, resultKeys: { ...lines.resultKeys } };
   return {
-    customer: spec.customer, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
+    customer, lines, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes], difficulty: spec.difficulty,
     seed, holdFactors, roughReductions, unlockedTools,
     request, room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), career: true,
@@ -491,7 +507,8 @@ export function skipPenaltyNow(save) {
 }
 
 /**
- * The arguments for free play (pop-mode.js startFree): the owned tools, mastery and the studio room. No money.
+ * The arguments for free play (pop-mode.js startFree): EVERY tool (free play is the try-everything mode, SPEC D29; it
+ * changes no money or stats, so nothing is given away), mastery and the studio room. No money.
  * @param {object} save the save
  * @param {number|null} [forcedSeed] the ?seed= flag
  * @returns {object} startFree arguments
@@ -499,7 +516,7 @@ export function skipPenaltyNow(save) {
 export function freeArgs(save, forcedSeed = null) {
   const { holdFactors, roughReductions } = masteryTables(save);
   return {
-    unlockedTools: [...economyFromSave(save).unlockedTools], room: 'studio', tier: backdropTier(save),
+    unlockedTools: [...TOOL_IDS], room: 'studio', tier: backdropTier(save),
     layers: backdropLayers(save), holdFactors, roughReductions,
     ...(Number.isFinite(forcedSeed) && forcedSeed > 0 ? { seed: forcedSeed } : {}),
   };
@@ -561,7 +578,9 @@ export function reactionKey(customer, owCount) {
  * (economy.js roundPayout eventBonus, cut like every line in Keep working); skipping it costs the usual reputation.
  * @param {object} save the save
  * @param {object} payload the onFinish payload (round-logic.js finishPayload)
- * @param {{chapter: number, n: number, boss?: string}} step the customer step that was played
+ * step.lines (R6-lines: roundArgs lines, app.js passes them) = the visit's result lines and its line memory entry
+ * (game/customer-lines.js recordLines; Try again remembers nothing, so the retry says the same lines).
+ * @param {{chapter: number, n: number, boss?: string, lines?: object}} step the customer step that was played
  * @returns {{save: object, retry: boolean, failed: boolean, stars: number, payout: object|null, reputationChange: number,
  *   skipPenalty: number, strips: string[], factKey: string|null, reactionKey: string|undefined, boss?: string|null}}
  *   the outcome (boss = the finished boss's id, for its stamp)
@@ -592,17 +611,24 @@ export function applyRound(save, payload, step) {
     for (const type of payload.cleanBumpTypes ?? []) after = recordCleanPop(after, type);
     payout = result.payout;
     stars = result.stars;
+    // A hurry-line customer whose clock ran out (R6-lines): the tier's missPenalty in reputation (0 in v1: only the
+    // request bonus is lost, as with any missed request).
+    const miss = Number(step?.lines?.hurryLine?.missPenalty) || 0;
+    if (miss > 0 && payload.request !== 'hurry') after = { ...after, reputation: Math.max(0, after.reputation - miss) };
   }
   const strips = careerStrips(save, before, after, stars);
   // Keep working never moves the story: it only counts its own customers (a skip counts too, so the next one is new).
   // A daily challenge customer (T8.5) counts nothing here: daily-logic.js settleDaily keeps its own fields.
   const moved = step?.daily ? {} : kw ? { keepWorkingDone: (save.keepWorkingDone ?? 0) + 1 } : progressToSave(advance(progressFromSave(save), failed ? 'skip' : 'done'));
-  const next = { ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }; // kept until played (B4)
   const spec = stepSpec(step);
+  // R6-lines: the visit's own lines (step.lines = roundArgs lines, app.js passes them) or the customer's plain keys.
+  const said = failed ? undefined : reactionKey(step?.lines?.resultKeys ? { resultKeys: step.lines.resultKeys } : spec?.customer, payload.owCount ?? 0);
+  // The line memory counts this visit (finished or skipped), so the next one is a return with other lines.
+  const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }, step?.lines, said); // strips kept until played (B4)
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
     strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
-    reactionKey: failed ? undefined : reactionKey(spec?.customer, payload.owCount ?? 0),
+    reactionKey: said,
     boss: !failed && isBoss(step?.boss) ? step.boss : null, // a finished boss: its stamp goes into the album (T8.4)
   };
 }
