@@ -322,9 +322,10 @@ function tiles(ctx, w, top, bottom, t, pal, rand) {
  * @param {number} y top of the plank
  * @param {number} len plank length
  * @param {object} pal palette
+ * @param {boolean} [sadPlant] true = the comics' sad little plant (in Greta's scarf) stands where the mug was
  * @returns {void}
  */
-function shelf(ctx, x, y, len, pal) {
+function shelf(ctx, x, y, len, pal, sadPlant = false) {
   const k = len / 120;
   ctx.save();
   ctx.translate(x, y);
@@ -341,6 +342,11 @@ function shelf(ctx, x, y, len, pal) {
   ctx.fillRect(28 * k, -52 * k, 8 * k, 14 * k);
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.fillRect(26 * k, -34 * k, 4 * k, 26 * k);
+  if (sadPlant) {
+    sadPlantOnShelf(ctx, 74 * k, k);
+    ctx.restore();
+    return;
+  }
   // Mug with a chip.
   ctx.fillStyle = '#d8d2bd';
   ctx.beginPath(); ctx.roundRect(62 * k, -24 * k, 24 * k, 24 * k, 4 * k); ctx.fill();
@@ -1269,6 +1275,108 @@ function ringLight(ctx, L, floorY, u) {
 }
 
 /**
+ * The comics' sad little plant, standing on the plank (the shop's hanging plant replaces it): a terracotta pot, three
+ * drooping leaves, a red scarf (Greta knitted it) and sad eyes. Drawn in the shelf's own coordinates.
+ * @param {CanvasRenderingContext2D} ctx the context (already moved to the plank)
+ * @param {number} cx middle of the pot, in plank units
+ * @param {number} k plank scale (plank length / 120)
+ * @returns {void}
+ */
+function sadPlantOnShelf(ctx, cx, k) {
+  const lw = Math.max(1, k * 1.4);
+  for (const [dx, len, a] of [[-5, 20, -1.1], [0, 24, 0.1], [5, 19, 1.1]]) { // leaves that flop over the rim
+    ctx.save();
+    ctx.translate(cx + dx * k, -20 * k);
+    ctx.rotate(a);
+    ctx.beginPath(); ctx.ellipse(0, -len * k * 0.4, 4.5 * k, len * k * 0.4, 0, 0, Math.PI * 2);
+    inked(ctx, '#7fae6a', lw, INK);
+    ctx.restore();
+  }
+  ctx.beginPath(); // the pot
+  ctx.moveTo(cx - 13 * k, -22 * k); ctx.lineTo(cx + 13 * k, -22 * k); ctx.lineTo(cx + 10 * k, 0); ctx.lineTo(cx - 10 * k, 0); ctx.closePath();
+  inked(ctx, '#d9805f', lw, INK);
+  ctx.fillStyle = '#a85a45';
+  ctx.fillRect(cx - 14 * k, -26 * k, 28 * k, 5 * k);
+  ctx.fillStyle = '#e8505b'; // the scarf round the neck of the plant
+  ctx.fillRect(cx - 12 * k, -22 * k, 24 * k, 4 * k);
+  ctx.fillRect(cx + 7 * k, -22 * k, 4 * k, 12 * k);
+  for (const ex of [-4, 4]) { // sad eyes: white, a pupil looking down, a droopy lid
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cx + ex * k, -11 * k, 2.6 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = INK.ink;
+    ctx.beginPath(); ctx.arc(cx + ex * k, -10 * k, 1.2 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d9805f';
+    ctx.beginPath(); ctx.arc(cx + ex * k, -11.5 * k, 2.8 * k, Math.PI, Math.PI * 2); ctx.fill();
+  }
+}
+
+/**
+ * The studio's first sign (the comics' "Clean!" sign that is never clean): a grubby, crooked board on one nail with
+ * a brown water stain and no words. The shop's shiny sign replaces it.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, y: number, s: number}} p the nail and the sign's width
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function oldSign(ctx, p, u) {
+  const sw = p.s * 0.9;
+  const sh = p.s * 0.42;
+  const lw = Math.max(1.2, u * 0.45);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(0.12); // hangs off a single nail, crooked
+  ctx.strokeStyle = INK.ink;
+  ctx.lineWidth = Math.max(1, u * 0.3);
+  ctx.beginPath(); ctx.moveTo(-sw * 0.3, sh * 0.4); ctx.lineTo(0, 0); ctx.lineTo(sw * 0.1, sh * 0.4); ctx.stroke();
+  box(ctx, -sw * 0.5, sh * 0.4, sw, sh, sh * 0.12);
+  inked(ctx, '#d6cfae', lw, INK);
+  ctx.fillStyle = 'rgba(120,96,50,0.45)'; // a brown water stain running down the board
+  ctx.beginPath(); ctx.ellipse(sw * 0.18, sh * 0.75, sw * 0.16, sh * 0.2, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(sw * 0.14, sh * 0.75, sw * 0.05, sh * 0.45);
+  ctx.strokeStyle = 'rgba(70,60,40,0.55)'; // two wobbly lines where a word was once written
+  ctx.lineWidth = Math.max(1, sh * 0.09);
+  ctx.beginPath(); ctx.moveTo(-sw * 0.36, sh * 0.78); ctx.quadraticCurveTo(-sw * 0.1, sh * 0.68, sw * 0.08, sh * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, Math.max(2, u * 0.6), 0, Math.PI * 2);
+  inked(ctx, '#a9aeb5', lw * 0.7, INK);
+  ctx.restore();
+}
+
+/**
+ * The studio's first chair (the one plain chair in the comics): a wooden chair with two slats in its back, a flat seat
+ * and four legs, in the same place as the shop's wingback chair (which replaces it).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{x: number, top: number, wide: number, seat: number, floor?: number}} c middle, top of the back, width, seat
+ * @param {number} floorY floor
+ * @param {number} u size unit
+ * @returns {void}
+ */
+function oldChair(ctx, c, floorY, u) {
+  if (c.floor !== undefined) floorY = c.floor;
+  const W = c.wide * 0.8;
+  const x0 = c.x - W / 2;
+  const lw = Math.max(1.4, u * 0.5);
+  const wood = '#9a8f6a';
+  const dark = '#7d7352';
+  ctx.fillStyle = 'rgba(40,30,20,0.2)';
+  ctx.beginPath(); ctx.ellipse(c.x, floorY + u, W * 0.5, u * 2.2, 0, 0, Math.PI * 2); ctx.fill();
+  const seatH = Math.max(u * 1.6, (c.seat - c.top) * 0.12);
+  for (const lx of [x0 + W * 0.1, x0 + W * 0.9]) { // legs
+    box(ctx, lx - W * 0.03, c.seat + seatH * 0.8, W * 0.06, Math.max(u, floorY - c.seat - seatH * 0.8 + u), u * 0.5);
+    inked(ctx, dark, lw, INK);
+  }
+  for (const px of [x0 + W * 0.08, x0 + W * 0.84]) { // back posts
+    box(ctx, px, c.top, W * 0.08, c.seat - c.top + seatH * 0.4, u * 0.5);
+    inked(ctx, wood, lw, INK);
+  }
+  for (const f of [0.12, 0.42]) { // slats
+    box(ctx, x0 + W * 0.1, c.top + (c.seat - c.top) * f, W * 0.8, (c.seat - c.top) * 0.18, u * 0.5);
+    inked(ctx, wood, lw, INK);
+  }
+  box(ctx, x0, c.seat, W, seatH, u * 0.8);
+  inked(ctx, wood, lw, INK);
+}
+
+/**
  * Draw one studio upgrade in its spot (wallPaint is part of the wall, painted with it, so it is skipped here).
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {string} id the layer id (game/studio.js STUDIO_LAYERS)
@@ -1405,7 +1513,7 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false) {
     ctx.beginPath(); ctx.roundRect(sinkX - sinkS * 0.45, floorY + (h - floorY) * 0.25, sinkS * 0.9, (h - floorY) * 0.45, 6); ctx.fill();
   }
   if (pal.spa) spaShelf(ctx, land ? w * 0.78 : w - shelfLen - w * 0.05, h * (land ? 0.34 : 0.2), shelfLen, pal);
-  else shelf(ctx, land ? w * 0.78 : w - shelfLen - w * 0.05, h * (land ? 0.34 : 0.2), shelfLen, pal);
+  else shelf(ctx, land ? w * 0.78 : w - shelfLen - w * 0.05, h * (land ? 0.34 : 0.2), shelfLen, pal, !shown.includes('plant')); // the sad plant until the shop's one arrives
   sink(ctx, sinkX, sinkY, sinkS, pal);
   if (pal.towel) towel(ctx, sinkX + sinkS * 0.72, sinkY - sinkS * 0.3, sinkS * 0.55, pal.towel);
   if (pal.spa) diffuser(ctx, backX, floorMid, backS, pal);
@@ -1420,6 +1528,9 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false) {
   ctx.beginPath(); ctx.roundRect(L.x - L.r * 0.55, L.y - L.r * 1.8, L.r * 1.1, L.r * 1.0, 2); ctx.fill();
   // The upgrades the player owns, back to front.
   const spots = layerSpots(w, h, view);
+  // The first versions the comics show (R7): the plain chair and the crooked sign stay until the shop's ones replace them.
+  if (!shown.includes('chair')) oldChair(ctx, spots.chair, spots.floorY, spots.u);
+  if (!shown.includes('sign')) oldSign(ctx, spots.sign, spots.u);
   for (const id of shown) drawLayer(ctx, id, spots);
   if (pal.spa) { // sparkles all over: everything is clean
     const sp = rng(4242);
