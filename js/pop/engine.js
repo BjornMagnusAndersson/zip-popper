@@ -909,6 +909,7 @@ export function createPopScene(canvas, o) {
         const before = p.pressure;
         if (squeeze?.p === p) p.pressure = squeezeTick(p, dt); // two fingers squeezing (T1.7)
         else if (memory?.bump === p) { /* a squeezing finger lifted a moment ago: the pressure waits for it */ }
+        else if (twist === 'ticklish' && giggleBlocks(time, giggleAt)) { /* she is giggling: the press keeps what it had (R4 finding 2) */ }
         else if (keyHold?.p === p && time < keyHold.until) p.pressure = Math.min(keyHold.target, p.pressure + dt * 2.4);
         else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, warmth));
         for (const th of [0.3, 0.6, 0.85]) {

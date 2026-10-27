@@ -119,12 +119,13 @@ export function tickleDue(heldSeconds, zone, sinceLastGiggle = Infinity) {
 }
 
 /**
- * The bump's press progress after a giggle: TICKLE.dropBack less, never below 0.
+ * The bump's press progress after a giggle: it loses TICKLE.dropBack of what it had (a share, so a long hold always
+ * gains ground over a cycle and a big bump or Evil Horn can still be popped; R4 finding 2).
  * @param {number} pressure the press progress now, 0..1
  * @returns {number} the new progress, 0..1
  */
 export function giggleDrop(pressure) {
-  return Math.max(0, Math.min(1, num(pressure)) - TICKLE.dropBack);
+  return Math.max(0, Math.min(1, num(pressure)) * (1 - TICKLE.dropBack));
 }
 
 /**

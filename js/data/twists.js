@@ -39,12 +39,12 @@ export const SWAY = { amount: 0.07, maxPx: 14, period: 4.2, periodY: 5.7, reduce
 /**
  * Ticklish: holding a squeeze on a cheek, the side of the neck (jaw) or near the ear (temple) for holdSeconds makes
  * her giggle: the face jerks away for jerkSeconds (jerkShare of the face's half width, capped like the sway), the
- * bump's press progress drops back by dropBack (0..1), the press is let go, and new presses do nothing until the
+ * bump's press progress drops back by dropBack (a share of what it had, 0..1, so a long hold always gains), the press is let go, and new presses do nothing until the
  * jerk is over. cooldown = seconds after a giggle before the next one can come; irritation = how much each giggle
- * adds to the irritation meter (times the customer's difficulty).
+ * adds to the irritation meter (times the customer's difficulty). The press keeps what it has while she giggles.
  */
 export const TICKLE = {
-  holdSeconds: 1.1, dropBack: 0.2, jerkSeconds: 0.4, jerkShare: 0.08, cooldown: 0.4, irritation: 0.03,
+  holdSeconds: 1.1, dropBack: 0.25, jerkSeconds: 0.4, jerkShare: 0.08, cooldown: 0.4, irritation: 0.012,
   zones: ['cheekL', 'cheekR', 'jawL', 'jawR', 'temple'],
 };
 
