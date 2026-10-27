@@ -4,7 +4,7 @@
 // game/economy.js. No DOM, no text shown to the player: item names on screen come from the string table.
 
 /** Coins tipped for 0, 1, 2 and 3 stars (index = stars). A failed or unfinished customer gets stars 0, so no tip. */
-export const STAR_TIPS = [0, 0, 6, 15];
+export const STAR_TIPS = [0, 0, 4, 10]; // was [0, 0, 6, 15] before R7: the owner found the pay a bit much
 
 /** Coins for finishing a customer's request (ECONOMY section 1). Missed = nothing lost. */
 export const REQUEST_BONUS = { gentle: 10, hurry: 10, combo: 15 };

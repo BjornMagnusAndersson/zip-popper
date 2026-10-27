@@ -14,6 +14,9 @@ import { bumpInfo } from './bumps.js';
 /** Every event id, in the order the Field guide lists them (also the ?boss= test flag values). */
 export const BOSS_IDS = ['hairday', 'nosestrip', 'golden', 'horn'];
 
+/** The most irritated a scaled boss meter gets (the same as New Game Plus, data/economy-data.js). */
+export const BOSS_MAX_DIFFICULTY = 1.8;
+
 /** The event used when a slot's own event needs a tool she does not own yet (it needs no tool at all). */
 export const FALLBACK_BOSS = 'golden';
 
@@ -27,6 +30,8 @@ export const FALLBACK_BOSS = 'golden';
  * - grownHorns: Evil Horns start fully grown and this many times their usual size (0 = as usual).
  * - accessory: one face accessory she wears for the day (left out when that spot is taken, see ACCESSORY_SLOTS).
  * - difficulty: the irritation difficulty for this face (null = the slot's own, see data/chapters.js CAREER_BANDS).
+ * - difficultyScale: when difficulty is null, the slot's own difficulty is multiplied by this (R7: bosses felt too easy),
+ *   at most BOSS_MAX_DIFFICULTY.
  * - reward: flat = bonus coins; payScale = kind -> pay multiplier for those clean pops (2 = double pay on hairs, the
  *   extra half is the bonus); popScale = multiplier on all pop coins (1.5 = half the pops line again as a bonus).
  * String keys: boss.<id>.name (pill, chip, guide card, album), .line (a funny line on the intro pill), .hint (the tip
@@ -36,11 +41,11 @@ export const FALLBACK_BOSS = 'golden';
 export const BOSSES = {
   hairday: {
     kind: 'event', needs: ['tweezers'], mix: { hair: [5, 7], whitehead: 2, red: 1 }, stripAlways: false, grownHorns: 0,
-    accessory: 'headband', difficulty: null, reward: { flat: 10, payScale: { hair: 1.5 }, popScale: 1 },
+    accessory: 'headband', difficulty: null, difficultyScale: 1.3, reward: { flat: 10, payScale: { hair: 1.5 }, popScale: 1 },
   },
   nosestrip: {
     kind: 'event', needs: ['noseStrip', 'tweezers'], mix: { blackhead: 6, whitehead: 3 }, stripAlways: true, grownHorns: 0,
-    accessory: 'scarf', difficulty: null, reward: { flat: 10, payScale: null, popScale: 1 },
+    accessory: 'scarf', difficulty: null, difficultyScale: 1.3, reward: { flat: 10, payScale: null, popScale: 1 },
   },
   golden: { // relaxed: no timer (a boss never has a request), a softer meter
     kind: 'event', needs: [], mix: { gold: 4, whitehead: 5 }, stripAlways: false, grownHorns: 0,
@@ -48,7 +53,7 @@ export const BOSSES = {
   },
   horn: { // Big Evil Horn: two horns grown big plus reds; the warm cloth is the way in, so it needs one (D27c, B75)
     kind: 'boss', needs: ['warmCloth'], mix: { horn: 2, red: 4, whitehead: 2 }, stripAlways: false, grownHorns: 1.2,
-    accessory: 'sunglasses', difficulty: null, reward: { flat: 15, payScale: null, popScale: 1 },
+    accessory: 'sunglasses', difficulty: null, difficultyScale: 1.3, reward: { flat: 15, payScale: null, popScale: 1 },
   },
 };
 
@@ -192,7 +197,7 @@ export function bossSpec(spec, id, seed) {
   const face = { ...spec.customer.face, accessories: bossAccessories(spec.customer.face?.accessories, id) };
   const customer = { ...spec.customer, face, bumps: count, bumpTypes: [...types] };
   return {
-    ...spec, customer, bumpCount: count, allowedTypes: [...types], difficulty: b.difficulty ?? spec.difficulty, requestAllowed: false,
+    ...spec, customer, bumpCount: count, allowedTypes: [...types], difficulty: b.difficulty ?? Math.min(BOSS_MAX_DIFFICULTY, spec.difficulty * (b.difficultyScale ?? 1)), requestAllowed: false,
     boss: { id, kind: b.kind, mix: { ...mix }, stripAlways: b.stripAlways, grownHorns: b.grownHorns },
   };
 }

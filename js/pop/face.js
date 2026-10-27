@@ -335,6 +335,22 @@ function hairline(f, u) {
 }
 
 /**
+ * Where the head outline is at height v, as a positive u (R7: the bald side tufts follow it).
+ * @param {object} f the face geometry
+ * @param {number} v height in face units
+ * @returns {number} u of the outline's right edge at v
+ */
+function headEdgeU(f, v) {
+  let lo = 0.5;
+  let hi = 1.6;
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (insideHeadOutline(f.features.shape, mid, v, 1, 1)) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+/**
  * The background: a calm bathroom-mirror mint with faint tiles.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {number} w width
@@ -689,15 +705,21 @@ function drawFrontHair(ctx, f, look) {
     ctx.beginPath();
     ctx.ellipse(X(-0.3), Y(-0.86), rx * 0.22, ry * 0.07, -0.35, 0, Math.PI * 2);
     ctx.fill();
-    // Tufts above the ears, outside the bare-skin oval: full, soft patches hugging the head (B56: they used to be thin
-    // dark slivers standing off the head like fins).
+    // Tufts above the ears: a crescent that hugs the head outline (R7: they stood off the head as loose dark slivers).
     for (const s of [-1, 1]) {
+      const vs = [];
+      for (let v = -0.48; v <= -0.16 + 1e-9; v += 0.04) vs.push(v);
       ctx.beginPath();
-      ctx.moveTo(X(s * 0.93), Y(-0.52));
-      ctx.quadraticCurveTo(X(s * 1.09), Y(-0.46), X(s * 1.08), Y(-0.17));
-      ctx.quadraticCurveTo(X(s * 1.05), Y(-0.1), X(s * 0.99), Y(-0.14));
-      ctx.quadraticCurveTo(X(s * 1.0), Y(-0.36), X(s * 0.93), Y(-0.52));
-      fillHair(ctx, f, hair, -0.95, 0, { flow: 'down', box: s < 0 ? [-1.09, -0.52, -0.93, -0.1] : [0.93, -0.52, 1.09, -0.1], count: 8 });
+      vs.forEach((v, i) => { const x = X(s * (headEdgeU(f, v) + 0.012)); if (i) ctx.lineTo(x, Y(v)); else ctx.moveTo(x, Y(v)); });
+      for (let i = vs.length - 1; i >= 0; i -= 1) {
+        const v = vs[i];
+        const inset = 0.15 * Math.sin(((v + 0.48) / 0.32) * Math.PI); // thickest in the middle, a point at both ends
+        ctx.lineTo(X(s * (headEdgeU(f, v) + 0.012 - inset)), Y(v));
+      }
+      ctx.closePath();
+      const e0 = headEdgeU(f, -0.48) + 0.012;
+      const e1 = headEdgeU(f, -0.16) + 0.012;
+      fillHair(ctx, f, hair, -0.95, 0, { flow: 'down', box: s < 0 ? [-Math.max(e0, e1), -0.48, -Math.min(e0, e1) + 0.15, -0.16] : [Math.min(e0, e1) - 0.15, -0.48, Math.max(e0, e1), -0.16], count: 8 });
     }
     return;
   }

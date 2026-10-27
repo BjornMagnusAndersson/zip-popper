@@ -12,7 +12,7 @@
 // - aside: a calm second line for a customer with no clock.
 
 /** How many keys each regular has per kind (the first intro/happy/ok/ow/deadline key is the old one with no number). */
-export const REGULAR_LINE_COUNTS = { intro: 4, back: 4, happy: 3, ok: 3, ow: 3, deadline: 2, aside: 2 };
+export const REGULAR_LINE_COUNTS = { intro: 7, back: 7, happy: 5, ok: 5, ow: 5, deadline: 2, aside: 4 };
 
 /** Kinds whose first key has no number (they existed before R6-lines); back and aside count from .1. */
 export const OLD_STYLE_KINDS = ['intro', 'happy', 'ok', 'ow', 'deadline'];
@@ -27,7 +27,7 @@ export const OLD_STYLE_KINDS = ['intro', 'happy', 'ok', 'ow', 'deadline'];
  * - aside: calm second lines for a walk-in with no clock (customer.walkin.aside.N); with a clock the old
  *   customer.generic.deadline.N jokes are used.
  */
-export const WALK_IN_LINES = { firstOnly: [2, 6], clockOnly: [8], intro: 6, back: 6, aside: 8 };
+export const WALK_IN_LINES = { firstOnly: [2, 6], clockOnly: [8], intro: 12, back: 10, aside: 14 };
 
 /** The husband (chapters 0 and 2) keeps his lines; his second line is this aside unless he has a clock (never in v1). */
 export const HUSBAND_ASIDES = { husband: 'chapter.0.husband.aside', husbandArmor: 'chapter.2.husband.aside' };
