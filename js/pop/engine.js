@@ -26,7 +26,7 @@ import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadiu
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
-  START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, underCloth, inStripArea, onFace, findPatchSpot,
+  START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, heatStep, underCloth, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
   wipeReach, autoWipeSeconds, padStartSpot, popStepOver, stripBusy, wipeStripPress,
 } from './tool-logic.js';
@@ -999,12 +999,19 @@ export function createPopScene(canvas, o) {
     // gives a little buzz and a puff of steam. The meter on the button shows the warmest bump.
     const warmBefore = warmth;
     let warmest = 0;
+    let hotOw = false; // one too-hot Ow per moment
     for (const p of pimples) {
       if (p.popped) continue;
       const on = Boolean(warmHold) && step === 'pop' && underCloth(warmHold, p, 34 * scale);
       const before = p.warm ?? 0;
       p.warm = warmStep(before, dt, on);
       if (on && before < 1 && p.warm >= 1) { p.warmAt = time; buzz(14); play('wipe'); }
+      p.heat = heatStep(p.heat, dt, on && before >= 1); // left on a warm bump: it gets too hot (SPEC D41)
+      if (p.heat >= 1) { // "Ow, too hot!" once, even with two bumps under the cloth; still hot, so staying on means another
+        p.heat = 0.35;
+        if (!hotOw) ow(p, { hot: true });
+        hotOw = true;
+      }
       warmest = Math.max(warmest, p.warm);
     }
     warmth = warmest;
@@ -1155,7 +1162,7 @@ export function createPopScene(canvas, o) {
     }
     faceLife()?.draw(ctx, lifeNow()); // the blinking, glancing eyes over the picture (only while they move, T8.1)
     for (const p of pimples) { // a warm bump glows pink and steams (SPEC D37); a ring when it just got fully warm
-      if (!p.popped && (p.warm ?? 0) > 0.01) drawWarmBump(ctx, p.x, p.y, p.r, p.warm, reduced ? 0 : time, p.warmAt === undefined ? Infinity : time - p.warmAt);
+      if (!p.popped && (p.warm ?? 0) > 0.01) drawWarmBump(ctx, p.x, p.y, p.r, p.warm, reduced ? 0 : time, p.warmAt === undefined ? Infinity : time - p.warmAt, p.heat ?? 0);
     }
     const blush = Math.max(irr.level, twist === 'sensitive' && (step === 'pop' || step === 'wipe') ? SENSITIVE.blush : 0); // delicate skin starts a bit red (T8.3)
     if (blush > 0.02 && face) drawIrritation(blush); // redder, blotchy cheeks while irritated (no motion)
@@ -1236,7 +1243,10 @@ export function createPopScene(canvas, o) {
       ctx.restore();
     }
     for (const d of drops) drawDrop(ctx, d);
-    if (warmHold) drawCloth(ctx, warmHold.x, warmHold.y, 34 * scale, reduced ? 0 : time);
+    if (warmHold) { // the cloth shows the heat of the hottest bump under it (SPEC D41: the bump itself is hidden)
+      const heat = Math.max(0, ...pimples.filter((p) => !p.popped && underCloth(warmHold, p, 34 * scale)).map((p) => p.heat ?? 0));
+      drawCloth(ctx, warmHold.x, warmHold.y, 34 * scale, reduced ? 0 : time, heat);
+    }
     if (wipe && !wipe.fade) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale * wipeReach(tool)); // bigger with the cotton pad
     if (cream) {
       for (const d of cream.dollops) {
@@ -1380,16 +1390,17 @@ export function createPopScene(canvas, o) {
 
   /**
    * A wrong-tool or rough press, or a press on a decoy: no pressure and no pop; ouch lines, the "ow" sound, a buzz,
-   * the irritation rise, and the controller is told.
+   * the irritation rise, and the controller is told. Also the warm cloth left too long on a warm bump (SPEC D41).
    * @param {object} p the bump or decoy (type 'decoy')
+   * @param {{hot?: boolean}} [why] hot = it was the warm cloth, too hot (the bubble says so)
    * @returns {void}
    */
-  function ow(p) {
+  function ow(p, why = {}) {
     p.ouch = time;
     raiseIrritation(IRRITATION.perOw * (twist === 'sensitive' ? SENSITIVE.owScale : 1)); // delicate skin minds an Ow more (T8.3)
     play('ow_customer');
     buzz([20, 40, 20]);
-    try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool, id: p.id }); } catch (e) { console.warn('onOw failed:', e); }
+    try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool, id: p.id, hot: Boolean(why.hot) }); } catch (e) { console.warn('onOw failed:', e); }
     kick();
   }
 
@@ -1935,7 +1946,7 @@ export function createPopScene(canvas, o) {
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.popView = () => ({ ...view }); // for browser checks: the zoom view now (T1.4)
   // Debug and smoke-test hook: where the pimples still are (scene coordinates; on screen see popView and sceneToScreen).
-  canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type, zone: p.zone, warm: p.warm ?? 0 }));
+  canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type, zone: p.zone, warm: p.warm ?? 0, heat: p.heat ?? 0 }));
   canvas.popDecoys = () => decoys.map((d) => ({ x: d.x, y: d.y, r: d.r, kind: d.kind })); // for browser checks, like popTargets
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
   canvas.popStep = () => step;

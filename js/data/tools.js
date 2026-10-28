@@ -43,7 +43,7 @@ export const TOOLS = {
     implemented: true, bar: true, unlockChapter: 3, use: 'strip', works: [], holdScale: { default: 1 }, roughScale: 0,
     peelBonus: 6, // the dots are lots of tiny blackheads: a peeled strip pays +6 (B13 round 2c)
   },
-  warmCloth: { // never required, never an Ow: hold on the face, bumps pop faster for a while
+  warmCloth: { // never required; rubbed over bumps they pop faster for a while (left too long on one: too hot, an Ow)
     implemented: true, bar: true, unlockChapter: 3, use: 'warm', works: [], holdScale: { default: 1 }, roughScale: 0,
   },
   patch: { // hydrocolloid patch: stick on a popped spot; the spot skips the cream and the customer tips for it
@@ -76,6 +76,10 @@ export const WARM = {
   fillPerSecond: 1, // the cloth on a bump warms it fully in about 1 s
   drainPerSecond: 1 / 18, // a fully warm bump stays warm for about 18 s
   reach: 1.1, // how far round the drawn cloth it warms (a little extra: the finger hides the cloth)
+  // Too hot (owner 2026-10-28, SPEC D41): left on a bump that is already fully warm, it heats up: a warning from half
+  // way (red glow, heavy wobbly steam), and at full heat "Ow, too hot!" (an Ow like any other). Moving on cools it fast.
+  hotAfter: 1.2, // seconds parked on a fully warm bump until it is too hot
+  hotCool: 2, // how fast the extra heat goes away once the cloth moves on (per second)
   helpsCut: 0.4, // a fully warm bump that likes warmth (data/bumps.js warmHelps) needs 40 percent less hold time
   otherCut: 0.15, // ...and other bumps 15 percent less
   roughCut: 0.8, // on a fully warm bump the rough-press (Ow) chance and the irritation of a cold pop are 80 percent lower

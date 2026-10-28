@@ -907,17 +907,20 @@ export function drawTweezers(ctx, x, y, open, scale) {
  * @param {number} y centre y
  * @param {number} r size (half the width)
  * @param {number} time seconds, for the steam wobble (0 = still, for reduced motion)
+ * @param {number} [heat] the hottest bump under it, 0..1 (SPEC D41): from half way the towel turns red, shakes a
+ *   little and steams harder, so the warning shows even though the cloth covers the bump
  * @returns {void}
  */
-export function drawCloth(ctx, x, y, r, time) {
+export function drawCloth(ctx, x, y, r, time, heat = 0) {
+  const hot = Math.max(0, Math.min(1, (heat - 0.4) / 0.6)); // the warning part, 0..1
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(x + (time && hot ? Math.sin(time * 55) * r * 0.06 * hot : 0), y);
   ctx.rotate(-0.12);
   ctx.shadowColor = 'rgba(70,30,30,0.3)';
   ctx.shadowBlur = r * 0.3;
   ctx.shadowOffsetY = r * 0.1;
   roundRect(ctx, -r, -r * 0.62, r * 2, r * 1.24, r * 0.28);
-  ctx.fillStyle = '#ffb3c4';
+  ctx.fillStyle = hot ? `rgb(255,${Math.round(179 - 95 * hot)},${Math.round(196 - 120 * hot)})` : '#ffb3c4'; // pink, red when too hot
   ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.strokeStyle = 'rgba(255,255,255,0.7)'; // the fold and the stripes of a towel
@@ -927,9 +930,9 @@ export function drawCloth(ctx, x, y, r, time) {
   ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.lineTo(r * 0.9, 0); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,0.75)'; // steam
   ctx.lineCap = 'round';
-  ctx.lineWidth = Math.max(1.5, r * 0.07);
+  ctx.lineWidth = Math.max(1.5, r * (0.07 + 0.05 * hot)); // thicker steam when too hot
   for (const s of [-0.45, 0, 0.45]) {
-    const rise = ((time * 0.8 + s + 1) % 1) * r * 0.3;
+    const rise = ((time * (0.8 + 1.2 * hot) + s + 1) % 1) * r * 0.3; // faster too
     ctx.globalAlpha = time ? 1 - rise / (r * 0.3) : 0.8;
     ctx.beginPath();
     ctx.moveTo(s * r, -r * 0.75 - rise);
@@ -949,28 +952,32 @@ export function drawCloth(ctx, x, y, r, time) {
  * @param {number} warm its warmth, 0..1
  * @param {number} time seconds, for the steam drift (0 = still, for reduced motion)
  * @param {number} since seconds since it got fully warm (Infinity = not yet)
+ * @param {number} [heat] extra heat 0..1 (too hot, SPEC D41): from half way the glow turns red and the steam gets
+ *   heavy and wobbles, a warning before "Ow, too hot!"
  * @returns {void}
  */
-export function drawWarmBump(ctx, x, y, r, warm, time, since) {
+export function drawWarmBump(ctx, x, y, r, warm, time, since, heat = 0) {
   const k = Math.max(0, Math.min(1, warm));
   const R = Math.max(r * 2.4, 14);
   ctx.save();
   const g = ctx.createRadialGradient(x, y, r * 0.4, x, y, R);
-  g.addColorStop(0, `rgba(255,120,110,${0.34 * k})`);
-  g.addColorStop(1, 'rgba(255,120,110,0)');
+  const hot = Math.max(0, Math.min(1, (heat - 0.4) / 0.6)); // the warning part of the heat, 0..1
+  const gg = Math.round(120 - 80 * hot); // pink turns red as it gets too hot
+  g.addColorStop(0, `rgba(255,${gg},${Math.round(110 - 60 * hot)},${0.34 * k + 0.3 * hot})`);
+  g.addColorStop(1, `rgba(255,${gg},${Math.round(110 - 60 * hot)},0)`);
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.fill();
   if (k > 0.35) { // steam curls
-    const s = Math.max(6, r * 1.1);
+    const s = Math.max(6, r * 1.1) * (1 + 0.5 * hot); // bigger steam when too hot
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineCap = 'round';
     ctx.lineWidth = Math.max(1.5, s * 0.16);
-    for (const dx of [-0.45, 0.45]) {
+    for (const dx of hot > 0 ? [-0.6, 0, 0.6] : [-0.45, 0.45]) { // a third curl when too hot
       const rise = time ? ((time * 0.7 + (dx > 0 ? 0.5 : 0)) % 1) * s * 0.6 : s * 0.2; // the two curls take turns
       ctx.globalAlpha = (k - 0.35) / 0.65 * (time ? 1 - rise / (s * 0.6) : 0.8);
-      const bx = x + dx * s;
+      const bx = x + dx * s + (time && hot ? Math.sin(time * 40 + dx * 5) * s * 0.12 * hot : 0); // too hot: it wobbles
       const by = y - r - s * 0.3 - rise;
       ctx.beginPath();
       ctx.moveTo(bx, by);

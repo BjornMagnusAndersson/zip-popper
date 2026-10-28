@@ -576,7 +576,8 @@ export function createPopMode({
     if (at.id && at.type !== 'decoy') c.owed.add(at.id); // this bump's pop will not count as clean
     drawCount();
     drawRequest(c);
-    const bubble = el('p', 'pop-ow', t(at.type === 'decoy' ? 'pop.owDecoy' : 'pop.ow')); // a mole is not a bump
+    const owKey = at.type === 'decoy' ? 'pop.owDecoy' : at.hot ? 'pop.owHot' : 'pop.ow'; // a mole is not a bump; the cloth left on too long (D41)
+    const bubble = el('p', 'pop-ow', t(owKey));
     bubble.setAttribute('aria-hidden', 'true'); // the counter line says it for screen readers
     const sp = c.scene?.toScreen(at.x, at.y) ?? at; // where the bump is on screen (zoomed or not)
     bubble.style.left = `${sp.x}px`;

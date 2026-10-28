@@ -319,6 +319,20 @@ export function warmStep(warmth, dt, holding) {
 }
 
 /**
+ * One bump's extra heat (too hot, SPEC D41): it rises only while the cloth stays on a bump that is already fully warm,
+ * and goes away quickly once the cloth moves on. At 1 the customer says "Ow, too hot!".
+ * @param {number} heat now, 0..1
+ * @param {number} dt seconds since the last step
+ * @param {boolean} parked the cloth is on this bump and the bump is fully warm
+ * @returns {number} the new heat, 0..1
+ */
+export function heatStep(heat, dt, parked) {
+  const h = Number(heat) || 0;
+  if (parked) return Math.min(1, h + dt / WARM.hotAfter);
+  return Math.max(0, h - dt * WARM.hotCool);
+}
+
+/**
  * Whether a bump is under the warm cloth: the cloth is a towel about twice as wide as it is tall, and a bump counts
  * when any of it is under the towel (a little extra room, since the finger hides the cloth).
  * @param {{x: number, y: number}|null} cloth where the cloth is (scene px)
