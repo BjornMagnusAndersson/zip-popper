@@ -32,8 +32,12 @@ export const SOUND_TABLE = {
   ooh_happy: { type: 'synth', voice: 'ooh', category: 'sfx' },
   laugh_evil: { type: 'synth', voice: 'laughEvil', category: 'sfx' },
   ow_customer: { type: 'synth', voice: 'ow', category: 'sfx' },
-  giggle: { type: 'synth', voice: 'giggle', category: 'sfx' }, // the ticklish customer giggles (T8.3, B52): a short high playful "hee-hee-hee"
-  sizzle: { type: 'synth', voice: 'sizzle', category: 'sfx' }, // the warm cloth left on too long (D41, B101): a hiss and a small whistle, played with the Ow
+  // the ticklish customer giggles (T8.3, B52). Owner 2026-10-28 picked a real recording after three synth tries:
+  // "giggle2" by Reitanna, freesound.org/s/235167, CC0 (public domain), levelled. The synth voice is the fallback.
+  giggle: { type: 'file', url: 'assets/audio/giggle.wav', fallback: 'giggle', category: 'sfx' },
+  // the warm cloth left on too long (D41, B101), played with the Ow. Owner 2026-10-28 picked "cooking oil" by cvgre,
+  // freesound.org/s/754892, CC0 (public domain), cut to its best 1.1 s with a fade. The synth voice is the fallback.
+  sizzle: { type: 'file', url: 'assets/audio/sizzle.wav', fallback: 'sizzle', category: 'sfx' },
   // rewards
   cheer: { type: 'synth', voice: 'cheer', category: 'sfx' },
   cash: { type: 'synth', voice: 'cash', category: 'sfx' },
