@@ -16,7 +16,7 @@
 // (redness, blush, brows, eyes, mouth, glasses). Idle life (makeFaceLife): the picture carries a small plan for
 // blinks and glances, which the pop scene (engine.js) draws on top of the picture, only the eyes, only when they move.
 import { makeCanvas, paintSkin } from './art.js';
-import { rng } from './logic.js';
+import { rng, HATS, wornAccessories } from './logic.js';
 import { FACE_PARTS, makeCustomer } from '../data/customers.js';
 import {
   CHARACTER_FACES, PLUME_COLOURS, HELMET, BEARD_FUZZ, BEARD_DROP, CHIN_PATCH, resolveFaceSpec, armorOptions, beardTop,
@@ -185,28 +185,9 @@ function hashText(s) {
   return h >>> 0;
 }
 
-/** Headwear that covers the top of the head: only one of these is worn. */
-const HATS = ['beanie', 'hat', 'pilot-cap'];
-/** Accessory -> the headwear it cannot be worn with (it would sit on top of it or be squashed under it). */
-const CLASHES = { tiara: HATS, veil: HATS, headband: ['beanie', 'pilot-cap'] };
-
-/**
- * The accessories a face really wears (B56): the generator can pick two that clash (two hats, a tiara or veil on a
- * cap, a headband under a beanie); the first one in the list is kept and the clashing one is left off. Older saved
- * faces keep their list, so this is done when drawing. The layout (logic.js) still counts both, which only keeps
- * bumps a little further from the hairline.
- * @param {string[]} acc accessory ids, in the face's order
- * @returns {string[]} the ones worn
- */
-export function wornAccessories(acc) {
-  const out = [];
-  for (const a of acc) {
-    // True when b cannot be worn together with a (either way round).
-    const clash = (b) => (HATS.includes(a) && HATS.includes(b)) || CLASHES[a]?.includes(b) || CLASHES[b]?.includes(a);
-    if (!out.some(clash)) out.push(a);
-  }
-  return out;
-}
+// The clash rule (HATS, wornAccessories, B56) lives in logic.js since B60, so the layout counts only what is worn;
+// wornAccessories is passed on from here too, for older callers.
+export { wornAccessories };
 
 /**
  * Turn a face spec into everything the drawing needs: part ids checked against FACE_PARTS (unknown ones get a
@@ -688,9 +669,13 @@ function drawBackHair(ctx, f, look) {
     ctx.quadraticCurveTo(cx + rx * 1.05, cy + ry * 0.2, cx + rx * 0.8, cy - ry * 0.5);
     ctx.closePath();
     fillHair(ctx, f, hair, -0.7, 0, { flow: 'down', box: [0.78, -1.0, 1.34, 0.95], count: 16 });
+    // The hair tie. B60: under a beanie, bowler or pilot cap it sat on the hat's corner or brim tip (or peeked out
+    // beside the cap), so there it slides further down the tail, below the hat's edge.
+    const hatOn = look.acc.some((a) => HATS.includes(a));
     ctx.fillStyle = look.accent;
     ctx.beginPath();
-    ctx.ellipse(cx + rx * 1.06, cy - ry * 0.78, rx * 0.07, ry * 0.08, 0.6, 0, Math.PI * 2);
+    if (hatOn) ctx.ellipse(cx + rx * 1.15, cy - ry * 0.32, rx * 0.075, ry * 0.07, 0.2, 0, Math.PI * 2);
+    else ctx.ellipse(cx + rx * 1.06, cy - ry * 0.78, rx * 0.07, ry * 0.08, 0.6, 0, Math.PI * 2);
     ctx.fill();
   }
   // The back of the head (fills the temples behind the front hair).
@@ -967,21 +952,32 @@ function drawHeadwear(ctx, f, look) {
     // Built like the beanie: the crown hugs the head's own outline, and the ribbon and brim follow the hairline
     // curve down towards the ears, so there is never a gap of wall between the hat and a bald or short-haired head.
     const c = look.accent;
-    const cw = 0.9; // half the crown width at the ribbon, in rx units (a little wider than the head there)
+    // B104: on an afro the head-sized crown sank into the curl cloud (curls bulged out on both sides nearly to its top).
+    // There the crown is the same oval as the cloud (as the beanie, see above) and the brim is wider, so the curls
+    // only puff out below the brim at the sides.
+    const afro = look.hairStyle === 'afro';
+    const oV = -0.4; // the afro oval's middle, its half width and half height (as the beanie's)
+    const oA = 1.27;
+    const oB = 0.85 + (0.2 * rx) / ry;
+    // The angle on the afro oval at height v (negative = above its middle).
+    const oAngle = (v) => Math.asin(Math.max(-0.95, Math.min(0.95, (v - oV) / oB)));
     // Where the hat meets the head at x-unit u: a gentler curve than the hairline and never below it (bumps stay
-    // below the hairline, so none is covered).
-    const edge = (u) => f.features.hairTop + 0.2 * Math.min(1, u * u);
+    // below the hairline, so none is covered). On an afro it follows the brim all the way out to the cloud's side.
+    const edge = (u) => f.features.hairTop + 0.2 * (afro ? u * u : Math.min(1, u * u));
+    let cw = 0.9; // half the crown width at the ribbon, in rx units (a little wider than the head there)
+    for (let i = 0; afro && i < 6; i += 1) cw = oA * Math.cos(oAngle(edge(cw) - 0.04)); // on an afro: the cloud's side
     // The brim's top edge at u: one smooth arch along the hat's edge that droops a little past the head (no curl: a
     // curl only works on a tall forehead, and the hat has to stay above the hairline).
     const brimTop = (u) => f.features.hairTop + 0.2 * u * u - 0.06;
+    const tip = afro ? cw + 0.2 : 1.2; // half the brim width (on an afro a little past the crown)
     // How thick the brim looks at u: thickest in front, thinner at the tips.
-    const brimThick = (u) => 0.12 - 0.09 * Math.min(1, Math.max(0, Math.abs(u) - 0.6) / 0.6) ** 1.5; // soft tips, no square cut
-    const tip = 1.2; // half the brim width
-    // The crown's outline: along the hat's edge from left to right, then over the top of a taller copy of the head.
+    const brimThick = (u) => 0.12 - 0.09 * Math.min(1, Math.max(0, (Math.abs(u) * 1.2) / tip - 0.6) / 0.6) ** 1.5; // soft tips, no square cut
+    // The crown's outline: along the hat's edge from left to right, then over the top of a taller copy of the head
+    // (on an afro: over the top of the curl cloud's oval).
     const crown = () => {
       ctx.beginPath();
       for (let i = 0; i <= 24; i += 1) { const u = -cw + (2 * cw * i) / 24; ctx.lineTo(X(u), Y(edge(u) - 0.04)); }
-      topArc(ctx, f, edge(cw) - 0.04, cw + 0.02, 1.34, -0.02);
+      if (afro) { const a0 = oAngle(edge(cw) - 0.04); ctx.ellipse(X(0), Y(oV), oA * rx, oB * ry, 0, a0, Math.PI - a0, true); } else topArc(ctx, f, edge(cw) - 0.04, cw + 0.02, 1.34, -0.02);
       ctx.closePath();
     };
     // A soft shadow the brim throws on the hair and forehead, just under its front.
@@ -1002,16 +998,17 @@ function drawHeadwear(ctx, f, look) {
     ctx.save();
     crown();
     ctx.clip();
+    const rw = Math.max(1.1, cw + 0.1); // how far out the ribbon is drawn (it is cut to the crown)
     ctx.beginPath();
-    for (let i = 0; i <= 24; i += 1) { const u = -1.1 + (2.2 * i) / 24; ctx.lineTo(X(u), Y(brimTop(u) - 0.15)); }
-    for (let i = 24; i >= 0; i -= 1) { const u = -1.1 + (2.2 * i) / 24; ctx.lineTo(X(u), Y(brimTop(u) + 0.02)); }
+    for (let i = 0; i <= 24; i += 1) { const u = -rw + (2 * rw * i) / 24; ctx.lineTo(X(u), Y(brimTop(u) - 0.15)); }
+    for (let i = 24; i >= 0; i -= 1) { const u = -rw + (2 * rw * i) / 24; ctx.lineTo(X(u), Y(brimTop(u) + 0.02)); }
     ctx.closePath();
     ctx.fillStyle = look.accent2;
     ctx.fill();
     ctx.strokeStyle = shade(look.accent2, -0.3, 0.7); // its top edge, so it reads as wrapped round the hat
     ctx.lineWidth = lw;
     ctx.beginPath();
-    for (let i = 0; i <= 24; i += 1) { const u = -1.1 + (2.2 * i) / 24; ctx.lineTo(X(u), Y(brimTop(u) - 0.15)); }
+    for (let i = 0; i <= 24; i += 1) { const u = -rw + (2 * rw * i) / 24; ctx.lineTo(X(u), Y(brimTop(u) - 0.15)); }
     ctx.stroke();
     ctx.restore();
     // The brim: a curved band in front of the ribbon, curling up at both tips, with a lighter top edge.
@@ -1031,8 +1028,11 @@ function drawHeadwear(ctx, f, look) {
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = rx * 0.04;
     ctx.beginPath(); // on the dome's upper left, inside the crown
-    ctx.moveTo(X(-0.62), Y(edge(0) - 0.2));
-    ctx.quadraticCurveTo(X(-0.55), Y(edge(0) - 0.36), X(-0.3), Y(edge(0) - 0.42));
+    if (afro) ctx.ellipse(X(0), Y(oV), oA * rx * 0.8, oB * ry * 0.78, 0, -2.55, -1.95); // the big dome: along its curve
+    else {
+      ctx.moveTo(X(-0.62), Y(edge(0) - 0.2));
+      ctx.quadraticCurveTo(X(-0.55), Y(edge(0) - 0.36), X(-0.3), Y(edge(0) - 0.42));
+    }
     ctx.stroke();
   }
   if (has('pilot-cap')) { // navy captain's cap: crown, gold-braided band, shiny visor and a winged badge

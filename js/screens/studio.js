@@ -114,9 +114,12 @@ export function createStudioScreen({
    */
   function placeFrames(w, h, dpr) {
     wall.replaceChildren();
-    for (const p of fameSpots(w, h)) {
+    const spots = fameSpots(w, h).filter((q) => masters.includes(q.type));
+    for (const p of spots) {
       if (!masters.includes(p.type)) continue;
-      const bw = Math.max(40, p.s * 1.3);
+      // the tap area is never wider than the gap to the nearest framed neighbour in its row, so two never overlap
+      const gap = spots.reduce((m, q) => (q !== p && Math.abs(q.y - p.y) < 1 ? Math.min(m, Math.abs(q.x - p.x)) : m), Infinity);
+      const bw = Math.min(Math.max(40, p.s * 1.3), gap);
       const bh = Math.max(44, p.s * 1.6);
       if (onDiploma) {
         const b = button('app-studio__frame', '', () => onDiploma(p.type), shell.signal);

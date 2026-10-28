@@ -43,7 +43,8 @@ const knight = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s
 export const STRIP = {
   id: 'strip5',
   title: 'comic.s5.title',
-  dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  // Not `dressed` (B36a, B39a): opening day is always before the shop, so a replay shows her as she was then (everyday
+  // clothes, no scrub cap coming and going).
   bareHands: true, // no gloves here even on a replay: the words are about her bare hands (SPEC D32e)
   panels: [
     {

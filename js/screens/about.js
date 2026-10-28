@@ -2,6 +2,7 @@
 
 import { el, icon, header, screenShell } from './dom.js';
 import { mascotArt } from './mascot.js';
+import { VERSION } from '../core/version.js';
 
 /**
  * Build the About screen.
@@ -21,6 +22,7 @@ export function createAboutScreen({ t, onBack, reducedMotion = false }) {
   note.append(noteHead, el('p', 'app-about__text', t('ui.about.disclaimer')));
   const credits = el('section', 'app-card app-setcard');
   credits.append(el('h2', 'app-setcard__title', t('ui.about.credits.title')), el('p', 'app-about__text', t('ui.about.credits.text')));
+  credits.append(el('p', 'app-about__version', t('ui.about.version', { version: VERSION })));
   body.append(art, note, credits);
   shell.node.append(head, body);
   return { node: shell.node, dispose: shell.dispose };

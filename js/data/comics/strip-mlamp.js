@@ -142,7 +142,7 @@ export const STRIP = {
       sound: 'pop_gold',
       bubbles: [
         { kind: 'shout', key: 'comic.mlamp.p3.light', at: [560, 80], w: 240 },
-        { kind: 'say', key: 'comic.mlamp.p3.nils', at: [175, 250], to: 'nils', w: 320 },
+        { kind: 'say', key: 'comic.mlamp.p3.nils', at: [285, 250], to: 'nils', w: 320 }, // B10: right of the plant's leaves
         { kind: 'say', key: 'comic.mlamp.p3.her', at: [760, 340], to: 'her', w: 400, sound: 'ooh_happy' },
       ],
     },
@@ -169,18 +169,19 @@ export const STRIP = {
       scene: {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.5, door: false, leak: false, bulb: false, signX: 0.5, plantX: 0.94, plantEyes: 'smug', lamp: false }),
-          { id: 'her', art: 'heroine', x: 170, y: 660, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
-          { id: 'nils', art: 'nils', x: 560, y: 660, scale: 0.85, pose: 'bust', expr: 'squint', look: -1 },
+          // B9: the two busts sit lower and the end caption is in the top band, so it no longer covers their faces.
+          { id: 'her', art: 'heroine', x: 170, y: 740, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
+          { id: 'nils', art: 'nils', x: 560, y: 740, scale: 0.85, pose: 'bust', expr: 'squint', look: -1 },
           dark(800, 600, 0.6),
-          ...ringLamp(330, 640, 0.5, 'ring'),
-          beam(330, 360, 560, 400, 110),
+          ...ringLamp(330, 720, 0.5, 'ring'),
+          beam(330, 440, 560, 480, 110),
         ],
       },
       sound: 'pop_small',
       bubbles: [
-        { kind: 'say', key: 'comic.mlamp.p5.her', at: [150, 110], to: 'her', w: 220 },
-        { kind: 'say', key: 'comic.mlamp.p5.nils', at: [640, 110], to: 'nils', w: 240 },
-        { kind: 'caption', key: 'comic.mlamp.p5.end', at: [400, 560], w: 640 },
+        { kind: 'say', key: 'comic.mlamp.p5.her', at: [130, 250], to: 'her', w: 220 },
+        { kind: 'say', key: 'comic.mlamp.p5.nils', at: [670, 250], to: 'nils', w: 240 },
+        { kind: 'caption', key: 'comic.mlamp.p5.end', at: [400, 44], w: 760 },
       ],
     },
   ],

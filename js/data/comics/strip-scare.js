@@ -19,7 +19,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.12, doorOpen: true, windowX: 0.56, leakX: 0.36, bulbX: 0.66, signX: 0.84, plantX: 0.97, plantEyes: 'wide', lamp: false }),
+          studio(1600, 900, { floorY: 600, doorX: 0.12, doorOpen: true, windowX: 0.56, leakX: 0.36, bulbX: 0.66, signX: 0.84, plantX: 0.93, plantEyes: 'wide', lamp: false }),
           { art: 'bucket', x: 576, y: 830, scale: 0.5 },
           { id: 'insp', art: 'inspector', x: 192, y: 870, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'grumpy', look: 1 },
           { id: 'her', art: 'heroine', x: 1060, y: 880, scale: 0.8, pose: 'pop', expr: 'shocked', look: -1 },

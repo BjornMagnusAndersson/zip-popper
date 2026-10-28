@@ -520,6 +520,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function keepWorking() {
+    const dips = L.pendingDiplomas(save); // a Master diploma missed when the app was closed on a result screen (B93)
+    if (dips.length) { showDiplomas(dips, keepWorking); return; }
     const lost = L.pendingStrips(save);
     if (lost.length) { playStrips(lost, () => { persist(L.clearPendingStrips(save)); keepWorking(); }); return; }
     const waiting = L.pendingScrub(save);
@@ -536,6 +538,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function playDaily() {
     const date = dailyDate();
     if (dailyState(save, date).done) { showDailyDone(date); return; }
+    const dips = L.pendingDiplomas(save); // (B93)
+    if (dips.length) { showDiplomas(dips, playDaily); return; }
     const lost = L.pendingStrips(save);
     if (lost.length) { playStrips(lost, () => { persist(L.clearPendingStrips(save)); playDaily(); }); return; }
     const waiting = L.pendingScrub(save);
@@ -634,6 +638,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function continueStory() {
+    const dips = L.pendingDiplomas(save); // a Master diploma missed when the app was closed on a result screen (B93)
+    if (dips.length) { showDiplomas(dips, continueStory); return; }
     const lost = L.pendingStrips(save); // milestone strips left over when the app was closed on a result screen (B4)
     if (lost.length) { playStrips(lost, () => { persist(L.clearPendingStrips(save)); continueStory(); }); return; }
     const waiting = L.pendingScrub(save);
@@ -762,7 +768,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const onward = step.daily ? showMenu : step.keepWorking ? keepWorking : continueStory;
     if (out.failed) { playWaiting(onward); return; } // "Next customer": on with the story
     /** The Master diplomas of this round (D34) one after the other, then the waiting strips, then on. @param {() => void} then what comes after @returns {void} */
-    const afterResult = (then) => showDiplomas(out.skills?.mastered ?? [], () => playWaiting(then));
+    const afterResult = (then) => showDiplomas(L.pendingDiplomas(save), () => playWaiting(then)); // the waiting list, kept in the save (B93)
     const tag = daily ? dailyTag(daily) : step.keepWorking ? { key: 'ui.keepWorking.pay', vars: { pct: L.KEEP_WORKING_PERCENT } } : null;
     show(createResultScreen({
       t, reducedMotion: still(), stars: out.stars, payout: daily ? dailyPayout(out.payout, daily) : out.payout, reputationChange: out.reputationChange,
@@ -789,7 +795,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     // "Hang it up!": the studio view, where the new frame drops onto the wall of fame; its Continue goes on (R8j)
     show(createDiplomaScreen({
       t, reducedMotion: still(), type: types[0], playerName: playerName(), buttonKey: 'ui.diploma.hang',
-      onContinue: () => showStudio(() => showDiplomas(types.slice(1), then), types[0]),
+      onContinue: () => { persist(L.clearPendingDiploma(save, types[0])); showStudio(() => showDiplomas(types.slice(1), then), types[0]); }, // seen: off the waiting list (B93)
     }));
     sound.play('cheer');
   }

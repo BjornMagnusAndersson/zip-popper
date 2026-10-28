@@ -362,7 +362,7 @@ export function drawMark(ctx, m, alpha = 1) {
 /**
  * A decoy drawn as part of the skin (T1.3b): a small raised mole, a tiny beauty mark, a freckle cluster, or a bigger
  * flat brown "suspicious mole". No redness glow and no shine like a bump; dark tones with some see-through, so they
- * read on light and dark skin alike.
+ * read on light and dark skin alike (B53: the small dark mole and beauty mark also get a thin pale rim, see paleRim).
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {{kind: string, x: number, y: number, r: number, axis?: number, dots?: {u: number, v: number, s: number}[]}} d the decoy
  * @returns {void}
@@ -376,8 +376,10 @@ export function drawDecoy(ctx, d) {
       ctx.beginPath(); ctx.arc(x + f.u * r, y + f.v * r, Math.max(2, f.s * r * 1.3), 0, Math.PI * 2); ctx.fill();
     }
   } else if (d.kind === 'beauty') {
+    const br = Math.max(1.8, r);
     ctx.fillStyle = 'rgba(42,24,18,0.9)';
-    ctx.beginPath(); ctx.arc(x, y, Math.max(1.8, r), 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, br, 0, Math.PI * 2); ctx.fill();
+    paleRim(ctx, x, y, br);
   } else if (d.kind === 'suspicious') { // flat and brown, a bit lopsided: two overlapping soft ovals, no shine
     ctx.translate(x, y);
     ctx.rotate(d.axis ?? 0);
@@ -393,9 +395,28 @@ export function drawDecoy(ctx, d) {
     g.addColorStop(0, 'rgba(110,72,52,0.95)');
     g.addColorStop(1, 'rgba(46,26,18,0.95)');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, Math.max(2.4, r), 0, Math.PI * 2); ctx.fill();
+    const mr = Math.max(2.4, r);
+    ctx.beginPath(); ctx.arc(x, y, mr, 0, Math.PI * 2); ctx.fill();
+    paleRim(ctx, x, y, mr);
   }
   ctx.restore();
+}
+
+/**
+ * B53: a thin pale rim just round a small dark decoy (mole, beauty mark), so it stands out from deep skin and never
+ * passes for a blackhead there. It is a ring, not a shine, so the decoy still looks flat-ish and unlike a bump; on fair
+ * skin the pale ring almost disappears into the skin.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x centre x
+ * @param {number} y centre y
+ * @param {number} r the decoy's drawn radius
+ * @returns {void}
+ */
+function paleRim(ctx, x, y, r) {
+  const w = Math.max(0.9, r * 0.22);
+  ctx.strokeStyle = 'rgba(255,232,214,0.5)';
+  ctx.lineWidth = w;
+  ctx.beginPath(); ctx.arc(x, y, r + w * 0.5, 0, Math.PI * 2); ctx.stroke();
 }
 
 /**
@@ -800,15 +821,24 @@ export function drawStrip(ctx, s, q, lift = 0) {
 }
 
 /**
- * Tiny blackheads (the dots under the strip) on the skin.
+ * Tiny blackheads (the dots under the strip) on the skin. B95: each dark dot has a thin pale ring round it, so it reads
+ * on every skin tone (the dark core on light skin, the pale ring on brown and deep skin), without knowing the skin.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {{x: number, y: number}[]} dots positions
  * @param {number} fromX only dots right of this x are drawn (left of it the strip has pulled them out)
  * @returns {void}
  */
 export function drawStripDots(ctx, dots, fromX) {
-  ctx.fillStyle = 'rgba(58,42,34,0.75)';
-  for (const d of dots) if (d.x > fromX) { ctx.beginPath(); ctx.arc(d.x, d.y, 1.3, 0, Math.PI * 2); ctx.fill(); }
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,236,220,0.6)'; // the pale ring (hardly shows on fair skin)
+  ctx.lineWidth = 0.9;
+  ctx.fillStyle = 'rgba(46,32,26,0.85)';
+  for (const d of dots) {
+    if (d.x <= fromX) continue;
+    ctx.beginPath(); ctx.arc(d.x, d.y, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(d.x, d.y, 2.05, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /**
@@ -908,7 +938,8 @@ export function drawTweezers(ctx, x, y, open, scale) {
  * @param {number} r size (half the width)
  * @param {number} time seconds, for the steam wobble (0 = still, for reduced motion)
  * @param {number} [heat] the hottest bump under it, 0..1 (SPEC D41): from half way the towel turns red, shakes a
- *   little and steams harder, so the warning shows even though the cloth covers the bump
+ *   little and steams harder, so the warning shows even though the cloth covers the bump; a still "!" badge on its
+ *   corner (B101) shows it with reduced motion too
  * @returns {void}
  */
 export function drawCloth(ctx, x, y, r, time, heat = 0) {
@@ -939,6 +970,37 @@ export function drawCloth(ctx, x, y, r, time, heat = 0) {
     ctx.bezierCurveTo(s * r + r * 0.15, -r * 0.95 - rise, s * r - r * 0.15, -r * 1.1 - rise, s * r, -r * 1.3 - rise);
     ctx.stroke();
   }
+  ctx.globalAlpha = 1;
+  if (hot > 0) hotBadge(ctx, r * 0.74, -r * 0.48, r * 0.3, Math.min(1, hot * 2));
+  ctx.restore();
+}
+
+/**
+ * B101: a still warning on the too-hot towel (it reads with reduced motion too, where the towel does not shake): a
+ * small white badge with a red ring and a red "!" drawn as a bar and a dot (shapes, not text).
+ * @param {CanvasRenderingContext2D} ctx the context (already moved and turned to the towel)
+ * @param {number} x badge centre x
+ * @param {number} y badge centre y
+ * @param {number} s badge radius
+ * @param {number} alpha how strongly it shows, 0..1 (fades in as the bump gets too hot)
+ * @returns {void}
+ */
+function hotBadge(ctx, x, y, s, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#d8283a';
+  ctx.lineWidth = Math.max(1.5, s * 0.22);
+  ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#d8283a';
+  ctx.beginPath(); // the bar of the "!", narrower at the bottom
+  ctx.moveTo(x - s * 0.17, y - s * 0.6);
+  ctx.lineTo(x + s * 0.17, y - s * 0.6);
+  ctx.lineTo(x + s * 0.09, y + s * 0.18);
+  ctx.lineTo(x - s * 0.09, y + s * 0.18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y + s * 0.45, s * 0.13, 0, Math.PI * 2); ctx.fill(); // its dot
   ctx.restore();
 }
 

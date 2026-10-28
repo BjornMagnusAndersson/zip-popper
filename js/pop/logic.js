@@ -52,6 +52,35 @@ export const HAIRLINES = {
 };
 /** Headwear -> how low its lower edge reaches in the middle of the forehead (it follows the hairline curve). */
 export const HEADWEAR_LINES = { beanie: -0.84, 'pilot-cap': -0.84, hat: -0.88, headband: -0.9 };
+/**
+ * B18: tall headwear -> how far it reaches above the face centre, in ry (face.js drawHeadwear: the beanie with its
+ * pom-pom, the bowler's dome, the pilot cap's top), plus a little air; `afro` = worn over an afro's curl cloud, where
+ * the beanie and bowler stretch over the whole cloud and reach higher. The layout keeps this much room above the head.
+ */
+export const HEADWEAR_CROWN = { beanie: 1.5, hat: 1.42, 'pilot-cap': 1.48, afro: { beanie: 1.6, hat: 1.56 } };
+
+/** Headwear that covers the top of the head: only one of these is worn. */
+export const HATS = ['beanie', 'hat', 'pilot-cap'];
+/** Accessory -> the headwear it cannot be worn with (it would sit on top of it or be squashed under it). */
+const CLASHES = { tiara: HATS, veil: HATS, headband: ['beanie', 'pilot-cap'] };
+
+/**
+ * The accessories a face really wears (B56): the generator can pick two that clash (two hats, a tiara or veil on a
+ * cap, a headband under a beanie); the first one in the list is kept and the clashing one is left off. Older saved
+ * faces keep their list, so this is done when drawing (face.js) and in the layout (faceGeometry, B60: a dropped hat
+ * no longer counts for the hairline).
+ * @param {string[]} acc accessory ids, in the face's order
+ * @returns {string[]} the ones worn
+ */
+export function wornAccessories(acc) {
+  const out = [];
+  for (const a of acc) {
+    // True when b cannot be worn together with a (either way round).
+    const clash = (b) => (HATS.includes(a) && HATS.includes(b)) || CLASHES[a]?.includes(b) || CLASHES[b]?.includes(a);
+    if (!out.some(clash)) out.push(a);
+  }
+  return out;
+}
 /** Eye style -> half the eye width in rx units. */
 export const EYE_SIZES = { round: 0.16, wide: 0.19, sleepy: 0.16, sparkly: 0.18, squint: 0.15, tiny: 0.1 };
 /** Mouth style -> half the mouth width in rx units. */
@@ -126,6 +155,7 @@ export const FACE_FIT = {
  *   fits). Unknown or missing ids fall back to an oval head, short hair, round eyes and a smile. A spec with
  *   `character` (pop/characters.js, e.g. the husband) gets that character's parts, beard and armor: keep-out boxes over
  *   the beard and the helmet's cheek guards, the helmet's brow edge as the hairline, and room above for the plumes.
+ *   A worn beanie, bowler or pilot cap also gets room above the head (HEADWEAR_CROWN, B18).
  * @returns {{width: number, height: number, cx: number, cy: number, rx: number, ry: number, unit: number,
  *   features: object, keepOut: {x: number, y: number, w: number, h: number}[]}} the face geometry in CSS px
  *   (cx, cy = face centre, rx, ry = half-width and half-height of the bare-skin oval, unit = bump size factor,
@@ -140,7 +170,11 @@ export function faceGeometry(width, height, spec0 = {}) {
   const shape = SHAPE_ASPECT[spec.shape] ? spec.shape : 'oval';
   const aspect = SHAPE_ASPECT[shape];
   const F = FACE_FIT;
-  const crown = extra.crown ?? 1.12; // how far the hair (or a helmet with plumes) reaches above the face centre, in ry
+  const acc = Array.isArray(spec.accessories) ? wornAccessories(spec.accessories) : []; // B60: only what is worn
+  // B18: a beanie, bowler or pilot cap reaches higher than the hair, so it gets its own room above the head.
+  const hatCrown = Math.max(0, ...acc.map((a) => (spec.hair === 'afro' && HEADWEAR_CROWN.afro[a]) || HEADWEAR_CROWN[a] || 0));
+  // How far the hair (or a helmet with plumes, or a hat) reaches above the face centre, in ry.
+  const crown = Math.max(extra.crown ?? 1.12, hatCrown);
   const byWidth = Math.max(width * F.widthPart, Math.min(width * 0.4, F.smallRx)) * aspect;
   const ry = Math.min(Math.min(byWidth, height * F.heightPart) * size, height * F.maxRy, width * 0.41 * aspect,
     (height * (F.chinMax - F.topRoom)) / (crown + 1)); // tall headwear: a smaller head, so it never clips at the top
@@ -150,7 +184,6 @@ export function faceGeometry(width, height, spec0 = {}) {
   const lo = ry * crown + height * F.topRoom;
   const hi = Math.min(height - ry * 1.2, height * F.chinMax - ry);
   const cy = clamp(height * F.centre, lo, Math.max(lo, hi));
-  const acc = Array.isArray(spec.accessories) ? spec.accessories : [];
   const [hairTop0, hairCurve] = extra.hairline ?? HAIRLINES[spec.hair] ?? HAIRLINES.short; // a helmet's brow edge counts as the hairline
   // A hat, cap or band hides the hair line; its lower edge then counts as the hairline.
   const hairTop = Math.max(hairTop0, ...acc.map((a) => HEADWEAR_LINES[a] ?? -9));

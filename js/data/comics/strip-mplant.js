@@ -19,8 +19,9 @@ export const STRIP = {
         layers: [
           studio(1600, 900, { floorY: 600, doorX: 0.08, windowX: 0.42, leakX: 0.7, bulbX: 0.56, signX: 0.88 }),
           { art: 'bucket', x: 1120, y: 830, scale: 0.5 },
-          { id: 'her', art: 'heroine', x: 760, y: 900, scale: 0.8, pose: 'cheer', expr: 'bliss' },
-          { art: 'plant', x: 760, y: 440, scale: 0.85 },
+          // B10: the plant sits in her hands (pose 'lift'), drawn behind her so her hands grip the pot's sides.
+          { art: 'plant', x: 760, y: 462, scale: 1.05 },
+          { id: 'her', art: 'heroine', x: 760, y: 900, scale: 0.75, pose: 'lift', expr: 'bliss' },
           { art: 'sparkles', x: 760, y: 230, r: 240 },
         ],
       },

@@ -30,8 +30,9 @@ function spoon(him, loops = false) {
   const out = []; // R7: the spoon that used to stick out of the side read as an antenna, so only the cereal remains
   if (loops) {
     for (const [dx, dy, c] of [[-60, -110, '#f3a33a'], [40, -128, '#e66a8f'], [-10, -140, '#ffd25a'], [70, -96, '#f3a33a']]) {
-      out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 15 * k, fill: c, stroke: true, sw: 4 });
-      out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 5 * k, fill: '#fff8ee' });
+      // B44(7): bigger loops with a thicker outline, so they still read on a phone.
+      out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 23 * k, fill: c, stroke: true, sw: 5 });
+      out.push({ shape: 'circle', x: x + f * dx * k, y: y + dy * k, r: 8 * k, fill: '#fff8ee', stroke: true, sw: 2.5 });
     }
     out.push({ shape: 'path', d: `M${x - f * 124 * k} ${y + 20 * k} q${-f * 8 * k} ${30 * k} 0 ${44 * k} q${f * 10 * k} ${-10 * k} 0 ${-44 * k}Z`, fill: '#ffffff', stroke: true, sw: 3 });
   }
@@ -428,9 +429,10 @@ export const STRIP = {
       },
       camera: { move: 'pullOut', focus: [800, 450], amount: 0.08, ms: 3500 },
       bubbles: [
-        { kind: 'caption', key: 'comic.plan.p7.cap', at: [300, 52], w: 480 },
-        { kind: 'say', key: 'comic.plan.p7.her', at: [880, 110], to: 'her', w: 400 },
-        { kind: 'shout', key: 'comic.plan.p7.click', at: [1400, 80], w: 280, sound: 'creak' },
+        // B44(4): caption and her bubble a little to the left, so the shout fits on one line above the lamp shade.
+        { kind: 'caption', key: 'comic.plan.p7.cap', at: [240, 52], w: 430 },
+        { kind: 'say', key: 'comic.plan.p7.her', at: [700, 110], to: 'her', w: 400 },
+        { kind: 'shout', key: 'comic.plan.p7.click', at: [1330, 64], w: 560, sound: 'creak' },
       ],
     },
     {

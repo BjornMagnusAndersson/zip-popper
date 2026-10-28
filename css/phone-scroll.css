@@ -117,6 +117,8 @@
 .ps-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
 .ps-howto { font-size: 0.78rem; line-height: 1.25; opacity: 0.9; }
 .ps-howto__keys { opacity: 0.8; }
+/* The idea card has no how-to line (B32/B86): it is not a scroll to play. */
+.ps--idea .ps-howto { display: none; }
 .ps .app-btn { color: var(--ink); }
 
 /* Reduced motion */

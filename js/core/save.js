@@ -42,6 +42,7 @@ export function defaultSave(now = Date.now()) {
     threeStarDone: false, // a 3-star customer has happened (for the `mstar` strip)
     requestsDone: 0,
     pendingStrips: [], // milestone strips earned by the last customer, not yet played (B4: they survive closing the app on the result screen)
+    pendingDiplomas: [], // Master diplomas (bump ids) earned by the last customer, not yet shown (B93: they survive closing the app on the result screen)
     endingSeen: false, // the "To be continued" ending was reached: the menu shows Keep working (T5.4, SPEC D23)
     keepWorkingDone: 0, // Keep working customers finished or skipped (its own count; story progress never moves in it)
     pinJar: 0, // home-popping pins she took away from customers (owner 2026-10-28; the jar on the studio shelf)
@@ -178,6 +179,7 @@ export function normalizeSave(raw, now = Date.now()) {
     threeStarDone: flag(s.threeStarDone, d.threeStarDone),
     requestsDone: count(s.requestsDone, d.requestsDone),
     pendingStrips: words(s.pendingStrips, d.pendingStrips),
+    pendingDiplomas: words(s.pendingDiplomas, d.pendingDiplomas),
     endingSeen: flag(s.endingSeen, d.endingSeen),
     keepWorkingDone: count(s.keepWorkingDone, d.keepWorkingDone),
     pinJar: count(s.pinJar, d.pinJar),

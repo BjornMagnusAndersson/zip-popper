@@ -86,6 +86,8 @@ export const POSES = {
   stand: { arms: [[[-112, -270], [-116, -175]], [[112, -270], [116, -175]]], legs: 'stand' },
   wave: { arms: [[[-112, -270], [-116, -175]], [[175, -400], [190, -530]]], legs: 'stand', open: [false, true] },
   cheer: { arms: [[[-170, -400], [-190, -540]], [[170, -400], [190, -540]]], legs: 'stand', open: [true, true] },
+  // Both hands high above the head, close together, holding something up like a trophy (milestone "First plant", B10).
+  lift: { arms: [[[-160, -480], [-100, -690]], [[160, -480], [100, -690]]], legs: 'stand' },
   point: { arms: [[[-112, -270], [-116, -175]], [[185, -350], [275, -365]]], legs: 'stand', point: true },
   hips: { arms: [[[-175, -280], [-90, -205]], [[175, -280], [90, -205]]], legs: 'stand' },
   pop: { arms: [[[-175, -320], [-128, -470]], [[175, -320], [128, -470]]], legs: 'stand', wiggle: true },
@@ -1418,7 +1420,7 @@ function room(l) {
     // R8: the small plant she adopted in the plan strip (not yet the shop's living plant): on the window sill where she
     // put it (strip 5), or later on a small crate at plantX (SPEC D32j).
     const want = l.plantSill || l.plantShelf;
-    const s = typeof want === 'number' ? want : 0.32 * F / 600;
+    const s = typeof want === 'number' ? want : 0.5 * F / 600; // B91, B92: was 0.32, too small to see on a phone
     let x = wx + ww * 0.74;
     let y = wy + wh + 2;
     if (!l.plantSill) {
@@ -1707,7 +1709,14 @@ function ladder(l) {
       g.appendChild(line(`M${sx * (xm - 6)} ${ym - 18} l${sx * 10} 10 l${-sx * 8} 8 l${sx * 10} 10`, 4));
     }
   }
-  if (l.wobble) for (const sx of [-1, 1]) g.appendChild(line(`M${sx * (hw + 40)} -30 q${sx * 20} 16 ${sx * 6} 34 M${sx * (hw + 64)} -50 q${sx * 24} 22 ${sx * 8} 48`, 5));
+  // Wobble: thick motion marks at the feet, halfway up and beside the top step (B97: the thin ones at the feet alone
+  // were hidden behind people and captions).
+  if (l.wobble) for (const sx of [-1, 1]) {
+    const xm = railX(0.5);
+    g.appendChild(line(`M${sx * (hw + 44)} -36 q${sx * 24} 20 ${sx * 6} 42 M${sx * (hw + 76)} -60 q${sx * 30} 28 ${sx * 8} 62`, 9));
+    g.appendChild(line(`M${sx * (xm + 50)} ${-h * 0.5 - 50} q${sx * 30} 50 0 100 M${sx * (xm + 100)} ${-h * 0.5 - 80} q${sx * 40} 80 0 160`, 10));
+    g.appendChild(line(`M${sx * (tw + 70)} ${-h - 60} q${sx * 30} 45 0 90 M${sx * (tw + 120)} ${-h - 90} q${sx * 40} 70 0 140`, 10));
+  }
   return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${(l.flip ? -1 : 1) * s} ${s})` }, [g]) };
 }
 
@@ -2030,7 +2039,7 @@ export function studioKit(arts, o = null) {
 }
 
 /** Poses where she is relaxed, celebrating or seen close up: in a `dressed` strip her scrub cap is off there (T5.2b). */
-export const CAP_OFF_POSES = ['cheer', 'sit', 'bust', 'wave', 'shrug'];
+export const CAP_OFF_POSES = ['cheer', 'lift', 'sit', 'bust', 'wave', 'shrug'];
 /** Things in her hand that mean she is at work (then the cap stays on, whatever the pose). */
 export const WORK_HOLDS = ['tweezers', 'gloves', 'magnifier'];
 

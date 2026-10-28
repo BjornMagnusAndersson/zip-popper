@@ -657,9 +657,11 @@ function homePlant(ctx, x, y, s, pal, lw) {
  * @param {number} u size unit
  * @param {object} pal palette
  * @param {() => number} rand random numbers
+ * @param {number} [plantBelow] B17: 0 = the plant stands on top of the case; more = it stands on the first shelf whose
+ *   space starts at least this low (CSS px), so the zoom buttons at the top right never hide it (portrait)
  * @returns {void}
  */
-function homeBookshelf(ctx, x, top, bw, floorY, u, pal, rand) {
+function homeBookshelf(ctx, x, top, bw, floorY, u, pal, rand, plantBelow = 0) {
   const lw = Math.max(1.2, u * 0.4);
   const side = Math.max(4, u * 1.4);
   box(ctx, x, top, bw, floorY - top, u * 0.8);
@@ -669,10 +671,15 @@ function homeBookshelf(ctx, x, top, bw, floorY, u, pal, rand) {
   const books = ['#e8735a', '#4f86e8', '#ffd25a', '#7b6ad8', '#3fae8c', '#f08cbf', '#fff3e3', '#d0672e'];
   const rows = Math.max(3, Math.round((floorY - top) / (u * 15)));
   const rh = (floorY - top - side * 2) / rows;
+  // B17: the shelf row the plant stands in (-1 = on top), and the plant's place and size there.
+  let plantRow = -1;
+  for (let r = 0; plantBelow > 0 && r < rows - 1; r += 1) if (top + side + rh * r >= plantBelow) { plantRow = r; break; }
+  const plantS = Math.min(rh * 0.38, Math.max(16, u * 7));
+  const plantX = x + bw * 0.45;
   for (let r = 0; r < rows; r += 1) {
     const base = top + side + rh * (r + 1);
     let bx = x + side + u * 0.6;
-    const end = x + bw - side - u * 0.6;
+    const end = r === plantRow ? plantX - plantS * 0.8 : x + bw - side - u * 0.6; // books stop where the plant stands
     while (bx < end - u * 1.5) {
       const bwid = Math.min(end - bx, u * (1.8 + rand() * 1.6));
       const bh = rh * (0.55 + rand() * 0.33);
@@ -688,10 +695,11 @@ function homeBookshelf(ctx, x, top, bw, floorY, u, pal, rand) {
       ctx.fillRect(bx + bwid * 0.2, base - bh * 0.78, bwid * 0.6, Math.max(1, u * 0.4));
       bx += bwid + u * 0.15;
     }
+    if (r === plantRow) homePlant(ctx, plantX, base - u * 0.3, plantS, pal, lw); // standing on this row's plank
     box(ctx, x + side * 0.6, base - u * 0.3, bw - side * 1.2, Math.max(3, u * 1.1), 1); // the shelf plank
     inked(ctx, pal.shelf, lw * 0.8, pal);
   }
-  homePlant(ctx, x + bw * 0.32, top, Math.max(16, u * 7), pal, lw);
+  if (plantRow < 0) homePlant(ctx, x + bw * 0.32, top, Math.max(16, u * 7), pal, lw);
 }
 
 /**
@@ -783,7 +791,9 @@ function drawHome(ctx, w, h, pal) {
     homeSofa(ctx, w * 0.235, w * 0.765, h * 0.56, h * 0.67, floorY, u, pal);
   } else {
     homePicture(ctx, w * 0.6, h * 0.095, Math.max(60, Math.min(150, w * 0.24)), u, pal);
-    homeBookshelf(ctx, w * 0.83, h * 0.17, w * 0.22, floorY, u, pal, rand);
+    // B17: the zoom buttons (three of 48 px with 8 px gaps, 10 px from the top) cover the top of the case, so the
+    // plant stands on a shelf below them.
+    homeBookshelf(ctx, w * 0.83, h * 0.17, w * 0.22, floorY, u, pal, rand, 10 + 48 * 3 + 8 * 2 + 12);
     homeLamp(ctx, L, floorY, u, pal);
     homeSofa(ctx, -w * 0.06, w * 1.06, h * 0.6, h * 0.7, floorY, u, pal);
   }
@@ -2016,7 +2026,8 @@ function closeupWall(ctx, w, h, floorY) {
 }
 
 /**
- * Paint a studio upgrade up close, clean, for the scrub job (T5.1b): a warm wall with soft light behind it, the floor,
+ * Paint a studio upgrade up close, clean, for the scrub job (T5.1b): a warm wall with soft light behind it, the floor
+ * (none under the leak's ceiling pipe, B97),
  * and the item drawn by the same drawer as in the room (ringLight, wingChair, hangingPlant, shinySign), only bigger.
  * The wallPaint upgrade is the wall itself. The grime goes on top in screens/scrub.js.
  * @param {CanvasRenderingContext2D} ctx where to paint (CSS px)
@@ -2029,20 +2040,24 @@ export function drawCloseup(ctx, w, h, id) {
   const { u, floorY, spot } = closeupSpot(id, w, h);
   if (id === 'wallPaint') { closeupWall(ctx, w, h, floorY); return; }
   const pal = PALETTES[1];
-  const g = ctx.createLinearGradient(0, 0, 0, floorY);
+  const ceiling = id === 'leakFix'; // B97: the pipe is a view up at the ceiling, so no floor strip under it
+  const wallEnd = ceiling ? h : floorY;
+  const g = ctx.createLinearGradient(0, 0, 0, wallEnd);
   g.addColorStop(0, pal.wallTop);
   g.addColorStop(1, pal.wallBottom);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, w, floorY);
+  ctx.fillRect(0, 0, w, wallEnd);
   const glow = ctx.createRadialGradient(w / 2, h * 0.45, h * 0.05, w / 2, h * 0.45, w * 0.55);
   glow.addColorStop(0, 'rgba(255,248,228,0.55)');
   glow.addColorStop(1, 'rgba(255,248,228,0)');
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, w, floorY);
-  ctx.fillStyle = pal.floor;
-  ctx.fillRect(0, floorY, w, h - floorY);
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ctx.fillRect(0, floorY, w, Math.max(2, h * 0.01));
+  ctx.fillRect(0, 0, w, wallEnd);
+  if (!ceiling) {
+    ctx.fillStyle = pal.floor;
+    ctx.fillRect(0, floorY, w, h - floorY);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(0, floorY, w, Math.max(2, h * 0.01));
+  }
   if (id === 'lamp') ringLight(ctx, spot, floorY, u);
   else if (id === 'chair') wingChair(ctx, spot, floorY, u);
   else if (id === 'plant') hangingPlant(ctx, spot, u);

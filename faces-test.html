@@ -30,6 +30,7 @@
 // Developer page: draws each test face as a 390 x 800 phone scene, shown small. Options:
 //   ?bumps          the bumps and the keep-out boxes from layoutFace / faceGeometry on top, to check they sit on bare skin
 //   ?show=bumps     bumps and decoys (moles, freckles) in every mood, no boxes: to judge how well they read on the skin
+//                   (add ?strip for the nose strip's left-on dots, B95)
 //   ?w=800&h=390    a landscape phone; ?px=400 shows each picture that many CSS px high; ?dpr=2 paints sharper
 //   ?who=a,b        only these people; ?mood=grim only this mood
 //   ?cols=0-4       only columns 0 to 4; ?album=96x120 the album / reveal picture (screens/reveal.js) at that size
@@ -42,7 +43,7 @@
 //                   ?perf=still with reduced motion (no idle life, no breathing), ?perf=nobreath without the sway
 import { faceGeometry, layoutFace } from './js/pop/logic.js';
 import * as FACE from './js/pop/face.js';
-import { drawPimple, drawDecoy } from './js/pop/art.js';
+import { drawPimple, drawDecoy, drawStripDots } from './js/pop/art.js';
 import { createPopScene } from './js/pop/engine.js';
 import { faceCanvas as albumFace } from './js/screens/reveal.js';
 import { REGULARS, makeCustomer, FACE_PARTS } from './js/data/customers.js';
@@ -111,6 +112,19 @@ function accPeople(arg) {
   return FACE_PARTS.hair.map((h, i) => ({ name: h, seed: 200 + i, bumps: 8, face: { ...base(i), hair: h, accessories: acc } }));
 }
 const lives = []; // {canvas, tex, life} for ?live
+const STRIP = params.has('strip'); // ?strip with ?show=bumps: the nose strip's dots too (B95)
+
+/**
+ * B16: a story character's first zone (the husband's chin spot) always holds a whitehead in the story, so the preview
+ * shows one there too (the random kinds could put a gold or big bump on it).
+ * @param {{pimples: object[]}} lay a layout from layoutFace (changed in place)
+ * @returns {object} the same layout
+ */
+function chinWhitehead(lay) {
+  const first = lay.pimples[0];
+  if (first?.zone === 'chin') first.type = 'whitehead'; // only a character starts with the chin (ZONES start at the nose)
+  return lay;
+}
 
 /**
  * Draw one person in one mood into a new canvas (with bumps and keep-out boxes when asked).
@@ -132,11 +146,12 @@ function faceCanvas(p, mood) {
   const ctx = tex.getContext('2d');
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   if (plainBumps) {
-    const lay = layoutFace({ seed: p.seed, face, count: Math.max(8, p.bumps), decoys: true });
+    const lay = chinWhitehead(layoutFace({ seed: p.seed, face, count: Math.max(8, p.bumps), decoys: true, strip: STRIP }));
     for (const d of lay.decoys ?? []) drawDecoy(ctx, d);
+    if (lay.strip) drawStripDots(ctx, lay.strip.dots, -Infinity); // ?strip (B95): the nose dots, as if the strip was left on
     for (const b of lay.pimples) drawPimple(ctx, b, 0, 1, 0.4);
   } else if (showBumps) {
-    if (mood === 'grim' || mood === 'ow') for (const b of layoutFace({ seed: p.seed, face, count: p.bumps }).pimples) drawPimple(ctx, b, 0, 1, 0);
+    if (mood === 'grim' || mood === 'ow') for (const b of chinWhitehead(layoutFace({ seed: p.seed, face, count: p.bumps })).pimples) drawPimple(ctx, b, 0, 1, 0);
     ctx.strokeStyle = 'rgba(0,120,255,0.8)';
     ctx.lineWidth = 2;
     for (const k of face.keepOut) ctx.strokeRect(k.x, k.y, k.w, k.h);

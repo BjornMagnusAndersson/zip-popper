@@ -1764,7 +1764,7 @@ export function createPopScene(canvas, o) {
   /**
    * Two soft see-through finger pads on the squeezed bump's edges, along the line between the real fingers (so the
    * picture stays clear even when the fingers are far off to the side), pressing in as the pressure rises. Drawn in
-   * screen px, over the face.
+   * screen px, over the face. Blue when she owns the gloves (B92), like the one-finger fingertips.
    * @param {object} p the squeezed bump (its axis is the finger line)
    * @returns {void}
    */
@@ -1781,9 +1781,15 @@ export function createPopScene(canvas, o) {
       ctx.rotate(ang);
       const squash = 1 - 0.28 * pr;
       const g = ctx.createRadialGradient(dir * R * 0.35, 0, 1, 0, 0, R);
-      g.addColorStop(0, `rgba(255,242,234,${0.16 + 0.14 * pr})`);
-      g.addColorStop(0.65, `rgba(255,220,204,${0.3 + 0.16 * pr})`);
-      g.addColorStop(1, 'rgba(255,212,192,0.1)');
+      if (gloves) { // B92: in her blue rubber gloves, like the fingertips (drawFinger's glove colours)
+        g.addColorStop(0, `rgba(154,217,247,${0.22 + 0.14 * pr})`);
+        g.addColorStop(0.65, `rgba(116,194,234,${0.38 + 0.16 * pr})`);
+        g.addColorStop(1, 'rgba(77,159,204,0.15)');
+      } else {
+        g.addColorStop(0, `rgba(255,242,234,${0.16 + 0.14 * pr})`);
+        g.addColorStop(0.65, `rgba(255,220,204,${0.3 + 0.16 * pr})`);
+        g.addColorStop(1, 'rgba(255,212,192,0.1)');
+      }
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.ellipse(0, 0, R * squash, R * (1 + 0.1 * pr), 0, 0, Math.PI * 2); // flattened against the bump
@@ -1791,7 +1797,7 @@ export function createPopScene(canvas, o) {
       ctx.strokeStyle = `rgba(255,255,255,${0.5 + 0.35 * pr})`;
       ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.strokeStyle = `rgba(150,70,55,${0.25 + 0.35 * pr})`; // the pressing edge, on the side facing the bump
+      ctx.strokeStyle = gloves ? `rgba(40,110,150,${0.25 + 0.35 * pr})` : `rgba(150,70,55,${0.25 + 0.35 * pr})`; // the pressing edge, on the side facing the bump
       ctx.lineWidth = 2.4;
       ctx.lineCap = 'round';
       const edge = dir > 0 ? 0 : Math.PI;

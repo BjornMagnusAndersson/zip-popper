@@ -185,7 +185,8 @@ export function outfitTestItems(outfit) {
 
 /**
  * Which outfit the comic player dresses her in for a strip (T5.2): strips marked `dressed: true` are set after she
- * may own an outfit (chapter 5 in her studio, the hygiene scare, the teaser and the milestone strips), so there she
+ * may own an outfit (the hygiene scare, the teaser and the milestone strips; not opening day, strip 5, which is
+ * always before the shop: B36a), so there she
  * wears her best owned outfit (studio.js heroOutfit); the other strips (earlier times, and the apron strip with its
  * own look) keep what they draw. Only heroine layers without their own `outfit` are dressed (comic-art.js dressHeroine).
  * @param {object|null} strip the strip data
@@ -727,7 +728,8 @@ export function applyRound(save, payload, step) {
   // The line memory counts this visit (finished or skipped), so the next one is a return with other lines.
   const pinTaken = !failed && step?.pin === true; // a pin visit: the pin goes into the jar (game/pin-jar.js)
   const jar = (save.pinJar ?? 0) + (pinTaken ? 1 : 0);
-  const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips], pinJar: jar }, step?.lines, said, failed); // strips kept until played (B4)
+  const base = { ...economyToSave(save, after), ...moved, pendingStrips: [...strips], pinJar: jar }; // strips kept until played (B4)
+  const next = recordLines(failed ? base : addPendingDiplomas(base, roundSkills(before, after, payload.cleanBumpTypes ?? []).mastered), step?.lines, said, failed); // new Master diplomas too (B93)
   // Nose dots left on: the customer says so instead (owner 2026-10-28); the line memory keeps the usual line.
   const shown = !failed && payload.stripLeft === true ? noseLeftKey(step) : said;
   return {
@@ -826,6 +828,42 @@ export function addPendingStrips(save, strips) {
   if (!strips.length) return save;
   const pending = Array.isArray(save.pendingStrips) ? save.pendingStrips : [];
   return { ...save, pendingStrips: [...pending, ...strips.filter((id) => !pending.includes(id))] };
+}
+
+/**
+ * Adds new Master diplomas (bump ids) to the save's waiting list (B93), once each, after any already waiting.
+ * clearPendingDiploma takes one off once its screen has been seen.
+ * @param {object} save the save
+ * @param {string[]} types bump ids that just reached Master
+ * @returns {object} new save (the same save when there is nothing to add)
+ */
+export function addPendingDiplomas(save, types) {
+  const pending = Array.isArray(save.pendingDiplomas) ? save.pendingDiplomas : [];
+  const fresh = types.filter((id) => !pending.includes(id));
+  return fresh.length ? { ...save, pendingDiplomas: [...pending, ...fresh] } : save;
+}
+
+/**
+ * The Master diplomas still waiting to be shown (B93): earned by the last customer, not seen yet. Shown after the
+ * result screen, or on the next Continue when the app was closed on the result screen. Only real bump kinds that are
+ * still Master count.
+ * @param {object} save the save
+ * @returns {string[]} bump ids, in order
+ */
+export function pendingDiplomas(save) {
+  const masters = masterKinds(save);
+  return (Array.isArray(save.pendingDiplomas) ? save.pendingDiplomas : []).filter((id) => masters.includes(id));
+}
+
+/**
+ * Takes one diploma off the waiting list (call when its screen is done, so it never shows twice).
+ * @param {object} save the save
+ * @param {string} type bump id
+ * @returns {object} new save (the same save when it was not waiting)
+ */
+export function clearPendingDiploma(save, type) {
+  const pending = Array.isArray(save.pendingDiplomas) ? save.pendingDiplomas : [];
+  return pending.includes(type) ? { ...save, pendingDiplomas: pending.filter((id) => id !== type) } : save;
 }
 
 /**

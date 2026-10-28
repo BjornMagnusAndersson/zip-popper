@@ -160,8 +160,9 @@ export const STRIP = {
           ...blurHand(609, 610, 1),
           { id: 'her', art: 'heroine', x: 500, y: 1010, scale: 0.85, pose: 'pop', expr: 'bliss' },
           zips(500, 560, 330, -50, 50, 7, 60),
-          { id: 'nils', art: 'nils', x: 150, y: 1060, scale: 0.6, pose: 'bust', expr: 'shocked', look: 1 },
-          ...stopwatch(270, 900, 80, 60),
+          // B10: Nils bigger, his bubble up and out of the way.
+          { id: 'nils', art: 'nils', x: 150, y: 1080, scale: 0.85, pose: 'bust', expr: 'shocked', look: 1 },
+          ...stopwatch(300, 930, 80, 60),
           { art: 'plant', x: 860, y: 1000, scale: 0.9, eyes: 'happy', sweat: true },
           ...sweatband(860, 1000, 0.9),
           zips(860, 740, 200, -40, 40, 3, 40),
@@ -171,7 +172,7 @@ export const STRIP = {
       sound: 'pop_gold',
       bubbles: [
         { kind: 'shout', key: 'comic.mmastery.p3.zip', at: [500, 90], w: 420 },
-        { kind: 'say', key: 'comic.mmastery.p3.nils', at: [140, 720], to: 'nils', w: 260, sound: 'cheer' },
+        { kind: 'say', key: 'comic.mmastery.p3.nils', at: [170, 590], to: 'nils', w: 330, sound: 'cheer' },
       ],
     },
     {
@@ -180,17 +181,18 @@ export const STRIP = {
       scene: {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.5, door: false, leak: false, sign: false, bulb: false, plantX: 0.5, plantEyes: 'sad' }),
-          { id: 'her', art: 'heroine', x: 170, y: 660, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
-          ...mug(300, 470, 0.9),
-          { id: 'nils', art: 'nils', x: 630, y: 660, scale: 0.85, pose: 'bust', expr: 'shocked', look: -1 },
-          ...stopwatch(540, 450, 48, 350),
+          // B9: the busts, mug and stopwatch sit lower and the end caption is in the top band, clear of mouths and watch.
+          { id: 'her', art: 'heroine', x: 170, y: 740, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
+          ...mug(300, 550, 0.9),
+          { id: 'nils', art: 'nils', x: 630, y: 740, scale: 0.85, pose: 'bust', expr: 'shocked', look: -1 },
+          ...stopwatch(540, 530, 48, 350),
         ],
       },
       sound: 'pop_small',
       bubbles: [
-        { kind: 'say', key: 'comic.mmastery.p4.nils', at: [620, 90], to: 'nils', w: 260 },
-        { kind: 'say', key: 'comic.mmastery.p4.her', at: [190, 90], to: 'her', w: 280 },
-        { kind: 'caption', key: 'comic.mmastery.p4.end', at: [400, 560], w: 640 },
+        { kind: 'say', key: 'comic.mmastery.p4.nils', at: [640, 250], to: 'nils', w: 260 },
+        { kind: 'say', key: 'comic.mmastery.p4.her', at: [170, 250], to: 'her', w: 280 },
+        { kind: 'caption', key: 'comic.mmastery.p4.end', at: [400, 50], w: 760 },
       ],
     },
   ],

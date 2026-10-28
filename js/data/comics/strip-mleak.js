@@ -140,7 +140,7 @@ export const STRIP = {
       sound: 'creak',
       bubbles: [
         { kind: 'say', key: 'comic.mleak.p2.him', at: [250, 300], to: 'him', w: 380 },
-        { kind: 'shout', key: 'comic.mleak.p2.creak', at: [740, 930], w: 280, sound: 'creak' },
+        { kind: 'shout', key: 'comic.mleak.p2.creak', at: [700, 930], w: 400, sound: 'creak' }, // wide enough that the word never breaks
       ],
     },
     {

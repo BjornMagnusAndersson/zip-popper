@@ -29,12 +29,13 @@
 // they report into the log (nothing is saved); the shop really buys with the economy rules so Buy can be tried out.
 import { loadStrings, t } from './js/core/strings.js';
 import { defaultSave, normalizeSave } from './js/core/save.js';
-import { economyFromSave, buy } from './js/game/economy.js';
+import { economyFromSave, economyToSave, buy } from './js/game/economy.js';
+import { comicOutfit, comicStudio } from './js/game/app-logic.js';
 import { REGULARS } from './js/data/customers.js';
 import { describeRequest } from './js/game/requests.js';
 import { factForCustomer } from './js/data/facts.js';
 import { playComic } from './js/game/comic.js';
-import { ARTS } from './js/game/comic-art.js';
+import { ARTS, dressHeroine, studioKit } from './js/game/comic-art.js';
 import { STRIP as strip0 } from './js/data/comics/strip-0.js';
 import { STRIP as strip1 } from './js/data/comics/strip-1.js';
 import { STRIP as strip2 } from './js/data/comics/strip-2.js';
@@ -122,7 +123,11 @@ const SCREENS = [
     onPlay: (id) => {
       say(`onPlay("${id}")`);
       const strip = STRIPS.find(([s]) => s.id === id)?.[0];
-      if (strip) playComic(strip, { name: playerName, reducedMotion, arts: ARTS, onClose: () => say('comic closed') });
+      // Dressed as the real game does (app.js playStrip, B36h): her outfit, gloves and plant follow what the page's
+      // shop state owns (buy scrubs on the shop screen, then play a strip to see them).
+      const save = economyToSave(defaultSave(0), eco);
+      const arts = studioKit(dressHeroine(ARTS, comicOutfit(strip, save)), comicStudio(strip, save));
+      if (strip) playComic(strip, { name: playerName, reducedMotion, arts, onClose: () => say('comic closed') });
     },
   })],
   ['settings', () => {
