@@ -353,8 +353,11 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     sound.unlock();
     setMusic({ screen: 'comic' });
     screenChanged(); // a comic: Back stays (it has no Back or Menu button, B87)
+    const sv = L.stripVars(id, save);
+    const vars = { ...sv.values };
+    for (const [k, key] of Object.entries(sv.keys)) vars[k] = t(key);
     playComic(strip, {
-      name: playerName(), reducedMotion: still() || undefined, sound,
+      name: playerName(), vars, reducedMotion: still() || undefined, sound,
       arts: studioKit(dressHeroine(ARTS, L.comicOutfit(strip, save)), L.comicStudio(strip, save)), // outfit, gloves, plant
       onSeen: (sid) => persist(L.markSeen(save, sid)),
       onClose: then,

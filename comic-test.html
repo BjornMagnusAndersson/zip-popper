@@ -52,6 +52,8 @@ import { STRIP as mtweezers } from './js/data/comics/strip-mtweezers.js';
 import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
 import { STRIP as scare } from './js/data/comics/strip-scare.js';
 import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer, dressHeroine, studioKit } from './js/game/comic-art.js';
+import { stripVars } from './js/game/app-logic.js';
+import { defaultSave } from './js/core/save.js';
 
 const STRIPS = [strip0, strip0b, strip1, strip2, strip3, strip4, strip4b, plan, strip5, scare, books, mplant, mlamp, mapron, mmastery, mtweezers, mstar, testStrip, placeholder]; // add new strips here to see them in the chooser
 const params = new URLSearchParams(location.search);
@@ -147,8 +149,12 @@ function open(strip) {
     if (l.art) for (const e of checkArtLayer(l)) problems.push(`${strip.id} panel ${i + 1}: ${e}`);
   }));
   log.textContent = problems.length ? problems.join('\n') : '';
+  // The strip's extra placeholders as the game fills them, for a save Skilled at &kind= (default whitehead)
+  const sv = stripVars(strip.id, { ...defaultSave(0), mastery: { [params.get('kind') ?? 'whitehead']: 70 } });
+  const vars = { ...sv.values };
+  for (const [k, key] of Object.entries(sv.keys)) vars[k] = t(key);
   return playComic(strip, {
-    name: nameBox.value.trim(), reducedMotion: stillBox.checked || undefined, sound,
+    name: nameBox.value.trim(), vars, reducedMotion: stillBox.checked || undefined, sound,
     // &gloves = her blue gloves in dressed strips, &studio=bare = no living plant yet (as the game does, SPEC D32e, D32j)
     arts: studioKit(dressHeroine(ARTS, strip.dressed ? params.get('outfit') : null), {
       gloves: params.has('gloves') && !!strip.dressed && !strip.bareHands,

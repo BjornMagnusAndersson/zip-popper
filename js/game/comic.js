@@ -211,9 +211,10 @@ function bubbleGroup(kind, box, target, em, u, stop = 0) {
 /**
  * Start the comic player over the page and show the first panel.
  * @param {object} strip the strip data
- * @param {{root?: HTMLElement, name?: string, reducedMotion?: boolean, sound?: {play: (n: string) => unknown},
- *   arts?: Record<string, Function>, onSeen?: (id: string, info: {skipped: boolean}) => void,
- *   onClose?: () => void}} [opts] where to show it, the player's name, motion setting, the sound player, the art kit
+ * @param {{root?: HTMLElement, name?: string, vars?: Record<string, string|number>, reducedMotion?: boolean,
+ *   sound?: {play: (n: string) => unknown}, arts?: Record<string, Function>, onSeen?: (id: string, info: {skipped: boolean}) => void,
+ *   onClose?: () => void}} [opts] where to show it, the player's name, more {placeholders} for the texts (for example
+ *   {kind} in the mastery strip), motion setting, the sound player, the art kit
  *   (art name -> function(layer) returning {node, mouth}), and callbacks: onSeen when the strip was read or skipped
  *   (save it with markComicSeen), onClose when the player leaves with Continue
  * @returns {{next: () => void, skip: () => void, replay: () => void, close: () => void, readonly state: object}} controls
@@ -222,6 +223,7 @@ export function playComic(strip, opts = {}) {
   const root = opts.root ?? document.body;
   const still = opts.reducedMotion ?? prefersStill();
   const name = opts.name || t('comic.defaultName');
+  const vars = opts.vars ?? {};
   const arts = opts.arts ?? {};
   let state = startReading(strip);
   let pages = [];
@@ -246,12 +248,14 @@ export function playComic(strip, opts = {}) {
   live.setAttribute('aria-live', 'polite');
   const end = htmlEl('div', 'comic-end');
   end.hidden = true;
-  const endText = htmlEl('p', 'comic-end__text', t('comic.end'));
+  const endText = htmlEl('p', 'comic-end__text', fillName(t(strip.endTitleKey ?? 'comic.end'), name, vars));
   const replayBtn = htmlEl('button', 'comic-btn', t('comic.replay'));
   const goBtn = htmlEl('button', 'comic-btn comic-btn--main', t('comic.continue'));
   replayBtn.type = 'button';
   goBtn.type = 'button';
-  end.append(endText, htmlEl('div', 'comic-end__row'));
+  end.append(endText);
+  if (strip.endKey) end.append(htmlEl('p', 'comic-end__more', fillName(t(strip.endKey), name, vars))); // a strip's own end line
+  end.append(htmlEl('div', 'comic-end__row'));
   end.lastChild.append(replayBtn, goBtn);
   box.append(top, stage, hint, end, live);
   root.appendChild(box);
@@ -315,7 +319,7 @@ export function playComic(strip, opts = {}) {
     const stopOf = (b) => (typeof b.to === 'string' ? (reaches[b.to] ?? 0) * 0.8 * cam.to.s : 0);
     /** A text box for a bubble, at its font size and widest width. @param {object} b bubble @param {number} maxW widest (px) @returns {HTMLElement} the box */
     const textBox = (b, maxW) => {
-      const div = htmlEl('div', `comic-text comic-text--${b.kind}`, fillName(t(b.key), name));
+      const div = htmlEl('div', `comic-text comic-text--${b.kind}`, fillName(t(b.key), name, vars));
       div.style.fontSize = `${b.kind === 'caption' ? Math.max(13, fontPx - 2) : fontPx}px`;
       div.style.maxWidth = `${Math.max(120, Math.min(size.w - 24, maxW))}px`;
       return div;

@@ -12,7 +12,7 @@ import {
 } from './economy.js';
 import {
   SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL, KEEP_WORKING_PAY,
-  MASTER_LEVEL,
+  MASTER_LEVEL, MASTERY_LEVELS,
 } from '../data/economy-data.js';
 import { pickRequest, hurryLimit } from './requests.js';
 import { customerLines, hurryLineRequest, recordLines } from './customer-lines.js';
@@ -128,7 +128,7 @@ function intOrNull(v) {
  * T8.3, used only with ?test; ?boss=hairday|nosestrip|golden|horn = every customer is that boss or event, T8.4, only
  * with ?test, and the tools it needs are owned; ?daily=YYYY-MM-DD = the daily challenge's date and ?dailystreak=N = a
  * streak of N days up to the day before it, T8.5, used only with ?test; ?mastery=demo = clean pop counts just short
- * of level ups and Masters, D34).
+ * of level ups and Masters, D34; ?mastery=skilled = whiteheads one clean pop from the first Skilled, R8i).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
  *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null,
@@ -148,7 +148,8 @@ export function parseFlags(search) {
     seenAll: p.get('seen') === 'all', // ?seen=all: every Field guide kind met (T6.5)
     album: p.get('album') === 'demo', // ?album=demo: 12 faces in the Face album (T8.2)
     gloves: p.has('gloves'), // ?gloves: the gloves owned, as after the hygiene scare (SPEC D32e)
-    mastery: p.get('mastery') === 'demo', // ?mastery=demo: clean pop counts just short of level ups and Masters (D34)
+    // ?mastery=demo: clean pop counts just short of level ups and Masters (D34); ?mastery=skilled: one short of the first Skilled
+    mastery: ['demo', 'skilled'].includes(p.get('mastery')) ? p.get('mastery') : null,
     twist: isTwist(p.get('twist')) ? p.get('twist') : null, // ?twist=: force a customer twist (T8.3)
     boss: isBoss(p.get('boss')) ? p.get('boss') : null, // ?boss=: force a boss or event customer (T8.4)
     daily: isDateKey(p.get('daily')) ? p.get('daily') : null, // ?daily=YYYY-MM-DD: the daily challenge's date (T8.5)
@@ -161,6 +162,12 @@ export function parseFlags(search) {
  * from Master (a diploma), red one from Expert, gold already Master, the rest at different levels on the way.
  */
 export const DEMO_MASTERY = { whitehead: 109, red: 69, blackhead: 12, big: 3, gold: 24, horn: 10, hair: 23 };
+
+/**
+ * The clean pop counts of ?mastery=skilled: whiteheads one clean pop from Skilled (level 3), every other kind lower, so
+ * the next customer plays the Tool mastery strip (R8i).
+ */
+export const SKILLED_MASTERY = { whitehead: 39, red: 19, blackhead: 4, big: 2, hair: 1 };
 
 /**
  * The outfit shop items a test run gets for ?outfit= (T5.2): every outfit item up to that tier (scrubs = apron and
@@ -249,7 +256,7 @@ export function applyTestFlags(save, flags, now = Date.now()) {
   }
   if (flags.gloves) s = economyToSave(s, grantItem(economyFromSave(s), 'gloves')); // ?gloves: she owns the gloves (SPEC D32e)
   if (flags.album) s.albumFaces = demoAlbum(now); // ?album=demo: a Face album with 12 faces (T8.2)
-  if (flags.mastery) s.mastery = { ...DEMO_MASTERY }; // ?mastery=demo: one clean pop from level ups and Masters (D34)
+  if (flags.mastery) s.mastery = { ...(flags.mastery === 'skilled' ? SKILLED_MASTERY : DEMO_MASTERY) }; // ?mastery= (D34, R8i)
   if (flags.daily && flags.dailyStreak > 0) { // ?daily=&dailystreak=N: N days in a row done, the last one yesterday (T8.5)
     const yesterday = addDays(flags.daily, -1);
     s = { ...s, dailyStreak: flags.dailyStreak, dailyBest: flags.dailyStreak, dailyLastDone: yesterday, dailyLastPlayed: yesterday };
@@ -711,6 +718,29 @@ export function skillNews(skills) {
     up: false, key: n.left === 1 ? 'ui.skill.newsLeftOne' : 'ui.skill.newsLeft', kindKey: `ui.guide.${n.type}.name`,
     levelKey: `ui.skill.level${n.level + 1}`, vars: { n: n.left, level: n.level + 1 }, share: n.share,
   }];
+}
+
+/**
+ * The extra {placeholders} a strip's texts need. Only the Tool mastery strip has any: {kind} = the kind of bump she got
+ * Skilled at (the most trained kind; on a replay, the most trained kind now), {level} and {max} = the Skilled level
+ * and the Master level, {pct} = how much faster the Skilled level pops. Kind names come as string keys (`keys`, app.js
+ * translates them); numbers come as `values`.
+ * @param {string} id strip id @param {object} save the save
+ * @returns {{keys: Record<string, string>, values: Record<string, number>}} placeholders to translate, and plain ones
+ */
+export function stripVars(id, save) {
+  if (id !== STRIP_FIRST_MASTERY) return { keys: {}, values: {} };
+  const state = economyFromSave(save);
+  let best = null;
+  let bestLevel = 0;
+  for (const type of BUMP_IDS) {
+    const level = masteryLevel(state, type);
+    if (level > bestLevel) { best = type; bestLevel = level; }
+  }
+  return {
+    keys: { kind: best ? `ui.skill.kinds.${best}` : 'ui.skill.anyKind' },
+    values: { level: MASTERY_STRIP_LEVEL, max: MASTER_LEVEL, pct: Math.round((1 - MASTERY_LEVELS[MASTERY_STRIP_LEVEL].holdFactor) * 100) },
+  };
 }
 
 /**

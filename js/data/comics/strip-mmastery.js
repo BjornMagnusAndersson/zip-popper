@@ -1,4 +1,5 @@
-// Milestone strip "Tool mastery" (T4.3c): played when the player becomes fast (mastery) on a bump type. 4 panels.
+// Milestone strip "Tool mastery" (T4.3c): played when a kind of bump first reaches Skilled (level 3 of 5, D34). 4 panels.
+// The texts name that kind ({kind}) and the end card explains the skill ladder (R8i, the owner found it unclear).
 // A training montage. Nils times her with a big stopwatch, Greta knits in time ("click, click"). The big moment: her
 // hands are a blur of speed lines and extra hands, "Two seconds flat!", and the plant nods along in a red sweatband
 // (the visual surprise). Button: Nils stops the watch for a record, but she finished ages ago and is on her second
@@ -103,6 +104,8 @@ function mug(x, y, k) {
 export const STRIP = {
   id: 'mmastery',
   title: 'comic.mmastery.title',
+  endTitleKey: 'comic.mmastery.endTitle',
+  endKey: 'comic.mmastery.endCard', // the end card says what she got Skilled at and what comes next ({kind}, app-logic.js stripVars)
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
   studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
   panels: [
