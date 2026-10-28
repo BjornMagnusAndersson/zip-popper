@@ -574,7 +574,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
 
   /**
    * The Field guide over the pop scene (T6.5, its "?" button): the scene stays as it is underneath and takes no taps
-   * or keys while the guide is open (hurry rounds have no "?" button, so no clock runs out meanwhile).
+   * or keys while the guide is open and is frozen too (B48: meter, horn, combo, twists and round clock stand still;
+ * hurry rounds have no "?" button).
    * @returns {void}
    */
   function openGuideOverlay() {
@@ -584,6 +585,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       skillCards: currentSkillCards(), overlay: true, onBack: () => closeGuideOverlay(true),
     });
     pop.node.inert = true;
+    pop.setPaused?.(true); // the round stands still while the guide is open (B48): meter, horn, combo, twists and clock
     changedAt = performance.now(); // the double-tap guard (B85); the phone's Back closes it (B87, onBackButton)
     root.append(guideOverlay.node);
     guideOverlay.focus();
@@ -599,6 +601,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     guideOverlay.dispose();
     guideOverlay = null;
     if (!pop) return;
+    pop.setPaused?.(false); // go on exactly where it stopped (B48)
     pop.node.inert = false;
     changedAt = performance.now(); // the double-tap guard (B85): the Back tap must not land on the scene's buttons
     if (refocus) { // the "?" button, or the face when that button is hidden

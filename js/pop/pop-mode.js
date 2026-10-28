@@ -49,7 +49,7 @@ import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
 import {
   applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
-  stripChance, stripHintKey, wipeHintKey, hiddenMs, clockSeconds,
+  stripChance, stripHintKey, wipeHintKey, clockSeconds, startPause, endPause, isPaused, comboClock,
 } from './round-logic.js';
 import { kindsOnFace, newKindQueue, hintQueueAfterPop, newKindHintKey } from '../screens/guide-logic.js';
 
@@ -663,23 +663,39 @@ export function createPopMode({
    * @returns {number} seconds
    */
   function elapsedFor(c) {
-    return c.popEnd ?? clockSeconds(c.startAt, performance.now(), hiddenSince); // stands still while the page is hidden (B83)
+    return c.popEnd ?? clockSeconds(c.startAt, performance.now(), pause.since); // stands still while paused (hidden page B83, Field guide B48)
   }
 
-  let hiddenSince = null; // when the page went hidden (phone call, app switch, lock screen), null while on show (B83)
+  let pause = { since: null, reasons: [] }; // why the round stands still: 'hidden' (phone call, app switch, lock screen, B83) and/or 'guide' (B48)
+  let pausedTotalMs = 0; // all the pauses that ended so far: the combo clock leaves them out so a chain never breaks over a pause
   /**
-   * The page was hidden or shown again (B83): the round clock (a hurry request, the daily "Beat the clock") stands
-   * still while hidden; on return the face's start moves on by the hidden time, so it goes on where it stopped.
+   * Stand still for a reason, or go on again. While paused the round clock (a hurry request, the daily "Beat the clock")
+   * and the combo clock stand still and the scene's time is frozen (scene.setPaused); when the last reason ends, the
+   * face's start moves on by the whole paused time, so everything goes on where it stopped (B83 and B48 share this).
+   * @param {string} reason 'hidden' or 'guide'
+   * @param {boolean} on true = pause for this reason, false = this reason is over
+   * @returns {void}
+   */
+  function setRoundPause(reason, on) {
+    const now = performance.now();
+    if (on) pause = startPause(pause, reason, now);
+    else {
+      if (!pause.reasons.includes(reason)) return;
+      const end = endPause(pause, reason, now);
+      pause = end.pause;
+      pausedTotalMs += end.shiftMs;
+      if (current) current.startAt += end.shiftMs;
+    }
+    current?.scene?.setPaused?.(isPaused(pause));
+    if (!on) drawRequest(current);
+  }
+
+  /**
+   * The page was hidden or shown again (B83): the round pauses while hidden and goes on where it stopped on return.
    * @returns {void}
    */
   function onVisibility() {
-    const doc = globalThis.document;
-    const now = performance.now();
-    if (doc?.hidden) { hiddenSince ??= now; return; }
-    if (hiddenSince === null) return;
-    if (current) current.startAt += hiddenMs(hiddenSince, now);
-    hiddenSince = null;
-    drawRequest(current);
+    setRoundPause('hidden', Boolean(globalThis.document?.hidden));
   }
 
   /**
@@ -957,7 +973,7 @@ export function createPopMode({
           if (c.scene?.step() === 'pop') paintHint('pop');
         } else if ((shownNew || shownTwist) && c.scene?.step() === 'pop') paintHint('pop');
         const clean = !c.owed.has(p.id); // clean = no Ow on this bump (counts for mastery and pay)
-        c.round = registerPop(c.round, { timeSeconds: performance.now() / 1000, clean });
+        c.round = registerPop(c.round, { timeSeconds: comboClock(performance.now(), pausedTotalMs, pause.since), clean });
         c.popTypes.push(p.type);
         if (clean) { c.cleanTypes.push(p.type); c.cleanTools.push(p.tool ?? START_TOOL); } // the tool counts for the pad bonus
         if (allHandled(c.round)) c.popEnd ??= elapsedFor(c);
@@ -999,6 +1015,7 @@ export function createPopMode({
     canvas.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { if (c.scene.keyPress()) e.preventDefault(); }
     });
+    if (isPaused(pause)) c.scene.setPaused(true); // a new face made while the guide is open (or the page hidden) starts frozen
     paintHint('pop');
     drawCount();
     drawRequest(c);
@@ -1148,6 +1165,16 @@ export function createPopMode({
     },
     /** Stop popping on the face in play (presses do nothing any more; a special mode's scripted end). @returns {void} */
     halt() { current?.scene?.halt(); },
+    /**
+     * Freeze the round while the Field guide is open over it (B48), or let it go on: the scene's time, the irritation
+     * meter, the Evil Horn growth, the twists, the combo clock and the round clock all stand still, the same way as
+     * while the page is hidden (B83). Both pauses can overlap.
+     * @param {boolean} on true = freeze, false = go on exactly where it stopped
+     * @returns {void}
+     */
+    setPaused(on) { setRoundPause('guide', Boolean(on)); },
+    /** Whether the round is frozen now (hidden page or open guide). @returns {boolean} true while paused */
+    paused: () => isPaused(pause),
     /**
      * Where the face in play is on screen (stage px, through the zoom): its middle, half width and height, and its two
      * eyes. Null before the first face.

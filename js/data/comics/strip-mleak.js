@@ -106,7 +106,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.44, bulbX: 0.3, signX: 0.76, plantX: 0.93, plantEyes: 'sad' }),
+          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.44, bulbX: 0.3, signX: 0.76, signY: 0.21, plantX: 0.93, plantEyes: 'sad' }), // B9: the sign hangs under the pipe so CLEAN! shows
           { art: 'pipe', y: 140, w: 1600, jointX: 1060, joint: 'old' },
           { art: 'drip', x: 1060, y: 520, r: 24 },
           { art: 'bucket', x: 1060, y: 850, scale: 0.6 },

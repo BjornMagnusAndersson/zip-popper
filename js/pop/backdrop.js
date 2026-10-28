@@ -4,7 +4,7 @@
 // shade on the bulb, a towel), tier 2 = clean, sparkly and spa-like (mint and white, a glowing globe lamp, a spa
 // shelf with towels, a candle and a little plant, a diffuser, sparkles, soft light). T5.1a.
 // On top, each studio upgrade the player owns draws its own object (game/studio.js says which and in what order):
-// wallPaint (fresh lavender wall with a stencilled band), sign (a shiny new sign with a tick), chair (a pink tufted
+// wallPaint (fresh lavender wall with a stencilled band), sign (a shiny new sign saying CLEAN!), chair (a pink tufted
 // wingback chair behind the customer), plant (a hanging plant with little eyes on its pot) and lamp (a ring light on
 // a stand). They sit where the face does not cover them, in portrait and landscape. drawStudio paints the same room
 // without the face in mind, for the studio view (T5.1c), with the wall of fame: a gold frame per mastered kind of bump
@@ -20,6 +20,7 @@ import { drawPimple, drawHair, hairPoints } from './art.js';
 import { studioLayersShown, studioKey } from '../game/studio.js';
 import { BUMP_IDS } from '../data/bumps.js';
 import { pinsDrawn } from '../game/pin-jar.js';
+import { t, hasString } from '../core/strings.js';
 
 /** The backdrop tiers there are (same as the studio tiers in SPEC section 4). */
 export const BACKDROP_TIERS = [0, 1, 2];
@@ -1087,8 +1088,42 @@ function viewSpots(w, h, u, land, floorY) {
 }
 
 /**
- * The sign upgrade: a shiny new sign hanging straight from a nail, with a big green tick, a pink heart and gold
- * sparkles (no words: the old sign in the comics has none either) and no stain this time.
+ * Paint the sign's word, "CLEAN!" from the string table (B9), in chunky hand-painted letters with a dark rim,
+ * squeezed to fit maxW so it never runs off the board in any language. Does nothing (and says so) when the string
+ * table is not loaded, so the caller can keep its old picture.
+ * @param {CanvasRenderingContext2D} ctx the context (already moved and turned with the board)
+ * @param {number} x middle of the word
+ * @param {number} y its baseline
+ * @param {number} maxW the widest it may be
+ * @param {number} size letter height in px
+ * @param {string} fill letter colour
+ * @param {number} [alpha] opacity of the whole word (faded paint on the old sign)
+ * @returns {boolean} true when the word was painted
+ */
+function signWord(ctx, x, y, maxW, size, fill, alpha = 1) {
+  if (!hasString('art.sign.clean')) return false;
+  const word = t('art.sign.clean');
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.font = `900 ${size}px 'Arial Rounded MT Bold', 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const natural = ctx.measureText(word)?.width || maxW;
+  ctx.translate(x, y);
+  ctx.scale(Math.min(1, maxW / natural), 1); // squeeze a long word, never stretch a short one
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(1.5, size * 0.16);
+  ctx.strokeStyle = INK.ink;
+  ctx.strokeText(word, 0, 0);
+  ctx.fillStyle = fill;
+  ctx.fillText(word, 0, 0);
+  ctx.restore();
+  return true;
+}
+
+/**
+ * The sign upgrade: a shiny new sign hanging straight from a nail, with the painted word CLEAN! (B9), a small green
+ * tick and gold sparkles, and no stain this time.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {{x: number, y: number, s: number}} p the nail and the sign's width
  * @param {number} u size unit
@@ -1112,19 +1147,27 @@ function shinySign(ctx, p, u) {
   box(ctx, x0 + sh * 0.1, top + sh * 0.1, sw - sh * 0.2, sh * 0.8, sh * 0.14); ctx.stroke();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(3, sh * 0.14);
-  ctx.beginPath();
-  ctx.moveTo(x0 + sw * 0.2, top + sh * 0.5); ctx.lineTo(x0 + sw * 0.32, top + sh * 0.7); ctx.lineTo(x0 + sw * 0.52, top + sh * 0.28);
-  ctx.stroke();
+  if (signWord(ctx, x0 + sw * 0.44, top + sh * 0.67, sw * 0.6, sh * 0.46, '#3fae8c')) {
+    ctx.strokeStyle = '#3fae8c'; // a small tick after the word
+    ctx.lineWidth = Math.max(2, sh * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(x0 + sw * 0.78, top + sh * 0.5); ctx.lineTo(x0 + sw * 0.83, top + sh * 0.64); ctx.lineTo(x0 + sw * 0.9, top + sh * 0.32);
+    ctx.stroke();
+  } else { // no string table: the big tick and a pink heart, as before
+    ctx.lineWidth = Math.max(3, sh * 0.14);
+    ctx.beginPath();
+    ctx.moveTo(x0 + sw * 0.2, top + sh * 0.5); ctx.lineTo(x0 + sw * 0.32, top + sh * 0.7); ctx.lineTo(x0 + sw * 0.52, top + sh * 0.28);
+    ctx.stroke();
+    const hx = x0 + sw * 0.73;
+    const hy = top + sh * 0.5;
+    const hz = sh * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy + hz);
+    ctx.bezierCurveTo(hx - hz * 1.6, hy - hz * 0.2, hx - hz * 0.7, hy - hz * 1.3, hx, hy - hz * 0.45);
+    ctx.bezierCurveTo(hx + hz * 0.7, hy - hz * 1.3, hx + hz * 1.6, hy - hz * 0.2, hx, hy + hz);
+    inked(ctx, '#f48fb1', lw * 0.8, INK);
+  }
   ctx.lineCap = 'butt';
-  const hx = x0 + sw * 0.73; // a pink heart
-  const hy = top + sh * 0.5;
-  const hz = sh * 0.2;
-  ctx.beginPath();
-  ctx.moveTo(hx, hy + hz);
-  ctx.bezierCurveTo(hx - hz * 1.6, hy - hz * 0.2, hx - hz * 0.7, hy - hz * 1.3, hx, hy - hz * 0.45);
-  ctx.bezierCurveTo(hx + hz * 0.7, hy - hz * 1.3, hx + hz * 1.6, hy - hz * 0.2, hx, hy + hz);
-  inked(ctx, '#f48fb1', lw * 0.8, INK);
   ctx.fillStyle = 'rgba(255,255,255,0.45)'; // a gloss streak across the corner
   ctx.beginPath();
   ctx.moveTo(x0 + sw * 0.08, top + sh * 0.12); ctx.lineTo(x0 + sw * 0.18, top + sh * 0.12); ctx.lineTo(x0 + sw * 0.1, top + sh * 0.88); ctx.lineTo(x0 + sw * 0.04, top + sh * 0.88);
@@ -1328,7 +1371,8 @@ function sadPlantOnShelf(ctx, cx, k) {
 
 /**
  * The studio's first sign (the comics' "Clean!" sign that is never clean): a grubby, crooked board on one nail with
- * a brown water stain and no words. The shop's shiny sign replaces it.
+ * the faded painted word CLEAN! (B9), a small tick and a brown water stain running over the word. The shop's shiny
+ * sign replaces it.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {{x: number, y: number, s: number}} p the nail and the sign's width
  * @param {number} u size unit
@@ -1346,12 +1390,23 @@ function oldSign(ctx, p, u) {
   ctx.beginPath(); ctx.moveTo(-sw * 0.3, sh * 0.4); ctx.lineTo(0, 0); ctx.lineTo(sw * 0.1, sh * 0.4); ctx.stroke();
   box(ctx, -sw * 0.5, sh * 0.4, sw, sh, sh * 0.12);
   inked(ctx, '#d6cfae', lw, INK);
-  ctx.fillStyle = 'rgba(120,96,50,0.45)'; // a brown water stain running down the board
-  ctx.beginPath(); ctx.ellipse(sw * 0.18, sh * 0.75, sw * 0.16, sh * 0.2, 0.3, 0, Math.PI * 2); ctx.fill();
-  ctx.fillRect(sw * 0.14, sh * 0.75, sw * 0.05, sh * 0.45);
-  ctx.strokeStyle = 'rgba(70,60,40,0.55)'; // two wobbly lines where a word was once written
-  ctx.lineWidth = Math.max(1, sh * 0.09);
-  ctx.beginPath(); ctx.moveTo(-sw * 0.36, sh * 0.78); ctx.quadraticCurveTo(-sw * 0.1, sh * 0.68, sw * 0.08, sh * 0.8); ctx.stroke();
+  if (signWord(ctx, -sw * 0.08, sh * 1.07, sw * 0.7, sh * 0.5, '#4f9a7a', 0.85)) {
+    ctx.strokeStyle = 'rgba(79,154,122,0.85)'; // a small faded tick after the word
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.5, sh * 0.08);
+    ctx.beginPath(); ctx.moveTo(sw * 0.3, sh * 0.88); ctx.lineTo(sw * 0.34, sh * 1.0); ctx.lineTo(sw * 0.42, sh * 0.7); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.fillStyle = 'rgba(120,96,50,0.42)'; // a brown water stain running down over the word
+    ctx.beginPath(); ctx.ellipse(sw * 0.02, sh * 1.0, sw * 0.12, sh * 0.16, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(-sw * 0.01, sh * 1.0, sw * 0.04, sh * 0.38);
+  } else { // no string table: the stain and two wobbly lines where a word was once written, as before
+    ctx.fillStyle = 'rgba(120,96,50,0.45)';
+    ctx.beginPath(); ctx.ellipse(sw * 0.18, sh * 0.75, sw * 0.16, sh * 0.2, 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(sw * 0.14, sh * 0.75, sw * 0.05, sh * 0.45);
+    ctx.strokeStyle = 'rgba(70,60,40,0.55)';
+    ctx.lineWidth = Math.max(1, sh * 0.09);
+    ctx.beginPath(); ctx.moveTo(-sw * 0.36, sh * 0.78); ctx.quadraticCurveTo(-sw * 0.1, sh * 0.68, sw * 0.08, sh * 0.8); ctx.stroke();
+  }
   ctx.beginPath(); ctx.arc(0, 0, Math.max(2, u * 0.6), 0, Math.PI * 2);
   inked(ctx, '#a9aeb5', lw * 0.7, INK);
   ctx.restore();

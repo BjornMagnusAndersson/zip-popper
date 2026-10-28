@@ -64,7 +64,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.4, leakX: 0.74, bulbX: 0.56, signX: 0.9, plantX: 0.2 }),
+          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.4, leakX: 0.74, bulbX: 0.56, signX: 0.87, plantX: 0.2 }), // B9: in from the edge so CLEAN! shows
           { shape: 'circle', x: 724, y: 280, r: 160, fill: '#fff6c8', opacity: 0.45 },
           { art: 'chair', x: 1110, y: 870, scale: 0.75, color: '#9a8f6a' },
           { id: 'nils', art: 'nils', x: 1110, y: 870, scale: 0.75, pose: 'sit', expr: 'squint', look: -1 },
@@ -77,7 +77,7 @@ export const STRIP = {
       bubbles: [
         { kind: 'caption', key: 'comic.mtweezers.p1.cap', at: [330, 60], w: 560 },
         { kind: 'say', key: 'comic.mtweezers.p1.her', at: [250, 280], to: 'her', w: 380 },
-        { kind: 'say', key: 'comic.mtweezers.p1.nils', at: [1360, 300], to: 'nils', w: 340 },
+        { kind: 'say', key: 'comic.mtweezers.p1.nils', at: [1390, 370], to: 'nils', w: 300 }, // B9: under the CLEAN! sign
       ],
     },
     {

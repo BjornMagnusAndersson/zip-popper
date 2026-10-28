@@ -99,7 +99,7 @@ export const STRIP = {
       bubbles: [
         { kind: 'caption', key: 'comic.books.p1.cap', at: [520, 60], w: 820 },
         { kind: 'say', key: 'comic.books.p1.her', at: [800, 260], to: 'her', w: 380 },
-        { kind: 'think', key: 'comic.books.p1.think', at: [1300, 200], to: 'her', w: 320 },
+        { kind: 'think', key: 'comic.books.p1.think', at: [1290, 350], to: 'her', w: 320 }, // B9: under the CLEAN! sign
       ],
     },
     {
@@ -126,7 +126,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.5, leakX: 0.36, bulbX: 0.7, signX: 0.9, plant: false, lamp: false }),
+          studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.5, leakX: 0.36, bulbX: 0.7, signX: 0.87, plant: false, lamp: false }), // B9: in from the edge so the whole word CLEAN! shows
           night(1600, 900),
           ...bookTower(1000, 880, 11, 0.9),
           ...banner(220, 880, 0.95),
@@ -139,7 +139,7 @@ export const STRIP = {
       camera: { move: 'pullOut', focus: [800, 450], amount: 0.08, ms: 3000 },
       bubbles: [
         { kind: 'say', key: 'comic.books.p3.him', at: [700, 140], to: 'him', w: 460 },
-        { kind: 'say', key: 'comic.books.p3.her', at: [1260, 140], to: 'her', w: 320, sound: 'cheer' },
+        { kind: 'say', key: 'comic.books.p3.her', at: [1130, 300], to: 'her', w: 360, sound: 'cheer' }, // B9: under the CLEAN! sign
       ],
     },
     {

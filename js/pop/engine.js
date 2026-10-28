@@ -143,7 +143,7 @@ function affine(s, d) {
  *   onOw = a wrong-tool press, onWarm = the warmest bump's warmth changed, onPatch = a patch went on, onNote = a press did nothing
  *   useful ('patchFirst' = a patch on a bump that is not popped yet)
  * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), size(), keyPress(),
- *   setTool(id), tool(), setTools(ids), warmth(), irritation(), halt(), dispose(). A bump may carry hold (seconds) and
+ *   setTool(id), tool(), setTools(ids), warmth(), irritation(), halt(), setPaused(on), paused(), dispose(). A bump may carry hold (seconds) and
  *   roughMul (part of the rough-press chance left after mastery, round-logic.js applyMastery).
  */
 export function createPopScene(canvas, o) {
@@ -186,6 +186,7 @@ export function createPopScene(canvas, o) {
   irrScale.calm = Number.isFinite(o.irritation?.calm) && o.irritation.calm >= 0 ? o.irritation.calm : undefined; // seconds before it calms (D27c)
   let irrSent = 0; // the level last told to onIrritation
   let halted = false; // true after halt(): the customer stormed off, presses do nothing
+  let paused = false; // true after setPaused(true) (the Field guide is open, B48): no frames, so no time passes at all
   const roll = typeof o.random === 'function' ? o.random : Math.random; // the rough-press dice
   const patches = []; // patches stuck on popped spots
   const marks = []; // pink spots where pimples were (healed by the cream)
@@ -245,7 +246,7 @@ export function createPopScene(canvas, o) {
     clearTimeout(lifeTimer);
     lifeTimer = 0;
     const life = faceLife();
-    if (!life || disposed) return;
+    if (!life || disposed || paused) return;
     const wait = life.next(lifeNow());
     if (!Number.isFinite(wait)) return;
     lifeTimer = setTimeout(() => {
@@ -355,7 +356,7 @@ export function createPopScene(canvas, o) {
   /** Start the drawing loop if it is not running. @returns {void} */
   function kick() {
     if (lifeTimer) { clearTimeout(lifeTimer); lifeTimer = 0; }
-    if (raf || disposed) return;
+    if (raf || disposed || paused) return;
     last = performance.now();
     raf = requestAnimationFrame(frame);
   }
@@ -1322,7 +1323,7 @@ export function createPopScene(canvas, o) {
    */
   function frame(now) {
     raf = 0;
-    if (disposed) return;
+    if (disposed || paused) return;
     if (wasBusy && !slow?.slow) { // the slow-phone watcher counts back-to-back moving frames only
       slow = slowStep(slow, now - last);
       if (slow.slow) { try { o.onSlow?.(); } catch (e) { console.warn('onSlow failed:', e); } }
@@ -1399,6 +1400,7 @@ export function createPopScene(canvas, o) {
     p.ouch = time;
     raiseIrritation(IRRITATION.perOw * (twist === 'sensitive' ? SENSITIVE.owScale : 1)); // delicate skin minds an Ow more (T8.3)
     play('ow_customer');
+    if (why.hot) play('sizzle'); // the too-hot cloth hisses along with the Ow (B101)
     buzz([20, 40, 20]);
     try { o.onOw?.({ x: p.x, y: p.y, type: p.type, tool, id: p.id, hot: Boolean(why.hot) }); } catch (e) { console.warn('onOw failed:', e); }
     kick();
@@ -2028,6 +2030,31 @@ export function createPopScene(canvas, o) {
     irritation: () => irr.level,
     /** Stop all popping (the customer stormed off): let go of every press, ignore new ones. @returns {void} */
     halt() { haltAll(); },
+    /**
+     * Freeze the scene (the Field guide is open over it, B48) or let it go on. Frozen = the drawing loop stops, so the
+     * scene's time, the irritation meter, the Evil Horn growth, the warm cloth, the twists (sway, giggle) and the blinks
+     * all stand still and the last picture stays; on going on the loop restarts with a fresh frame clock (no jump).
+     * @param {boolean} on true = freeze, false = go on
+     * @returns {void}
+     */
+    setPaused(on) {
+      const next = Boolean(on);
+      if (next === paused || disposed) return;
+      paused = next;
+      if (paused) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        clearTimeout(lifeTimer);
+        lifeTimer = 0;
+        wasBusy = false;
+        try { breathing?.pause(); } catch { /* optional */ }
+      } else {
+        try { breathing?.play(); } catch { /* optional */ }
+        kick();
+      }
+    },
+    /** Whether the scene is frozen (setPaused). @returns {boolean} true while frozen */
+    paused: () => paused,
     /** Stop the loop and the listeners. @returns {void} */
     dispose() {
       disposed = true;

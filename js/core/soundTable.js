@@ -32,7 +32,8 @@ export const SOUND_TABLE = {
   ooh_happy: { type: 'synth', voice: 'ooh', category: 'sfx' },
   laugh_evil: { type: 'synth', voice: 'laughEvil', category: 'sfx' },
   ow_customer: { type: 'synth', voice: 'ow', category: 'sfx' },
-  giggle: { type: 'synth', voice: 'laughEvil', category: 'sfx' }, // the ticklish customer giggles (T8.3; reuses the laugh until a recording exists)
+  giggle: { type: 'synth', voice: 'giggle', category: 'sfx' }, // the ticklish customer giggles (T8.3, B52): a short high playful "hee-hee-hee"
+  sizzle: { type: 'synth', voice: 'sizzle', category: 'sfx' }, // the warm cloth left on too long (D41, B101): a hiss and a small whistle, played with the Ow
   // rewards
   cheer: { type: 'synth', voice: 'cheer', category: 'sfx' },
   cash: { type: 'synth', voice: 'cash', category: 'sfx' },

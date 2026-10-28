@@ -99,7 +99,7 @@ export const STRIP = {
       bubbles: [
         { kind: 'caption', key: 'comic.mlamp.p1.cap', at: [440, 60], w: 720 },
         { kind: 'say', key: 'comic.mlamp.p1.her', at: [300, 300], to: 'her', w: 380 },
-        { kind: 'say', key: 'comic.mlamp.p1.nils', at: [1320, 260], to: 'nils', w: 380 },
+        { kind: 'say', key: 'comic.mlamp.p1.nils', at: [1330, 370], to: 'nils', w: 380 }, // B9: under the CLEAN! sign
       ],
     },
     {
@@ -141,7 +141,7 @@ export const STRIP = {
       camera: { move: 'shake' },
       sound: 'pop_gold',
       bubbles: [
-        { kind: 'shout', key: 'comic.mlamp.p3.light', at: [560, 80], w: 240 },
+        { kind: 'shout', key: 'comic.mlamp.p3.light', at: [480, 80], w: 240 }, // B9: left of the CLEAN! sign
         { kind: 'say', key: 'comic.mlamp.p3.nils', at: [285, 250], to: 'nils', w: 320 }, // B10: right of the plant's leaves
         { kind: 'say', key: 'comic.mlamp.p3.her', at: [760, 340], to: 'her', w: 400, sound: 'ooh_happy' },
       ],
@@ -153,8 +153,9 @@ export const STRIP = {
         bg: '#fffbe6',
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.14, door: false, leak: false, bulb: false, signX: 0.62, signTilt: -7, plant: false, lamp: false }),
-          { shape: 'circle', x: 556, y: 160, r: 40, fill: 'none', stroke: '#ff7a59', sw: 7 },
-          { shape: 'path', d: 'M612 214 l40 40 M520 214 l-30 34', fill: 'none', stroke: '#ff7a59', sw: 6 },
+          // The ring round the stain on the sign (comic-art shabbyFront paints it low over the middle of CLEAN!).
+          { shape: 'circle', x: 505, y: 165, r: 40, fill: 'none', stroke: '#ff7a59', sw: 7 },
+          { shape: 'path', d: 'M561 219 l40 40 M469 219 l-30 34', fill: 'none', stroke: '#ff7a59', sw: 6 },
           { id: 'nils', art: 'nils', x: 210, y: 660, scale: 0.95, pose: 'bust', expr: 'shocked', look: 1 },
         ],
       },

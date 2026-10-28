@@ -1690,6 +1690,16 @@ const MOOD_BROWS = {
 };
 
 /**
+ * The colour of the brows and moustache: the customer's own hair colour, on bald heads too (B91: they used to be a
+ * fixed brown there).
+ * @param {object} look the face look
+ * @returns {string} a '#rrggbb' colour
+ */
+function facialHair(look) {
+  return look.hair;
+}
+
+/**
  * Both eyebrows in the face's style, tilted by the mood: a tapered shape (full near the nose, thin to a point at the
  * outer end) with fine hairs slanting up and outwards on top.
  * @param {CanvasRenderingContext2D} ctx the context
@@ -1704,7 +1714,7 @@ function drawBrows(ctx, f, look, mood) {
   const [inner, raise, outerDrop] = MOOD_BROWS[mood] ?? MOOD_BROWS.meh;
   const lift = Math.max(mood === 'grim' ? -0.09 : -0.05, Math.min(0.06, rest + inner)); // kept inside faceGeometry's eye box
   const lw = thick * rx;
-  const col = look.hairStyle === 'bald' ? '#6e4528' : look.hair;
+  const col = facialHair(look);
   const body = shade(col, -0.28);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -1981,7 +1991,7 @@ function drawFaceWear(ctx, f, look) {
   const has = (a) => look.acc.includes(a);
   if (has('moustache')) {
     const y = Y(ft.noseV + 0.16);
-    const col = look.hairStyle === 'bald' ? '#6e4528' : shade(look.hair, -0.1);
+    const col = shade(facialHair(look), -0.1);
     ctx.fillStyle = css(skinDeep(look.skin), 0.25); // its soft shadow on the lip
     for (const s of [-1, 1]) {
       ctx.beginPath();
@@ -2003,7 +2013,7 @@ function drawFaceWear(ctx, f, look) {
       ctx.clip();
       ctx.lineCap = 'round';
       ctx.lineWidth = Math.max(0.8, rx * 0.01);
-      for (const [hc, dy] of [[shade(look.hairStyle === 'bald' ? '#6e4528' : look.hair, 0.35, 0.45), -0.02], [shade(look.hairStyle === 'bald' ? '#6e4528' : look.hair, -0.45, 0.45), 0.025]]) {
+      for (const [hc, dy] of [[shade(facialHair(look), 0.35, 0.45), -0.02], [shade(facialHair(look), -0.45, 0.45), 0.025]]) {
         ctx.strokeStyle = hc;
         ctx.beginPath();
         for (let k = 0; k < 7; k += 1) {

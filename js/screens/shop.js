@@ -4,7 +4,7 @@
 // in landscape), so the list gets the room.
 // The economy state comes in; a tap on Buy is only reported (onBuy). The game buys, saves and calls update(state).
 
-import { el, svg, button, icon, coinPill, header, screenShell } from './dom.js';
+import { el, svg, button, icon, itemIcon, coinPill, header, screenShell } from './dom.js';
 import { SHOP_TABS, shopEntries, tierInfo, wornOutfit, canScrollMore } from './screen-logic.js';
 import { drawCharacter, OUTFITS } from '../game/comic-art.js';
 
@@ -85,11 +85,11 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     return box;
   }
 
-  /** Draw one item card. @param {ReturnType<typeof shopEntries>[number]} item the entry @param {string} kindIcon icon name @returns {HTMLElement} the card */
+  /** Draw one item card. @param {ReturnType<typeof shopEntries>[number]} item the entry @param {string} kindIcon the tab's icon name (for an item without its own icon) @returns {HTMLElement} the card */
   function itemCard(item, kindIcon) {
     const card = el('article', `app-item${item.owned ? ' app-item--owned' : ''}${item.scrubWaiting ? ' app-item--scrub' : ''}${!item.owned && !item.canBuy ? ' app-item--locked' : ''}`);
     const badge = el('span', 'app-item__badge');
-    badge.append(icon(kindIcon));
+    badge.append(itemIcon(item.id, kindIcon)); // each item its own picture; the tab's icon for an item without one (B40a)
     const text = el('div', 'app-item__text');
     text.append(el('h2', 'app-item__name', t(item.nameKey)), el('p', 'app-item__desc', t(item.descKey)));
     const side = el('div', 'app-item__side');

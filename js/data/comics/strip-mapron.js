@@ -73,14 +73,23 @@ function cleanSpot(x, y, k) {
 }
 
 /**
- * The "Clean!" sign lying on the floor after the wind took it (a tick on a cream board, a stain, a string).
+ * The "Clean!" sign lying on the floor after the wind took it (the painted word CLEAN! and a small tick on a cream
+ * board, a stain, a string).
  * @param {number} x middle @param {number} y floor @param {number} k size @returns {object[]} shape layers
  */
 function fallenSign(x, y, k) {
+  const x0 = x - 125 * k; // the board's top-left corner, which it is turned round (8 degrees)
+  const y0 = y - 70 * k;
+  // A point on the board (board units from its top-left corner) -> panel units, turned with the board.
+  const at = (lx, ly) => [x0 + (lx * Math.cos(0.14) - ly * Math.sin(0.14)) * k, y0 + (lx * Math.sin(0.14) + ly * Math.cos(0.14)) * k];
+  const [wx, wy] = at(100, 54);
+  const [tx, ty] = at(196, 34);
+  const [sx, sy] = at(120, 50);
   return [
-    { shape: 'rect', x: x - 125 * k, y: y - 70 * k, w: 250 * k, h: 70 * k, rx: 10 * k, fill: '#f6f1de', stroke: true, sw: 5, rotate: 8 },
-    { shape: 'path', d: `M${x - 60 * k} ${y - 40 * k} l${30 * k} ${16 * k} l${60 * k} ${-26 * k}`, fill: 'none', stroke: '#3fae8c', sw: 12 * k },
-    { shape: 'ellipse', x: x + 70 * k, y: y - 22 * k, rx: 26 * k, ry: 14 * k, fill: '#786834', opacity: 0.35 },
+    { shape: 'rect', x: x0, y: y0, w: 250 * k, h: 70 * k, rx: 10 * k, fill: '#f6f1de', stroke: true, sw: 5, rotate: 8 },
+    { art: 'signWord', x: wx, y: wy, w: 160 * k, size: 44 * k, rotate: 8 },
+    { shape: 'path', d: `M${tx} ${ty} l${10 * k} ${16 * k} l${26 * k} ${-26 * k}`, fill: 'none', stroke: '#3fae8c', sw: 9 * k },
+    { shape: 'ellipse', x: sx, y: sy, rx: 24 * k, ry: 11 * k, rotate: 8, fill: '#786834', opacity: 0.35 },
     { shape: 'path', d: `M${x - 100 * k} ${y - 66 * k} q${-40 * k} ${-50 * k} ${-90 * k} ${-10 * k}`, fill: 'none', stroke: true, sw: 3.5 },
   ];
 }

@@ -114,7 +114,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.5, leakX: 0.36, bulbX: 0.5, signX: 0.93, plantX: 0.64, plantEyes: 'wide' }),
+          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.5, leakX: 0.36, bulbX: 0.5, signX: 0.86, plantX: 0.64, plantEyes: 'wide' }), // B9: in from the edge so CLEAN! shows
           { art: 'chair', x: 300, y: 870, scale: 0.75, color: '#9a8f6a' },
           { id: 'nils', art: 'nils', x: 300, y: 870, scale: 0.75, pose: 'sit', expr: 'proud', look: 1 },
           ...stopwatch(420, 640, 62, 0),
@@ -128,7 +128,7 @@ export const STRIP = {
       bubbles: [
         { kind: 'caption', key: 'comic.mmastery.p1.cap', at: [800, 60], w: 760 },
         { kind: 'say', key: 'comic.mmastery.p1.nils', at: [300, 250], to: 'nils', w: 300 },
-        { kind: 'whisper', key: 'comic.mmastery.p1.greta', at: [1310, 250], to: 'greta', w: 280 },
+        { kind: 'whisper', key: 'comic.mmastery.p1.greta', at: [1310, 320], to: 'greta', w: 280 }, // under the CLEAN! sign
       ],
     },
     {

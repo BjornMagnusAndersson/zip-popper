@@ -1,6 +1,8 @@
 // The comic art kit: the heroine, the husband and props, drawn as SVG in the game's cartoon style (soft shaded skin,
 // rosy cheeks, the same skin tones, hair and shirt colours as the pop scene in face.js, plus a friendly ink outline
 // so they sit well inside comic panels). No pictures, no real people, no blood: playful only.
+// The only word painted in the art itself is the studio sign's "CLEAN!" (string art.sign.clean, B9); all other words
+// go in bubbles.
 //
 // Everything is data, so a strip just names what it wants:
 //   { id: 'her', art: 'heroine', x: 420, y: 880, scale: 1, expr: 'bliss', pose: 'pop', outfit: 'everyday', look: 1 }
@@ -10,6 +12,8 @@
 // scale 1 = a standing figure about 620 units tall. flip mirrors left-right. look: -1 or 1 = eyes glance that way.
 // Options per piece: see CHARACTERS, OUTFITS, EXPRESSIONS, POSES, HOLDS and PROPS below. Add a new character, outfit,
 // expression or pose by adding a row to those tables. Every art function returns { node, mouth } (mouth in panel units).
+
+import { t, hasString } from '../core/strings.js';
 
 export const INK = '#2a211d'; // the outline colour (face.js 'black')
 export const GLOVE_BLUE = '#6fc3ef'; // her rubber gloves, the same blue as the inspector's glove box (SPEC D32e)
@@ -1136,8 +1140,8 @@ export const ROOMS = {
   },
   // Her first studio, tier 0 (strip 5 on), matching the game's dingy room (pop/backdrop.js): greenish grey paint with
   // stains and peeling bits, grimy tiles, a sagging ceiling with a leak, a bare flickering bulb, a door, the "Clean!"
-  // sign (a tick and sparkles; the word goes in a bubble) and a cheap lamp. Options: leakX, bulbX, signX, signTilt,
-  // doorX, doorOpen, leak/bulb/sign/door false to hide one.
+  // sign (the painted word CLEAN!, a small tick, sparkles and a stain) and a cheap lamp. Options: leakX, bulbX, signX, signTilt,
+  // signY (its nail's height as a share of the floor line, default 0.12), doorX, doorOpen, leak/bulb/sign/door false to hide one.
   studio: {
     wall: ['#8e9b83', '#7b8872'], stripes: '#86937c', skirting: '#5f6a56', floor: '#4f5648', boards: '#3c4237',
     sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: true, lamp: true,
@@ -1219,8 +1223,42 @@ function shabbyWall(g, r, w, F) {
 }
 
 /**
+ * The studio sign's word, "CLEAN!" from the string table (B9), hand-painted: chunky green letters with a dark rim,
+ * squeezed or stretched to fill the given width so it never runs off the board in any language. Gives nothing when
+ * the string table is not loaded (then the sign keeps its big tick only).
+ * @param {number} x middle of the word @param {number} y its baseline @param {number} width how wide it is painted
+ * @param {number} size letter height @param {number} k panel size unit (for the rim)
+ * @param {object} [o] extras: fill (letter colour), opacity, rotate (degrees, round the middle of the baseline)
+ * @returns {SVGElement|null} the text element, or null
+ */
+function signWord(x, y, width, size, k, o = {}) {
+  if (!hasString('art.sign.clean')) return null;
+  const word = el('text', {
+    x, y, 'text-anchor': 'middle', 'font-size': size, 'font-weight': 900, 'letter-spacing': size * 0.04,
+    'font-family': "'Arial Rounded MT Bold', 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif",
+    textLength: width, lengthAdjust: 'spacingAndGlyphs', fill: o.fill ?? '#3fae8c', stroke: INK, 'stroke-width': 3.5 * k,
+    'stroke-linejoin': 'round', 'paint-order': 'stroke', opacity: o.opacity,
+    transform: o.rotate ? `rotate(${o.rotate} ${x} ${y})` : null,
+  });
+  word.textContent = t('art.sign.clean');
+  return word;
+}
+
+/**
+ * The sign's word on its own, for a strip that draws the sign board itself (strip mapron's fallen sign):
+ * { art: 'signWord', x, y (middle of the baseline), w (how wide), size (letter height), rotate (degrees) }.
+ * @param {object} l the layer
+ * @returns {{node: SVGElement}} the word (an empty group when the string table is not loaded)
+ */
+function signWordProp(l) {
+  const size = l.size ?? 46;
+  return { node: signWord(l.x ?? 0, l.y ?? 0, l.w ?? size * 3.5, size, size / 46, { rotate: l.rotate }) ?? el('g') };
+}
+
+/**
  * The dingy studio's things in front of the wall: the bare bulb on its cord (with flicker marks) and the "Clean!"
- * sign hanging crooked from a nail (a tick and sparkles, plus a stain that says otherwise).
+ * sign hanging crooked from a nail (the painted word CLEAN! with a small tick, sparkles, plus a stain that says
+ * otherwise).
  * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
  * @returns {void}
  */
@@ -1228,15 +1266,25 @@ function shabbyFront(g, r, w, F) {
   const k = Math.min(F / 600, w / 1000);
   if (r.sign) {
     const sx = w * (r.signX ?? 0.72);
-    const sy = F * 0.12;
+    const sy = F * (r.signY ?? 0.12);
     const sw = 250 * k;
     const sh = 130 * k;
+    const top = sy + 40 * k;
     const sg = el('g', { transform: `rotate(${r.signTilt ?? -7} ${sx} ${sy})` });
-    sg.appendChild(line(`M${sx} ${sy} L${sx - sw * 0.4} ${sy + 40 * k} M${sx} ${sy} L${sx + sw * 0.4} ${sy + 40 * k}`, 3.5));
-    sg.appendChild(el('rect', { x: sx - sw / 2, y: sy + 40 * k, width: sw, height: sh, rx: 10 * k, fill: '#f6f1de', ...ink(5) }));
-    sg.appendChild(el('ellipse', { cx: sx + sw * 0.3, cy: sy + 40 * k + sh * 0.72, rx: 30 * k, ry: 18 * k, fill: '#786834', opacity: 0.35 }));
-    sg.appendChild(line(`M${sx - sw * 0.28} ${sy + 40 * k + sh * 0.5} l${sw * 0.12} ${sh * 0.24} l${sw * 0.26} ${-sh * 0.46}`, 14 * k, { stroke: '#3fae8c' }));
-    for (const [fx, fy, q] of [[0.26, 0.3, 22], [0.36, 0.7, 14], [-0.38, 0.28, 12]]) {
+    sg.appendChild(line(`M${sx} ${sy} L${sx - sw * 0.4} ${top} M${sx} ${sy} L${sx + sw * 0.4} ${top}`, 3.5));
+    sg.appendChild(el('rect', { x: sx - sw / 2, y: top, width: sw, height: sh, rx: 10 * k, fill: '#f6f1de', ...ink(5) }));
+    const word = signWord(sx - sw * 0.1, top + sh * 0.7, sw * 0.68, sh * 0.5, k);
+    if (word) {
+      sg.appendChild(word);
+      sg.appendChild(line(`M${sx + sw * 0.3} ${top + sh * 0.5} l${sw * 0.05} ${sh * 0.16} l${sw * 0.1} ${-sh * 0.34}`, 9 * k, { stroke: '#3fae8c' }));
+      // The stain that says otherwise, low over the middle of the word (the word still reads).
+      sg.appendChild(el('ellipse', { cx: sx - sw * 0.02, cy: top + sh * 0.76, rx: 26 * k, ry: 17 * k, fill: '#786834', opacity: 0.38 }));
+      sg.appendChild(el('path', { d: `M${sx - sw * 0.03} ${top + sh * 0.86} q${4 * k} ${10 * k} ${-2 * k} ${sh * 0.12}`, fill: 'none', stroke: '#786834', 'stroke-width': 6 * k, 'stroke-linecap': 'round', opacity: 0.38 }));
+    } else {
+      sg.appendChild(el('ellipse', { cx: sx + sw * 0.3, cy: top + sh * 0.72, rx: 30 * k, ry: 18 * k, fill: '#786834', opacity: 0.35 }));
+      sg.appendChild(line(`M${sx - sw * 0.28} ${top + sh * 0.5} l${sw * 0.12} ${sh * 0.24} l${sw * 0.26} ${-sh * 0.46}`, 14 * k, { stroke: '#3fae8c' }));
+    }
+    for (const [fx, fy, q] of (word ? [[0.5, 0.02, 20], [0.47, 0.98, 13], [-0.5, 0.04, 12]] : [[0.26, 0.3, 22], [0.36, 0.7, 14], [-0.38, 0.28, 12]])) {
       const cx = sx + sw * fx;
       const cy = sy + 40 * k + sh * fy;
       const z = q * k;
@@ -1992,7 +2040,7 @@ function shopfront(l) {
 }
 
 /** Props, rooms and effects by name. */
-export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront, pipe, ladder };
+export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront, pipe, ladder, signWord: signWordProp };
 
 /** Every art piece a strip can name with `art:` (characters and props). Each takes the layer and returns { node, mouth? }. */
 export const ARTS = {

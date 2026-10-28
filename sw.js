@@ -117,7 +117,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v76';
+const CACHE_VERSION = 'v77';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

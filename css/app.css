@@ -265,6 +265,7 @@
 .app-item--scrub { background-color: var(--yellow); border-style: dashed; }
 .app-item__badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--ink); background: var(--yellow); }
 .app-item__badge .app-icon { width: 24px; height: 24px; }
+.app-item__badge .app-icon--item { width: 28px; height: 28px; } /* each item's own picture (B40a): a bit bigger, it has more detail */
 .app-item__text { min-width: 0; display: grid; gap: 2px; }
 .app-item__name { font-size: 1rem; font-weight: 900; }
 .app-item__desc { font-size: 0.82rem; line-height: 1.2; color: #5f4a41; }

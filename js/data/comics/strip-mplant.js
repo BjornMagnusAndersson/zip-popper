@@ -29,7 +29,7 @@ export const STRIP = {
       sound: 'cheer',
       bubbles: [
         { kind: 'caption', key: 'comic.mplant.p1.cap', at: [300, 60], w: 520 },
-        { kind: 'say', key: 'comic.mplant.p1.her', at: [1240, 300], to: 'her', w: 420 },
+        { kind: 'say', key: 'comic.mplant.p1.her', at: [1300, 420], to: 'her', w: 400 }, // B9: under the CLEAN! sign
       ],
     },
     {

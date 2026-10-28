@@ -121,7 +121,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.56, leakX: 0.47, bulbX: 0.3, signX: 0.89, lamp: false }),
+          studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.56, leakX: 0.47, bulbX: 0.3, signX: 0.84, lamp: false }), // B9: in from the edge so the whole word CLEAN! shows
           { art: 'bucket', x: 820, y: 830, scale: 0.55 },
           { id: 'greta', art: 'greta', x: 170, y: 870, scale: 0.85, pose: 'wave', expr: 'happy' },
           { id: 'penny', art: 'penny', x: 420, y: 880, scale: 0.85, pose: 'stand', hold: 'snack', expr: 'happy', look: 1 },
@@ -134,7 +134,7 @@ export const STRIP = {
       bubbles: [
         { kind: 'say', key: 'comic.s5.p5.greta', at: [330, 90], to: 'greta', w: 400 },
         { kind: 'say', key: 'comic.s5.p5.nils', at: [800, 300], to: 'nils', w: 320 },
-        { kind: 'say', key: 'comic.s5.p5.her', at: [1250, 150], to: 'her', w: 320 },
+        { kind: 'say', key: 'comic.s5.p5.her', at: [1420, 330], to: 'her', w: 260 }, // under the sign, clear of its word
       ],
     },
     {

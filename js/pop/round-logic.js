@@ -282,6 +282,53 @@ export function clockSeconds(startAt, now, hiddenSince = null) {
 }
 
 /**
+ * The round is paused for a reason (B83 page hidden, B48 Field guide open). Several reasons can overlap; the clock stands
+ * still from the first one that began until the last one ends.
+ * @param {{since: number|null, reasons: string[]}} p the pause now ({since: null, reasons: []} when nothing is paused)
+ * @param {string} reason e.g. 'hidden' or 'guide'
+ * @param {number} now the time now (ms, performance.now)
+ * @returns {{since: number, reasons: string[]}} the pause with this reason added (since stays at the earliest start)
+ */
+export function startPause(p, reason, now) {
+  const reasons = p?.reasons ?? [];
+  const began = reasons.length && Number.isFinite(p?.since) ? p.since : (Number.isFinite(now) ? now : 0); // already paused: keep the first start
+  return { since: began, reasons: reasons.includes(reason) ? [...reasons] : [...reasons, reason] };
+}
+
+/**
+ * One reason for the pause ended. Only when the last reason is gone does the round go on, and then shiftMs is the whole
+ * time it stood still (add it to the round's start, like the hidden time, and to the combo clock).
+ * @param {{since: number|null, reasons: string[]}} p the pause now
+ * @param {string} reason the reason that ended
+ * @param {number} now the time now (ms)
+ * @returns {{pause: {since: number|null, reasons: string[]}, shiftMs: number}} the pause after, and the ms to move clocks on by
+ */
+export function endPause(p, reason, now) {
+  const reasons = (p?.reasons ?? []).filter((r) => r !== reason);
+  if (reasons.length) return { pause: { since: p.since, reasons }, shiftMs: 0 };
+  return { pause: { since: null, reasons: [] }, shiftMs: hiddenMs(p?.since ?? null, now) };
+}
+
+/**
+ * Whether any pause reason is active.
+ * @param {{since: number|null, reasons: string[]}|null|undefined} p the pause
+ * @returns {boolean} true while paused
+ */
+export const isPaused = (p) => Boolean(p?.reasons?.length);
+
+/**
+ * The combo clock in seconds: real time minus all the time spent paused, so a pause (hidden page, open Field guide) never
+ * breaks a chain (scoring.js COMBO_WINDOW). The pause in progress is not counted yet.
+ * @param {number} now the time now (ms, performance.now)
+ * @param {number} pausedTotalMs the total ms of pauses that already ended
+ * @param {number|null} [pausedSince] when the pause in progress began, or null
+ * @returns {number} seconds
+ */
+export function comboClock(now, pausedTotalMs, pausedSince = null) {
+  return clockSeconds(pausedTotalMs, now, pausedSince);
+}
+
+/**
  * What onFinish gets when a round ends (finished, or failed and the player picked Try again or Next customer).
  * @param {{round: object, elapsedSeconds: number, cleanBumpTypes?: string[], cleanBumpTools?: string[],
  *   popTypes?: string[], failChoice?: 'again'|'next'|'escape'|null, request?: object|null, patches?: number,

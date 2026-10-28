@@ -87,6 +87,121 @@ export function icon(name) {
   return svg('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', class: `app-icon app-icon--${name}` }, shapes[name] ?? []);
 }
 
+const PAINT = '#b9a6f0'; // the lilac "fresh colour" on the wall paint roller
+const TRIM = '#f2a33a'; // the apron's orange trim (as comic-art.js OUTFITS.apron)
+
+/**
+ * One small cartoon icon per shop item (B40a), kept as plain shape data so a test can check it without a browser:
+ * item id -> list of [svg tag, attributes, ink outline width (0 = no outline)], drawn in a 24 x 24 box in this order.
+ * An item missing here (a future one) gets its tab's icon instead (tool, studio or outfit).
+ */
+export const ITEM_ICONS = {
+  // a round fluffy pad with a stitched ring
+  cottonPad: [
+    ['path', { d: 'M12 4.8A3 3 0 0 1 16.6 6.5A3 3 0 0 1 19.1 10.7A3 3 0 0 1 18.2 15.6A3 3 0 0 1 14.5 18.8A3 3 0 0 1 9.5 18.8A3 3 0 0 1 5.8 15.6A3 3 0 0 1 4.9 10.7A3 3 0 0 1 7.4 6.5A3 3 0 0 1 12 4.8Z', fill: '#ffffff' }, 2.2],
+    ['path', { d: 'M8.6 11.2a3.6 3.6 0 0 1 3.2-3', fill: 'none', stroke: '#c7b5ab' }, 1.6],
+    ['path', { d: 'M15.4 12.8a3.6 3.6 0 0 1-3.2 3', fill: 'none', stroke: '#c7b5ab' }, 1.6],
+  ],
+  // silver tweezers, tips a little apart, tilted
+  tweezers: [
+    ['path', { d: 'M10 2.8h4v2.6l2.4 14.8h-2.2L12 7.6l-2.2 12.6H7.6L10 5.4z', fill: '#c9e6ff', transform: 'rotate(28 12 12)' }, 2],
+    ['path', { d: 'M10.2 5.4h3.6', fill: 'none', transform: 'rotate(28 12 12)' }, 1.4],
+  ],
+  // a peach nose strip (wide ends, narrow middle) with the black dots stuck on it
+  noseStrip: [
+    ['path', { d: 'M3 7.5Q12 11.5 21 7.5V16.5Q12 12.5 3 16.5Z', fill: '#f7c59f' }, 2.2],
+    ['circle', { cx: 6.6, cy: 11.6, r: 1.05, fill: INK }, 0],
+    ['circle', { cx: 9.3, cy: 12.8, r: 1.05, fill: INK }, 0],
+    ['circle', { cx: 12, cy: 11.3, r: 1.05, fill: INK }, 0],
+    ['circle', { cx: 14.7, cy: 12.8, r: 1.05, fill: INK }, 0],
+    ['circle', { cx: 17.4, cy: 11.6, r: 1.05, fill: INK }, 0],
+  ],
+  // a round see-through sticker on its blue backing card, with a shine
+  patch: [
+    ['rect', { x: 4, y: 4, width: 16, height: 16, rx: 3.5, fill: '#c9e6ff', transform: 'rotate(-8 12 12)' }, 2.2],
+    ['circle', { cx: 12, cy: 12, r: 5.2, fill: '#ffe9c4' }, 1.8],
+    ['path', { d: 'M9.4 11a2.9 2.9 0 0 1 1.9-2', fill: 'none', stroke: '#ffffff' }, 1.5],
+  ],
+  // a folded orange cloth with steam curling up
+  warmCloth: [
+    ['path', { d: 'M8 12c-1.4-1.5 1.4-2.3 0-3.8s1.4-2.3 0-3.8M12 12c-1.4-1.5 1.4-2.3 0-3.8s1.4-2.3 0-3.8M16 12c-1.4-1.5 1.4-2.3 0-3.8s1.4-2.3 0-3.8', fill: 'none' }, 1.8],
+    ['rect', { x: 3.5, y: 14, width: 17, height: 7.5, rx: 1.8, fill: '#ff9a6b' }, 2.2],
+    ['path', { d: 'M3.8 17.6h16.4', fill: 'none' }, 1.5],
+  ],
+  // a blue rubber glove (her glove blue, comic-art.js GLOVE_BLUE) with a rolled cuff
+  gloves: [
+    ['path', { d: 'M7 21V17L4.6 13.6a1.4 1.4 0 0 1 2.3-1.6L8 13.4V5.6a1.3 1.3 0 0 1 2.6 0V11V4.4a1.3 1.3 0 0 1 2.6 0V11V5.2a1.3 1.3 0 0 1 2.6 0V11.6V7.4a1.3 1.3 0 0 1 2.6 0V15c0 3-1.4 6-3 6Z', fill: '#6fc3ef' }, 2],
+    ['rect', { x: 6.2, y: 18.6, width: 9.8, height: 3.4, rx: 1.2, fill: '#bfe6fa' }, 1.8],
+  ],
+  // a ring light: a glowing ring with light rays, on a stand
+  lamp: [
+    ['path', { d: 'M12 16.5V21.5M8.5 21.5h7', fill: 'none' }, 2.2],
+    ['path', { d: 'M2.8 3.2l1.6 1.4M21.2 3.2l-1.6 1.4M1.8 10h2M20.2 10h2', fill: 'none' }, 1.6],
+    ['path', { d: 'M5.5 10a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0zM8.4 10a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0z', fill: '#fffbe0', 'fill-rule': 'evenodd' }, 2.2],
+  ],
+  // a green plant in a pot that has two little watching eyes
+  plant: [
+    ['path', { d: 'M12 13C8 13 5 10 5 6c4 0 7 3 7 7zM12 13c4 0 7-3 7-7-4 0-7 3-7 7zM12 13c-2-2.5-2-6.5 0-9.5 2 3 2 7 0 9.5z', fill: '#7bd389' }, 1.8],
+    ['path', { d: 'M6.3 13h11.4l-1.7 8.5H8z', fill: '#f08a5d' }, 2.2],
+    ['circle', { cx: 10.3, cy: 17.2, r: 0.9, fill: INK }, 0],
+    ['circle', { cx: 13.7, cy: 17.2, r: 0.9, fill: INK }, 0],
+  ],
+  // a grey pipe bend with a shiny new gold joint and a sparkle
+  leakFix: [
+    ['path', { d: 'M2 5.5h11a4.5 4.5 0 0 1 4.5 4.5v12h-4.2V10H2z', fill: '#c9d3dc' }, 2],
+    ['rect', { x: 12.2, y: 12.2, width: 6.4, height: 3.6, rx: 1, fill: '#ffd23f' }, 1.8],
+    ['path', { d: 'M6 13l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z', fill: '#ffffff' }, 1.4],
+  ],
+  // a mint salon chair with a padded (stitched) back
+  chair: [
+    ['path', { d: 'M7 16v5M17 16v5', fill: 'none' }, 2.2],
+    ['path', { d: 'M7.5 3.5h9a2 2 0 0 1 2 2V13h-13V5.5a2 2 0 0 1 2-2z', fill: '#5eead4' }, 2.2],
+    ['path', { d: 'M10 6.5v3.5M14 6.5v3.5', fill: 'none' }, 1.5],
+    ['rect', { x: 3.5, y: 12, width: 17, height: 4.2, rx: 2, fill: '#5eead4' }, 2.2],
+  ],
+  // a paint roller dripping fresh lilac paint
+  wallPaint: [
+    ['path', { d: 'M17 6.5h2.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H12v3', fill: 'none' }, 2],
+    ['path', { d: 'M6 9v3a1 1 0 0 0 2 0V9', fill: PAINT }, 1.6],
+    ['rect', { x: 3, y: 3.5, width: 14, height: 6, rx: 3, fill: PAINT }, 2.2],
+    ['rect', { x: 10, y: 15.5, width: 4, height: 6.5, rx: 1.6, fill: '#ff7aa8' }, 2],
+  ],
+  // a pink hanging sign with white "words" and a sparkle
+  sign: [
+    ['path', { d: 'M12 3L5.5 9M12 3l6.5 6', fill: 'none' }, 1.8],
+    ['rect', { x: 2.5, y: 9, width: 19, height: 10.5, rx: 2.5, fill: '#ff7aa8' }, 2.2],
+    ['path', { d: 'M6 12.8h7M15.6 12.8h2.4M6 15.8h12', fill: 'none', stroke: '#ffffff' }, 1.8],
+    ['circle', { cx: 12, cy: 3, r: 1.3, fill: INK }, 0],
+  ],
+  // a cream apron with orange trim, ties and a pocket
+  apron: [
+    ['path', { d: 'M9 7V5.2a3 3 0 0 1 6 0V7M5.4 12.3L2.6 14.6M18.6 12.3l2.8 2.3', fill: 'none' }, 1.8],
+    ['path', { d: 'M8 6.5h8V11l3 1.2-0.5 8.3a1.2 1.2 0 0 1-1.2 1H6.7a1.2 1.2 0 0 1-1.2-1L5 12.2 8 11z', fill: '#fff6e4' }, 2.2],
+    ['path', { d: 'M5.6 18.8h12.8', fill: 'none', stroke: TRIM }, 1.8],
+    ['rect', { x: 9.5, y: 13.6, width: 5, height: 3.4, rx: 1, fill: TRIM }, 1.6],
+  ],
+  // a teal V-neck scrubs top with short sleeves and a chest pocket
+  scrubs: [
+    ['path', { d: 'M8.5 3.5L3 6.5l1.8 4.5 2.7-1V21h9V10l2.7 1L21 6.5l-5.5-3L12 8.5z', fill: '#3fb6a8' }, 2.2],
+    ['path', { d: 'M13.2 12.2h2.4V15h-2.4zM14.3 12.2v-1.5', fill: 'none' }, 1.5],
+  ],
+};
+
+/**
+ * The icon of one shop item: its own picture from ITEM_ICONS, or the tab's icon for an item that has none yet.
+ * @param {string} id the shop item id (economy-data.js SHOP_ITEMS)
+ * @param {'tool'|'studio'|'outfit'} fallback the tab's icon name, used when the item has no icon of its own
+ * @returns {SVGElement} a 24 px svg (sized by CSS), hidden from screen readers (the card says the name)
+ */
+export function itemIcon(id, fallback) {
+  const shapes = Object.hasOwn(ITEM_ICONS, id) ? ITEM_ICONS[id] : null;
+  if (!shapes) return icon(fallback);
+  const kids = shapes.map(([tag, attrs, width]) => svg(tag, {
+    stroke: width ? INK : 'none', 'stroke-width': width || null, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', ...attrs,
+  }));
+  return svg('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', class: `app-icon app-icon--item app-icon--${id}` }, kids);
+}
+
 /**
  * The shell every screen shares: a section element with its class, an optional label for screen readers, the
  * reduced-motion class and an abort signal so the screen can remove all its listeners at once.

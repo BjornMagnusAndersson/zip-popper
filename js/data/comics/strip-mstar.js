@@ -78,7 +78,7 @@ export const STRIP = {
       },
       camera: { move: 'pushIn', focus: [760, 420], amount: 0.08, ms: 2500 },
       bubbles: [
-        { kind: 'caption', key: 'comic.mstar.p1.cap', at: [330, 60], w: 540 },
+        { kind: 'caption', key: 'comic.mstar.p1.cap', at: [810, 60], w: 480 }, // B9: right of the CLEAN! sign
         { kind: 'say', key: 'comic.mstar.p1.her', at: [1180, 250], to: 'her', w: 440, sound: 'cheer' },
       ],
     },
