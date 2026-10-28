@@ -145,6 +145,7 @@ export function parseFlags(search) {
     outfit: OUTFIT_TIERS.includes(p.get('outfit')) ? p.get('outfit') : null,
     seenAll: p.get('seen') === 'all', // ?seen=all: every Field guide kind met (T6.5)
     album: p.get('album') === 'demo', // ?album=demo: 12 faces in the Face album (T8.2)
+    gloves: p.has('gloves'), // ?gloves: the gloves owned, as after the hygiene scare (SPEC D32e)
     twist: isTwist(p.get('twist')) ? p.get('twist') : null, // ?twist=: force a customer twist (T8.3)
     boss: isBoss(p.get('boss')) ? p.get('boss') : null, // ?boss=: force a boss or event customer (T8.4)
     daily: isDateKey(p.get('daily')) ? p.get('daily') : null, // ?daily=YYYY-MM-DD: the daily challenge's date (T8.5)
@@ -237,6 +238,7 @@ export function applyTestFlags(save, flags, now = Date.now()) {
     for (const tool of BOSSES[flags.boss].needs) eco = grantItem(eco, tool);
     s = economyToSave(s, eco);
   }
+  if (flags.gloves) s = economyToSave(s, grantItem(economyFromSave(s), 'gloves')); // ?gloves: she owns the gloves (SPEC D32e)
   if (flags.album) s.albumFaces = demoAlbum(now); // ?album=demo: a Face album with 12 faces (T8.2)
   if (flags.daily && flags.dailyStreak > 0) { // ?daily=&dailystreak=N: N days in a row done, the last one yesterday (T8.5)
     const yesterday = addDays(flags.daily, -1);
