@@ -3,7 +3,7 @@
 // No DOM, no audio, not wired into the game yet. Style as in scoring.js: every function returns a NEW state object and
 // never changes the one it is given. All numbers live in data/economy-data.js.
 
-import { starsFor, comboBonus } from './scoring.js';
+import { roundStars, comboBonus } from './scoring.js';
 import { bumpInfo, BUMP_IDS } from '../data/bumps.js';
 import { toolInfo } from '../data/tools.js';
 import { defaultSave, normalizeSave } from '../core/save.js';
@@ -61,8 +61,9 @@ function patchTipsFor(patches) {
  * @param {string[]} bumpTypesPopped the bump types that were popped clean (unknown types pay 0)
  * @param {boolean|string|null} requestDone false/null = no request done; 'gentle' | 'hurry' | 'combo' = that request done; true = done (default bonus)
  * @param {string[]|null} [bumpTools] the tool of each clean pop, same order as bumpTypesPopped (left out = no tool bonus)
- * @param {{patches?: number, stripPeeled?: boolean, boss?: string|null}|null} [extras] how many popped spots got a
- *   patch, whether the nose strip was peeled off (left out = neither pays) and the boss or event id of the customer
+ * @param {{patches?: number, stripPeeled?: boolean, stripLeft?: boolean, boss?: string|null}|null} [extras] how many
+ *   popped spots got a patch, whether the nose strip was peeled off (left out = neither pays), whether nose dots were
+ *   left on (then at most 2 stars and their tip, owner 2026-10-28) and the boss or event id of the customer
  *   (T8.4: then the payout also has eventBonus = data/bosses.js bossBonus, and eventId; only then)
  * @returns {{popCoins:number, toolBonus:number, patchTips:number, stripBonus:number, tip:number, combo:number,
  *   requestBonus:number, total:number, eventBonus?: number, eventId?: string}} the coins
@@ -73,7 +74,7 @@ export function roundPayout(roundState, bumpTypesPopped, requestDone = false, bu
   const toolBonus = toolPayBonus(bumpTypesPopped, bumpTools);
   const patchTips = patchTipsFor(extras?.patches);
   const stripBonus = extras?.stripPeeled === true ? (toolInfo('noseStrip')?.peelBonus ?? 0) : 0;
-  const tip = STAR_TIPS[starsFor(roundState)] ?? 0;
+  const tip = STAR_TIPS[roundStars(roundState, extras?.stripLeft === true)] ?? 0; // nose dots left on: the 2-star tip
   const combo = comboBonus(roundState);
   const requestBonus = requestBonusFor(requestDone);
   const total = popCoins + toolBonus + patchTips + stripBonus + tip + combo + requestBonus;
@@ -129,7 +130,7 @@ export function keepWorkingPayout(payout, cleanPops, factor = KEEP_WORKING_PAY) 
 export function buildRoundResult(roundState, bumpTypesPopped, requestDone = false, choice = 'again', bumpTools = null, extras = null) {
   const payout = roundPayout(roundState, bumpTypesPopped, requestDone, bumpTools, extras);
   return {
-    stars: starsFor(roundState), failed: Boolean(roundState.failed), choice, payout, total: payout.total,
+    stars: roundStars(roundState, extras?.stripLeft === true), failed: Boolean(roundState.failed), choice, payout, total: payout.total,
     pops: roundState.pops, bestCombo: roundState.bestCombo, requestDone: Boolean(requestDone),
   };
 }

@@ -9,7 +9,7 @@ import { isImplemented } from '../data/bumps.js';
 import { makeRng } from '../data/customers.js';
 import { ROUND_IRRITATION } from '../data/economy-data.js';
 import { describeRequest, requestProgress, requestResult } from '../game/requests.js';
-import { starsFor } from '../game/scoring.js';
+import { roundStars } from '../game/scoring.js';
 
 /** Fewest and most bumps a round face may have (SPEC D4 says 6 to 10; the tutorial husband has 3). */
 export const ROUND_BUMPS_MIN = 1;
@@ -285,18 +285,19 @@ export function clockSeconds(startAt, now, hiddenSince = null) {
  * What onFinish gets when a round ends (finished, or failed and the player picked Try again or Next customer).
  * @param {{round: object, elapsedSeconds: number, cleanBumpTypes?: string[], cleanBumpTools?: string[],
  *   popTypes?: string[], failChoice?: 'again'|'next'|'escape'|null, request?: object|null, patches?: number,
- *   stripPeeled?: boolean}} o the scoring.js round state, the
+ *   stripPeeled?: boolean, stripLeft?: boolean}} o the scoring.js round state, the
  *   popping time in seconds (start to the last bump, or to the fail), the kinds of the clean pops (no Ow on that bump),
  *   the tool of each clean pop (same order; for the cotton pad's pay bonus, may be left out), the kinds of every pop,
  *   the fail choice, the customer's request (or null), how many popped spots got a patch and whether the nose strip
- *   was peeled off (both for their pay, B13 round 2c; may be left out)
+ *   was peeled off (both for their pay, B13 round 2c; may be left out), and whether the face had nose dots that were
+ *   never peeled (then at most 2 stars, scoring.js roundStars, owner 2026-10-28)
  * @returns {{state: object, elapsedSeconds: number, cleanBumpTypes: string[], cleanBumpTools: string[], popTypes: string[],
- *   patches: number, stripPeeled: boolean, owCount: number, failed: boolean, failChoice: 'again'|'next'|'escape'|null,
- *   request: 'gentle'|'hurry'|'combo'|false, stars: number}} payload
+ *   patches: number, stripPeeled: boolean, stripLeft: boolean, owCount: number, failed: boolean,
+ *   failChoice: 'again'|'next'|'escape'|null, request: 'gentle'|'hurry'|'combo'|false, stars: number}} payload
  */
 export function finishPayload({
   round, elapsedSeconds, cleanBumpTypes = [], cleanBumpTools = [], popTypes = [], failChoice = null, request = null,
-  patches = 0, stripPeeled = false,
+  patches = 0, stripPeeled = false, stripLeft = false,
 }) {
   const failed = Boolean(round?.failed);
   const elapsed = Math.max(0, Number(elapsedSeconds) || 0);
@@ -308,10 +309,11 @@ export function finishPayload({
     popTypes: [...popTypes],
     patches: Number.isFinite(patches) ? Math.max(0, Math.floor(patches)) : 0,
     stripPeeled: stripPeeled === true,
+    stripLeft: stripLeft === true && stripPeeled !== true,
     owCount: round?.owCount ?? 0,
     failed,
     failChoice: failed && (failChoice === 'again' || failChoice === 'next' || failChoice === 'escape') ? failChoice : null,
     request: requestResult(request ?? null, round, elapsed),
-    stars: starsFor(round),
+    stars: roundStars(round, stripLeft === true && stripPeeled !== true),
   };
 }

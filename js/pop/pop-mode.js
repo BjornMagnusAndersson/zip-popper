@@ -684,6 +684,7 @@ export function createPopMode({
       round: c.round, elapsedSeconds: elapsedFor(c), cleanBumpTypes: c.cleanTypes, cleanBumpTools: c.cleanTools,
       popTypes: c.popTypes, failChoice: c.failed ? choice : null, request: c.request,
       patches: c.patches, stripPeeled: c.stripPeeled, // patch tips and the nose strip bonus (B13 round 2c)
+      stripLeft: Boolean(c.hasStrip && !c.stripPeeled), // nose dots left on: at most 2 stars (owner 2026-10-28)
     });
     try { c.onFinish?.(payload); } catch (e) { console.warn('onFinish failed:', e); }
   }

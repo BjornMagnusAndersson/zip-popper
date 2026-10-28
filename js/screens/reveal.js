@@ -19,8 +19,9 @@ export const REVEAL_SIZE = { w: 240, h: 300 };
 
 /**
  * Draw one look of a saved face onto a new canvas: the head and shoulders fill the picture (the room around them is
- * left see-through, so the frame's own background shows). A clean look has no bumps and no nose dots; moles and
- * freckles stay (they are part of the face). The sparkly look adds a soft glow behind the head.
+ * left see-through, so the frame's own background shows). A clean look has no bumps and no nose dots (unless she never
+ * peeled the strip: look.stripLeft keeps them); moles and freckles stay (they are part of the face). The sparkly look
+ * adds a soft glow behind the head.
  * @param {{seed: number, spec: object, count: number, kinds: string[], strip: boolean, decoys: boolean, w: number,
  *   h: number, clean?: boolean, mood?: string, redness?: number, sparkles?: boolean}} look the face recipe plus the look
  *   (album-logic.js revealFaces gives both looks)
@@ -57,8 +58,8 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
   // As pop-mode.js does: width 0 skips face.js's plain wall, so only the person is drawn.
   drawFace(ctx, { ...face, width: 0 }, look.spec, { mood: look.mood, redness: look.redness ?? 0, seed: look.seed, dpr: dpr * k });
   for (const d of lay.decoys ?? []) drawDecoy(ctx, d);
+  if (lay.strip && (!look.clean || look.stripLeft)) drawStripDots(ctx, lay.strip.dots, -Infinity); // left on: still there
   if (!look.clean) {
-    if (lay.strip) drawStripDots(ctx, lay.strip.dots, -Infinity);
     for (const p of lay.pimples) drawPimple(ctx, p, 0, 1, 0.4); // standing still, fully grown in (as the round began)
   }
   return canvas;

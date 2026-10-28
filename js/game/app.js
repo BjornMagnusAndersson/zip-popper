@@ -743,7 +743,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       ? settleDaily(out.save, { date: step.daily, reached: judgeDaily(args?.daily?.goal, dailyResult(payload)) }) : null;
     const stamp = out.boss ?? daily?.milestone?.stamp ?? null; // a boss stamp (T8.4) or a streak milestone stamp (T8.5)
     // T8.2: a finished career or Keep working customer gets the before and after reveal and goes into the album.
-    const face = args && !out.failed && revealOn(step) ? faceSetup(args, popStageSize()) : null;
+    const face = args && !out.failed && revealOn(step) ? faceSetup(args, popStageSize(), payload) : null; // payload: nose strip peeled?
     // The save also lists the milestone strips still to play (B4), so closing the app now loses none.
     persist(recordFace(daily ? daily.save : out.save, { step, customer: args?.customer, setup: face, stars: out.stars, failed: out.failed, stamp }));
     /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */

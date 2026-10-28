@@ -627,6 +627,18 @@ export function reactionKey(customer, owCount) {
   return owCount <= 2 ? keys.ok : keys.ow;
 }
 
+/** The result lines of a customer whose nose dots were left on (the nose strip never peeled; owner 2026-10-28). */
+export const NOSE_LEFT_KEYS = ['customer.noseLeft.1', 'customer.noseLeft.2', 'customer.noseLeft.3'];
+
+/**
+ * Which nose line a customer says when the nose dots were left on (a different one from customer to customer).
+ * @param {{n?: number}|null|undefined} step the customer step @returns {string} a string key
+ */
+export function noseLeftKey(step) {
+  const n = Number.isFinite(step?.n) ? Math.abs(Math.floor(step.n)) : 0;
+  return NOSE_LEFT_KEYS[n % NOSE_LEFT_KEYS.length];
+}
+
 /**
  * Applies the end of a customer round (pop-mode.js onFinish payload) to the save.
  * - Failed + Try again ('again'): nothing changes, retry is true (the game starts the same customer again).
@@ -671,7 +683,8 @@ export function applyRound(save, payload, step) {
     skipPenalty = skipPenaltyNow(save);
     after = applyRoundResult(before, { failed: true, choice: 'next' });
   } else {
-    const extras = { patches: payload.patches ?? 0, stripPeeled: payload.stripPeeled === true }; // patch tips, strip bonus
+    // patch tips, the strip bonus, and nose dots left on (at most 2 stars, owner 2026-10-28)
+    const extras = { patches: payload.patches ?? 0, stripPeeled: payload.stripPeeled === true, stripLeft: payload.stripLeft === true };
     if (isBoss(step?.boss)) extras.boss = step.boss; // a boss or event customer's bonus (T8.4)
     let result = buildRoundResult(payload.state, payload.cleanBumpTypes ?? [], payload.request ?? false, 'again', payload.cleanBumpTools ?? null, extras);
     if (kw) { // Keep working pays KEEP_WORKING_PAY of every coin line (T5.4)
@@ -700,10 +713,12 @@ export function applyRound(save, payload, step) {
   const said = failed ? undefined : reactionKey(step?.lines?.resultKeys ? { resultKeys: step.lines.resultKeys } : spec?.customer, payload.owCount ?? 0);
   // The line memory counts this visit (finished or skipped), so the next one is a return with other lines.
   const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }, step?.lines, said, failed); // strips kept until played (B4)
+  // Nose dots left on: the customer says so instead (owner 2026-10-28); the line memory keeps the usual line.
+  const shown = !failed && payload.stripLeft === true ? noseLeftKey(step) : said;
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
     strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
-    reactionKey: said,
+    reactionKey: shown,
     boss: !failed && isBoss(step?.boss) ? step.boss : null, // a finished boss: its stamp goes into the album (T8.4)
     skills: failed ? null : roundSkills(before, after, payload.cleanBumpTypes ?? []), // level ups and the next goal (D34)
   };

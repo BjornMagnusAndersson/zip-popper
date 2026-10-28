@@ -246,6 +246,7 @@ function albumList(v) {
       if (Object.keys(mix).length) entry.mix = mix;
     }
     if (Number.isFinite(e.grown) && e.grown > 0 && e.grown <= 3) entry.grown = e.grown; // a boss face's grown horns (T8.4)
+    if (e.stripLeft === true) entry.stripLeft = true; // the nose dots she left on (never peeled the strip)
     out.push(entry);
   }
   return out;

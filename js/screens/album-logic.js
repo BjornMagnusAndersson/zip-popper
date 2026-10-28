@@ -56,10 +56,12 @@ export function stageOrDefault(stage) {
  * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[],
  *   decoys?: boolean, seed?: number}} args the startRound arguments
  * @param {{w?: number, h?: number}|null} [stage] the pop scene's stage size (null = DEFAULT_STAGE)
+ * @param {{stripPeeled?: boolean}|null} [played] how the round went (its onFinish payload): a face with nose dots whose
+ *   strip was never peeled gets stripLeft, so its AFTER look keeps the dots (owner 2026-10-28)
  * @returns {{seed: number, spec: object, count: number, kinds: string[], strip: boolean, decoys: boolean, w: number,
- *   h: number}} the face recipe
+ *   h: number, stripLeft?: boolean}} the face recipe
  */
-export function faceSetup(args, stage = null) {
+export function faceSetup(args, stage = null, played = null) {
   const a = args ?? {};
   const s = roundFaceSetup({
     customer: a.customer, bumpCount: a.bumpCount, allowedTypes: a.allowedTypes,
@@ -71,6 +73,7 @@ export function faceSetup(args, stage = null) {
   const out = { seed, spec: copySpec(s.spec), count: s.count, kinds: [...s.allowed], strip: s.strip, decoys: s.decoys, w, h };
   if (s.mix) out.mix = { ...s.mix }; // a boss face's own bump mix (T8.4)
   if (s.grown) out.grown = s.grown;
+  if (out.strip && played && played.stripPeeled !== true) out.stripLeft = true; // the nose dots stayed on
   return out;
 }
 
@@ -87,7 +90,8 @@ function copySpec(spec) {
 
 /**
  * The two looks of the reveal: BEFORE (every bump, the nose dots, the red patches and the worried mood the round
- * started with) and AFTER (clean skin, the glowing mood of a finished face, a soft glow and sparkles). Both use the
+ * started with) and AFTER (clean skin, the glowing mood of a finished face, a soft glow and sparkles; the nose dots
+ * stay when she never peeled the strip, setup.stripLeft). Both use the
  * SAME recipe (seed, face parts, layout), so it is the same person; only the look differs.
  * @param {ReturnType<typeof faceSetup>} setup the face recipe
  * @returns {{before: object, after: object}} each = the recipe plus clean (no bumps), mood, redness and sparkles
@@ -186,6 +190,7 @@ export function albumEntry({ customer, setup, stars, stamp = null }, now) {
   if (typeof stamp === 'string' && stamp) out.stamp = stamp;
   if (setup.mix) out.mix = { ...setup.mix };
   if (setup.grown) out.grown = setup.grown;
+  if (setup.stripLeft) out.stripLeft = true; // the nose dots she left on (the album shows the face as she left it)
   return out;
 }
 
@@ -278,6 +283,7 @@ export function entrySetup(entry) {
   };
   if (entry.mix && typeof entry.mix === 'object') out.mix = { ...entry.mix }; // a boss face's bump mix (T8.4)
   if (Number.isFinite(entry.grown) && entry.grown > 0) out.grown = entry.grown;
+  if (entry.stripLeft === true && out.strip) out.stripLeft = true; // nose dots left on
   return out;
 }
 

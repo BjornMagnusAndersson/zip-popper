@@ -81,6 +81,19 @@ export function starsFor(state) {
   return 1;
 }
 
+/** The most stars a face gets when its nose dots were left on (the nose strip never peeled; owner 2026-10-28). */
+export const NOSE_LEFT_MAX_STARS = 2;
+
+/**
+ * The stars of a finished face: starsFor, but at most NOSE_LEFT_MAX_STARS when she left the nose dots on.
+ * @param {object} state the round state @param {boolean} [stripLeft] the face had nose dots and the strip was never peeled
+ * @returns {number} 0 to 3
+ */
+export function roundStars(state, stripLeft = false) {
+  const s = starsFor(state);
+  return stripLeft ? Math.min(s, NOSE_LEFT_MAX_STARS) : s;
+}
+
 /** Combo bonus in whole coins: a fixed amount per chain step, capped. @param {object} state @returns {number} coins */
 export function comboBonus(state) {
   return Math.min(COMBO_BONUS_CAP, state.comboSteps * COMBO_COINS_PER_STEP);
