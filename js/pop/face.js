@@ -335,6 +335,22 @@ function hairline(f, u) {
 }
 
 /**
+ * Where the top of the head outline is at x-unit u (the dome's edge), in face units (R8: the veil's pearls on a bald head).
+ * @param {object} f the face geometry
+ * @param {number} u -1 .. 1
+ * @returns {number} v of the outline's top edge at u
+ */
+function headTopV(f, u) {
+  let lo = -1.6;
+  let hi = 0;
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (insideHeadOutline(f.features.shape, u, mid, 1, 1)) hi = mid; else lo = mid;
+  }
+  return hi;
+}
+
+/**
  * Where the head outline is at height v, as a positive u (R7: the bald side tufts follow it).
  * @param {object} f the face geometry
  * @param {number} v height in face units
@@ -619,6 +635,10 @@ function drawBackHair(ctx, f, look) {
     ctx.bezierCurveTo(cx - rx * 1.25, cy - ry * 0.8, cx - rx * 1.45, cy + ry * 0.6, cx - rx * 1.5, cy + ry * 1.5);
     ctx.lineTo(cx + rx * 1.5, cy + ry * 1.5);
     ctx.bezierCurveTo(cx + rx * 1.45, cy + ry * 0.6, cx + rx * 1.25, cy - ry * 0.8, cx + rx * 0.5, cy - ry * 1.05);
+    if (st === 'bald' || st === 'mohawk') { // a bare head: the top of the veil follows the dome (no flat edge above it)
+      const yMid = cy + ry * (headTopV(f, 0) + 0.05);
+      ctx.quadraticCurveTo(cx, 2 * yMid - (cy - ry * 1.05), cx - rx * 0.5, cy - ry * 1.05);
+    }
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = 'rgba(210,220,235,0.8)';
@@ -871,29 +891,51 @@ function drawHeadwear(ctx, f, look) {
   const has = (a) => look.acc.includes(a);
   const lw = Math.max(1.5, rx * 0.018);
   if (has('beanie')) {
+    // Owner 2026-10-28: the folded band stuck out past the sides like little wings. Now the beanie is one shape (the
+    // dome down to its lower edge) and the band is cut from the bottom of that same shape, so it never sticks out.
     const c = look.accent;
-    // Lower edge of the dome at x-unit u, just under the hairline.
-    const bottom = (u) => hairline(f, u) + 0.03;
-    // The dome.
-    ctx.beginPath();
-    ctx.moveTo(X(1.08), Y(bottom(1.08) - 0.12));
-    topArc(ctx, f, bottom(1.08) - 0.12, 1.1, 1.2, -0.04);
-    ctx.closePath();
+    const side = 1.06; // half the beanie's width at its lower edge
+    // Lower edge of the beanie at x-unit u, just under the hairline.
+    const bottom = (u) => { // ...curving up a little at the very ends, so the corners are round, not pointed
+      const k = Math.max(0, Math.abs(u) - 0.8) / (side - 0.8);
+      return hairline(f, Math.max(-side, Math.min(side, u))) + 0.03 - 0.14 * Math.min(1, k) ** 2;
+    };
+    // Where the top's curve meets the lower edge, in x-units (the lower edge ends exactly there: no spike at the corners).
+    const t0 = Math.asin(Math.max(-0.95, Math.min(0.95, (bottom(side) + 0.04) / 1.2)));
+    const ends = (headPoint(f, t0, 1.1, 1.2, -0.04)[0] - cx) / rx;
+    // The whole beanie's outline: along the lower edge from left to right, then over the top of a larger head.
+    const shape = () => {
+      ctx.beginPath();
+      for (let i = 0; i <= 24; i += 1) { const u = -ends + (2 * ends * i) / 24; ctx.lineTo(X(u), Y(bottom(u))); }
+      topArc(ctx, f, bottom(side), 1.1, 1.2, -0.04);
+      ctx.closePath();
+    };
+    shape();
     const g = ctx.createLinearGradient(0, Y(-1.3), 0, Y(-0.6));
     g.addColorStop(0, shade(c, 0.15));
     g.addColorStop(1, shade(c, -0.1));
     ctx.fillStyle = g;
     ctx.fill();
-    // The folded brim with ribs.
+    // The folded band with ribs: the lower part of the same shape.
+    ctx.save();
+    shape();
+    ctx.clip();
     ctx.beginPath();
-    for (let i = 0; i <= 24; i += 1) { const u = -1.1 + (2.2 * i) / 24; ctx.lineTo(X(u), Y(bottom(u) - 0.16)); }
-    for (let i = 24; i >= 0; i -= 1) { const u = -1.1 + (2.2 * i) / 24; ctx.lineTo(X(u), Y(bottom(u))); }
+    for (let i = 0; i <= 24; i += 1) { const u = -1.3 + (2.6 * i) / 24; ctx.lineTo(X(u), Y(bottom(u) - 0.16)); }
+    ctx.lineTo(X(1.3), Y(bottom(1.3) + 0.2));
+    ctx.lineTo(X(-1.3), Y(bottom(-1.3) + 0.2));
     ctx.closePath();
     ctx.fillStyle = shade(c, -0.15);
     ctx.fill();
     ctx.strokeStyle = shade(c, -0.35, 0.6);
     ctx.lineWidth = lw;
-    for (let i = 1; i < 16; i += 1) { const u = -1.1 + (2.2 * i) / 16; ctx.beginPath(); ctx.moveTo(X(u), Y(bottom(u) - 0.14)); ctx.lineTo(X(u), Y(bottom(u) - 0.02)); ctx.stroke(); }
+    for (let i = 1; i < 16; i += 1) { const u = -side + (2 * side * i) / 16; ctx.beginPath(); ctx.moveTo(X(u), Y(bottom(u) - 0.14)); ctx.lineTo(X(u), Y(bottom(u) - 0.02)); ctx.stroke(); }
+    ctx.strokeStyle = shade(c, -0.3, 0.8); // the fold's top edge
+    ctx.lineWidth = lw * 1.2;
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i += 1) { const u = -side + (2 * side * i) / 24; ctx.lineTo(X(u), Y(bottom(u) - 0.16)); }
+    ctx.stroke();
+    ctx.restore();
     // The pom-pom.
     ctx.fillStyle = look.accent2;
     ctx.beginPath();
@@ -973,41 +1015,57 @@ function drawHeadwear(ctx, f, look) {
     ctx.stroke();
   }
   if (has('pilot-cap')) { // navy captain's cap: crown, gold-braided band, shiny visor and a winged badge
-    const bandBottom = f.features.hairTop - 0.06;
+    // Owner 2026-10-28: it sat flat on top of bald and mohawk heads with wall showing under it. Now built like the
+    // beanie: the band follows the hairline curve down towards the ears, so the cap sits ON every head.
+    const bandBottom = (u) => hairline(f, Math.max(-1, Math.min(1, u))) - 0.03; // at the hairline (bumps stay below it)
+    const bandTop = (u) => bandBottom(u) - 0.15; // the band's top edge at u
+    const top = f.features.hairTop - 0.6; // the crown's flat top
+    const cw = 1.0; // half the band width
+    // The crown: up from the band's ends, bulging out a little (a captain's cap is wider on top), across the top.
     ctx.fillStyle = '#2c3a66';
     ctx.beginPath();
-    ctx.moveTo(X(-0.9), Y(bandBottom - 0.12));
-    ctx.bezierCurveTo(X(-1.2), Y(-1.2), X(-0.9), Y(-1.4), X(0), Y(-1.4));
-    ctx.bezierCurveTo(X(0.9), Y(-1.4), X(1.2), Y(-1.2), X(0.9), Y(bandBottom - 0.12));
+    ctx.moveTo(X(-cw), Y(bandTop(-cw) + 0.02));
+    ctx.bezierCurveTo(X(-1.24), Y(bandTop(-cw) - 0.2), X(-1.22), Y(top), X(0), Y(top));
+    ctx.bezierCurveTo(X(1.22), Y(top), X(1.24), Y(bandTop(cw) - 0.2), X(cw), Y(bandTop(cw) + 0.02));
+    for (let i = 12; i >= 0; i -= 1) { const u = -cw + (2 * cw * i) / 12; ctx.lineTo(X(u), Y(bandTop(u) + 0.02)); }
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; // a soft sheen on the top
+    ctx.beginPath(); ctx.ellipse(X(-0.35), Y(top + 0.1), rx * 0.45, ry * 0.06, -0.08, 0, Math.PI * 2); ctx.fill();
+    // The band, curved like the head, with a gold braid along it.
     ctx.fillStyle = '#1d2747';
-    ctx.fillRect(X(-0.9), Y(bandBottom - 0.14), rx * 1.8, ry * 0.14);
+    ctx.beginPath();
+    for (let i = 0; i <= 16; i += 1) { const u = -cw + (2 * cw * i) / 16; ctx.lineTo(X(u), Y(bandTop(u))); }
+    for (let i = 16; i >= 0; i -= 1) { const u = -cw + (2 * cw * i) / 16; ctx.lineTo(X(u), Y(bandBottom(u))); }
+    ctx.closePath();
+    ctx.fill();
     ctx.strokeStyle = '#e8c04a';
     ctx.lineWidth = lw * 1.4;
-    ctx.beginPath(); ctx.moveTo(X(-0.88), Y(bandBottom - 0.07)); ctx.lineTo(X(0.88), Y(bandBottom - 0.07)); ctx.stroke();
-    // Visor: a black glossy crescent just above the hairline.
+    ctx.beginPath();
+    for (let i = 0; i <= 16; i += 1) { const u = -cw * 0.98 + (1.96 * cw * i) / 16; ctx.lineTo(X(u), Y(bandBottom(u) - 0.075)); }
+    ctx.stroke();
+    // Visor: a black glossy crescent along the front of the band, just above the hairline.
     ctx.fillStyle = '#15161c';
     ctx.beginPath();
-    ctx.moveTo(X(-0.72), Y(bandBottom));
-    ctx.lineTo(X(0.72), Y(bandBottom));
-    ctx.quadraticCurveTo(X(0), Y(f.features.hairTop + 0.08), X(-0.72), Y(bandBottom));
+    for (let i = 0; i <= 12; i += 1) { const u = -0.72 + (1.44 * i) / 12; ctx.lineTo(X(u), Y(bandBottom(u) - 0.01)); }
+    ctx.quadraticCurveTo(X(0), Y(f.features.hairTop + 0.09), X(-0.72), Y(bandBottom(-0.72) - 0.01));
     ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.35)';
     ctx.lineWidth = lw;
-    ctx.beginPath(); ctx.moveTo(X(-0.4), Y(bandBottom + 0.02)); ctx.quadraticCurveTo(X(0), Y(bandBottom + 0.06), X(0.4), Y(bandBottom + 0.02)); ctx.stroke();
-    // Badge with wings.
+    ctx.beginPath(); ctx.moveTo(X(-0.4), Y(bandBottom(-0.4) + 0.02)); ctx.quadraticCurveTo(X(0), Y(bandBottom(0) + 0.06), X(0.4), Y(bandBottom(0.4) + 0.02)); ctx.stroke();
+    // Badge with wings, on the front of the crown above the band.
+    const by = bandTop(0) - 0.09;
     ctx.fillStyle = '#f2cc55';
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(X(s * 0.06), Y(bandBottom - 0.24));
-      ctx.quadraticCurveTo(X(s * 0.3), Y(bandBottom - 0.32), X(s * 0.42), Y(bandBottom - 0.3));
-      ctx.quadraticCurveTo(X(s * 0.25), Y(bandBottom - 0.2), X(s * 0.06), Y(bandBottom - 0.18));
+      ctx.moveTo(X(s * 0.06), Y(by - 0.02));
+      ctx.quadraticCurveTo(X(s * 0.3), Y(by - 0.1), X(s * 0.42), Y(by - 0.08));
+      ctx.quadraticCurveTo(X(s * 0.25), Y(by + 0.02), X(s * 0.06), Y(by + 0.04));
       ctx.fill();
     }
-    ctx.beginPath(); ctx.arc(X(0), Y(bandBottom - 0.22), rx * 0.07, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(0), Y(by), rx * 0.07, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#c0392b';
-    ctx.beginPath(); ctx.arc(X(0), Y(bandBottom - 0.22), rx * 0.035, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(X(0), Y(by), rx * 0.035, 0, Math.PI * 2); ctx.fill();
   }
   if (has('headband')) drawHeadband(ctx, f, look);
   if (has('tiara')) { // a small golden crown with a pink gem, resting on the hairline (R7: it used to float above bald and short heads)
@@ -1038,11 +1096,14 @@ function drawHeadwear(ctx, f, look) {
     ctx.beginPath(); ctx.arc(X(-0.02), Y(base(0) - 0.065), rx * 0.016, 0, Math.PI * 2); ctx.fill();
   }
   if (has('veil')) { // the front of the veil: a pearl band on top of the head
+    // On a bare head (bald, mohawk) the band sits on the dome itself (owner 2026-10-28: it floated above it).
+    const bare = look.hairStyle === 'bald' || look.hairStyle === 'mohawk';
     ctx.fillStyle = '#fffaf0';
     for (let i = 0; i <= 10; i += 1) {
       const u = -0.6 + (1.2 * i) / 10;
+      const v = bare ? headTopV(f, u) + 0.05 : -1.06 + 0.12 * u * u;
       ctx.beginPath();
-      ctx.arc(X(u), Y(-1.06 + 0.12 * u * u), rx * 0.04, 0, Math.PI * 2);
+      ctx.arc(X(u), Y(v), rx * 0.04, 0, Math.PI * 2);
       ctx.fill();
     }
   }
