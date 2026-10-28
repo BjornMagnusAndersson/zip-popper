@@ -8,10 +8,11 @@ import { CHAPTERS, CAREER_BANDS, getChapter, HUSBAND } from '../data/chapters.js
 import { TORCHLIGHT_ROUND } from './torchlight-logic.js';
 import {
   economyFromSave, economyToSave, holdFactor, roughReduction, buildRoundResult, applyRoundResult, recordCleanPop,
-  milestoneStripsToPlay, buy, canBuy, grantItem, finishScrub, needsScrub, masteryLevel, keepWorkingPayout,
+  milestoneStripsToPlay, buy, canBuy, grantItem, finishScrub, needsScrub, masteryLevel, keepWorkingPayout, roundSkills,
 } from './economy.js';
 import {
   SHOP_ITEM_IDS, SKIP_PENALTIES, STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, MASTERY_STRIP_LEVEL, KEEP_WORKING_PAY,
+  MASTER_LEVEL,
 } from '../data/economy-data.js';
 import { pickRequest, hurryLimit } from './requests.js';
 import { customerLines, hurryLineRequest, recordLines } from './customer-lines.js';
@@ -126,7 +127,8 @@ function intOrNull(v) {
  * every Field guide card open, T6.5; ?twist=fidgety|ticklish|sensitive|hurry = every customer gets that twist,
  * T8.3, used only with ?test; ?boss=hairday|nosestrip|golden|horn = every customer is that boss or event, T8.4, only
  * with ?test, and the tools it needs are owned; ?daily=YYYY-MM-DD = the daily challenge's date and ?dailystreak=N = a
- * streak of N days up to the day before it, T8.5, used only with ?test).
+ * streak of N days up to the day before it, T8.5, used only with ?test; ?mastery=demo = clean pop counts just short
+ * of level ups and Masters, D34).
  * @param {string} search location.search (with or without the "?")
  * @returns {{test: boolean, demo: boolean, chapter: number|null, customer: number|null, money: number|null,
  *   rep: number|null, seed: number|null, name: string|null, squeeze: boolean, layers: string[]|null,
@@ -146,12 +148,19 @@ export function parseFlags(search) {
     seenAll: p.get('seen') === 'all', // ?seen=all: every Field guide kind met (T6.5)
     album: p.get('album') === 'demo', // ?album=demo: 12 faces in the Face album (T8.2)
     gloves: p.has('gloves'), // ?gloves: the gloves owned, as after the hygiene scare (SPEC D32e)
+    mastery: p.get('mastery') === 'demo', // ?mastery=demo: clean pop counts just short of level ups and Masters (D34)
     twist: isTwist(p.get('twist')) ? p.get('twist') : null, // ?twist=: force a customer twist (T8.3)
     boss: isBoss(p.get('boss')) ? p.get('boss') : null, // ?boss=: force a boss or event customer (T8.4)
     daily: isDateKey(p.get('daily')) ? p.get('daily') : null, // ?daily=YYYY-MM-DD: the daily challenge's date (T8.5)
     dailyStreak: intOrNull(p.get('dailystreak')), // ?dailystreak=N: a streak of N up to the day before ?daily= (T8.5)
   };
 }
+
+/**
+ * The clean pop counts of ?mastery=demo (D34, data/economy-data.js MASTERY_STEPS): whitehead and hair one clean pop
+ * from Master (a diploma), red one from Expert, gold already Master, the rest at different levels on the way.
+ */
+export const DEMO_MASTERY = { whitehead: 109, red: 69, blackhead: 12, big: 3, gold: 24, horn: 10, hair: 23 };
 
 /**
  * The outfit shop items a test run gets for ?outfit= (T5.2): every outfit item up to that tier (scrubs = apron and
@@ -240,6 +249,7 @@ export function applyTestFlags(save, flags, now = Date.now()) {
   }
   if (flags.gloves) s = economyToSave(s, grantItem(economyFromSave(s), 'gloves')); // ?gloves: she owns the gloves (SPEC D32e)
   if (flags.album) s.albumFaces = demoAlbum(now); // ?album=demo: a Face album with 12 faces (T8.2)
+  if (flags.mastery) s.mastery = { ...DEMO_MASTERY }; // ?mastery=demo: one clean pop from level ups and Masters (D34)
   if (flags.daily && flags.dailyStreak > 0) { // ?daily=&dailystreak=N: N days in a row done, the last one yesterday (T8.5)
     const yesterday = addDays(flags.daily, -1);
     s = { ...s, dailyStreak: flags.dailyStreak, dailyBest: flags.dailyStreak, dailyLastDone: yesterday, dailyLastPlayed: yesterday };
@@ -616,8 +626,10 @@ export function reactionKey(customer, owCount) {
  * (game/customer-lines.js recordLines; Try again remembers nothing, so the retry says the same lines).
  * @param {{chapter: number, n: number, boss?: string, lines?: object}} step the customer step that was played
  * @returns {{save: object, retry: boolean, failed: boolean, stars: number, payout: object|null, reputationChange: number,
- *   skipPenalty: number, strips: string[], factKey: string|null, reactionKey: string|undefined, boss?: string|null}}
- *   the outcome (boss = the finished boss's id, for its stamp)
+ *   skipPenalty: number, strips: string[], factKey: string|null, reactionKey: string|undefined, boss?: string|null,
+ *   skills?: ReturnType<typeof roundSkills>|null}}
+ *   the outcome (boss = the finished boss's id, for its stamp; skills = level ups, new Masters and the closest next
+ *   level, economy.js roundSkills, D34; null when failed)
  */
 export function applyRound(save, payload, step) {
   const failed = Boolean(payload?.failed);
@@ -674,7 +686,31 @@ export function applyRound(save, payload, step) {
     strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
     reactionKey: said,
     boss: !failed && isBoss(step?.boss) ? step.boss : null, // a finished boss: its stamp goes into the album (T8.4)
+    skills: failed ? null : roundSkills(before, after, payload.cleanBumpTypes ?? []), // level ups and the next goal (D34)
   };
+}
+
+/**
+ * The skill lines of the result screen (D34) from applyRound's skills: up to two "Level up!" lines (new Masters first,
+ * then the highest new levels), or else one line
+ * saying how many clean pops the closest kind still needs (with its bar). Text keys only; the screen fills in the
+ * kind's name (kindKey) and the level's name (levelKey).
+ * @param {ReturnType<typeof roundSkills>|null|undefined} skills applyRound's skills
+ * @returns {{up: boolean, key: string, kindKey: string, levelKey: string, vars: object, share?: number}[]} the lines
+ */
+export function skillNews(skills) {
+  if (!skills) return [];
+  const ups = [...skills.ups].sort((a, b) => b.to - a.to).slice(0, 2).map((u) => ({
+    up: true, key: u.to >= MASTER_LEVEL ? 'ui.skill.newsMaster' : 'ui.skill.newsUp', kindKey: `ui.guide.${u.type}.name`,
+    levelKey: `ui.skill.level${u.to}`, vars: { n: u.to, pct: u.speedPercent },
+  }));
+  if (ups.length) return ups;
+  const n = skills.near;
+  if (!n) return [];
+  return [{
+    up: false, key: n.left === 1 ? 'ui.skill.newsLeftOne' : 'ui.skill.newsLeft', kindKey: `ui.guide.${n.type}.name`,
+    levelKey: `ui.skill.level${n.level + 1}`, vars: { n: n.left, level: n.level + 1 }, share: n.share,
+  }];
 }
 
 /**

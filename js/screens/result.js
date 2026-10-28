@@ -2,6 +2,8 @@
 // change, an info-card fact and a Continue button. A fail variant (the customer stormed off) shows "Try again" and
 // "Next customer" with the reputation cost of skipping. Numbers come from economy.js roundPayout; this file only draws.
 // T8.2: an optional before and after card (screens/reveal.js) goes on top, beside the stars.
+// D34: under the customer's line, "Level up!" for a kind of bump that went up a mastery level, or how many clean pops
+// the closest kind still needs.
 
 import { el, button, starIcon, icon, coinPill, screenShell } from './dom.js';
 import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-logic.js';
@@ -13,19 +15,21 @@ import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-l
  *   reputationChange?: number, skipPenalty?: number, factKey?: string, reactionKey?: string, playerName?: string,
  *   onContinue?: () => void, onShop?: () => void, onTryAgain?: () => void, onNext?: () => void, reducedMotion?: boolean,
  *   tagKey?: string|null, tagVars?: object|null, reveal?: {node: HTMLElement, dispose?: () => void}|null,
- *   stampKey?: string|null}} opts
+ *   stampKey?: string|null, skills?: ReturnType<typeof import('../game/app-logic.js').skillNews>}} opts
  *   t = string function; stars = 0 to 3; failed = the customer stormed off; payout = from roundPayout; reputationChange =
  *   points earned (not failed); skipPenalty = reputation "Next customer" costs (failed); factKey = info-card string key;
  *   reactionKey = what the customer says (a resultKeys string key); playerName = for the {name} in that line;
  *   onContinue = Continue; onShop = an optional "Shop" button beside Continue; onTryAgain / onNext = the two fail choices;
  *   tagKey + tagVars = an optional small line under the stars (Keep working's reduced pay, T5.4);
  *   reveal = the before and after card (T8.2, screens/reveal.js createReveal) shown as the top card, or null;
- *   stampKey = the name key of a finished boss or event (T8.4): a gold "New stamp!" line under the coins, or null
+ *   stampKey = the name key of a finished boss or event (T8.4): a gold "New stamp!" line under the coins, or null;
+ *   skills = the skill lines (app-logic.js skillNews, D34): level ups, or how many clean pops the next level needs
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
   onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null, stampKey = null,
+  skills = [],
 }) {
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
@@ -70,6 +74,20 @@ export function createResultScreen({
       main.append(stamp);
     }
     if (reactionKey) main.append(el('p', 'app-result__quote', t(reactionKey, { name: playerName })));
+    for (const line of skills) { // D34: "Level up! Whitehead: level 3" or "Red bump: 4 more clean pops to level 2"
+      const news = el('div', `app-skillnews${line.up ? ' app-skillnews--up' : ''}`);
+      const words = el('p', 'app-skillnews__text', t(line.key, { ...line.vars, kind: t(line.kindKey), levelName: t(line.levelKey) }));
+      news.append(line.up ? starIcon(true, 24) : icon('bulb'), words);
+      if (!line.up && typeof line.share === 'number') {
+        const bar = el('span', 'app-skillcard__bar app-skillnews__bar');
+        bar.setAttribute('aria-hidden', 'true');
+        const fill = el('span', 'app-skillcard__fill');
+        fill.style.width = `${Math.round(line.share * 100)}%`;
+        bar.append(fill);
+        news.append(bar);
+      }
+      main.append(news);
+    }
   }
   const rep = reputationLine({ failed, reputationChange, skipPenalty });
   if (rep) {

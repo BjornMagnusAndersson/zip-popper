@@ -53,20 +53,41 @@ export const SHOP_ITEMS = {
 export const SHOP_ITEM_IDS = Object.keys(SHOP_ITEMS);
 
 /**
- * Skill by use (D12-3, D13): per bump type, the number of CLEAN pops (no Ow) for each level.
- * - pops: clean pops of that type needed to reach the level.
+ * Skill by use (D12-3, D13, D34): what each mastery level of a bump type gives. Level 0 = Rookie, 5 = Master; the
+ * level names are strings ui.skill.level<N>. How many clean pops a level needs is in MASTERY_STEPS (per kind).
  * - holdFactor: multiplies the bump's starting hold time (0.60 is the floor).
  * - roughReduction: how much lower the bump's rough-press chance is (0.2 = 20 percent lower).
  */
 export const MASTERY_LEVELS = [
-  { pops: 0, holdFactor: 1, roughReduction: 0 },
-  { pops: 5, holdFactor: 0.85, roughReduction: 0 },
-  { pops: 15, holdFactor: 0.72, roughReduction: 0.2 },
-  { pops: 30, holdFactor: 0.6, roughReduction: 0.35 },
+  { holdFactor: 1, roughReduction: 0 },
+  { holdFactor: 0.92, roughReduction: 0.05 },
+  { holdFactor: 0.85, roughReduction: 0.1 },
+  { holdFactor: 0.77, roughReduction: 0.18 },
+  { holdFactor: 0.68, roughReduction: 0.26 },
+  { holdFactor: 0.6, roughReduction: 0.35 },
 ];
 
+/**
+ * Clean pops (no Ow) of one bump type needed for levels 1 to 5 (D34, owner 2026-10-28: harder, per kind). The common
+ * kinds need the most, the rare ones fewer, so each kind takes roughly as long. A career gives about 45 whiteheads, 40
+ * reds, 15 blackheads, 10 hairs, 7 big ones, 6 horns and 3 gold ones, so nothing is a Master by the ending; Master
+ * comes in Keep working (about 3 whiteheads and reds, 1 blackhead and big one, under 1 of the rest per customer).
+ */
+export const MASTERY_STEPS = {
+  whitehead: [8, 20, 40, 70, 110],
+  red: [8, 20, 40, 70, 110],
+  blackhead: [4, 10, 20, 35, 55],
+  big: [4, 10, 20, 35, 55],
+  hair: [2, 5, 10, 16, 24],
+  horn: [2, 5, 10, 16, 24],
+  gold: [2, 5, 10, 16, 24],
+};
+
+/** The top mastery level (Master). */
+export const MASTER_LEVEL = MASTERY_LEVELS.length - 1;
+
 /** The mastery level that starts the milestone strip `mmastery` the first time any bump type reaches it. */
-export const MASTERY_STRIP_LEVEL = 2;
+export const MASTERY_STRIP_LEVEL = 3;
 
 /**
  * Irritation difficulty by customer number (D15, ECONOMY section 7): customers up to `upTo` get `value`.

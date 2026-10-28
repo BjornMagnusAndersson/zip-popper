@@ -205,6 +205,32 @@ export function bossCards({ seenBosses = [] } = {}) {
 }
 
 /**
+ * The "Pop mastery" tab's cards (D34): one per kind of bump, in guide order, open once she has met that kind. Each
+ * carries where the kind stands on its mastery ladder (economy.js masteryProgress, passed in by the game so this file
+ * stays free of the economy). Texts: ui.guide.<id>.name, ui.skill.level<N>.
+ * @param {{seenKinds?: string[], progress?: Object<string, object>}} [o] seenKinds = the kinds met (metKinds);
+ *   progress = masteryProgress per bump id
+ * @returns {{id: string, kind: 'skill', open: boolean, nameKey: string, level: number, pops: number, master: boolean,
+ *   next: number|null, left: number, share: number, speedPercent: number}[]} one card per bump kind
+ */
+export function skillCards({ seenKinds = [], progress = {} } = {}) {
+  const seen = new Set(cleanKinds(seenKinds));
+  const none = { level: 0, pops: 0, master: false, next: null, left: 0, share: 0, speedPercent: 0 };
+  return GUIDE_ENTRIES.filter((e) => e.kind === 'bump').map((e) => ({
+    ...none, ...(progress[e.id] ?? {}), id: e.id, kind: 'skill', open: seen.has(e.id), nameKey: `ui.guide.${e.id}.name`,
+  }));
+}
+
+/**
+ * How many kinds are at Master, out of all of them (for the "1 of 7 mastered" line).
+ * @param {{master: boolean}[]} cards the skill cards (skillCards)
+ * @returns {{mastered: number, total: number}} the counts
+ */
+export function skillCount(cards) {
+  return { mastered: cards.filter((c) => c.master).length, total: cards.length };
+}
+
+/**
  * How many cards are open, out of all of them (for the "3 of 10 found" line).
  * @param {{open: boolean}[]} cards the cards (guideCards)
  * @returns {{open: number, total: number}} the counts

@@ -4,14 +4,14 @@
 // never changes the one it is given. All numbers live in data/economy-data.js.
 
 import { starsFor, comboBonus } from './scoring.js';
-import { bumpInfo } from '../data/bumps.js';
+import { bumpInfo, BUMP_IDS } from '../data/bumps.js';
 import { toolInfo } from '../data/tools.js';
 import { defaultSave, normalizeSave } from '../core/save.js';
 import { outfitTier } from './studio.js';
 import { isBoss, bossBonus } from '../data/bosses.js';
 import {
   STAR_TIPS, REQUEST_BONUS, REQUEST_BONUS_DEFAULT, REPUTATION_PER_STAR, SKIP_PENALTIES, TIER_THRESHOLDS,
-  SCRUB_REPUTATION, SHOP_ITEMS, MASTERY_LEVELS, MASTERY_STRIP_LEVEL, DIFFICULTY_BANDS,
+  SCRUB_REPUTATION, SHOP_ITEMS, MASTERY_LEVELS, MASTERY_STEPS, MASTER_LEVEL, MASTERY_STRIP_LEVEL, DIFFICULTY_BANDS,
   STRIP_FIRST_THREE_STAR, STRIP_FIRST_MASTERY, KEEP_WORKING_PAY,
 } from '../data/economy-data.js';
 
@@ -244,12 +244,73 @@ export function cleanPops(state, bumpType) {
   return Object.hasOwn(state.mastery, bumpType) ? state.mastery[bumpType] : 0;
 }
 
-/** Mastery level (0 to 3) of a bump type. @param {object} state @param {string} bumpType @returns {number} level */
+/** Clean pops a bump type needs for levels 1 to 5 (MASTERY_STEPS; an unknown type uses the whitehead's). @param {string} bumpType @returns {number[]} pops per level */
+export function masterySteps(bumpType) {
+  return Object.hasOwn(MASTERY_STEPS, bumpType) ? MASTERY_STEPS[bumpType] : MASTERY_STEPS.whitehead;
+}
+
+/** Mastery level (0 = Rookie to 5 = Master) of a bump type. @param {object} state @param {string} bumpType @returns {number} level */
 export function masteryLevel(state, bumpType) {
   const n = cleanPops(state, bumpType);
-  let level = 0;
-  MASTERY_LEVELS.forEach((l, i) => { if (n >= l.pops) level = i; });
-  return level;
+  return masterySteps(bumpType).filter((need) => n >= need).length;
+}
+
+/**
+ * Where a bump type stands on its mastery ladder (D34): level, clean pops, pops still needed for the next level and
+ * how far along the bar to it is.
+ * @param {object} state the economy state
+ * @param {string} bumpType a bump id
+ * @returns {{level: number, pops: number, master: boolean, next: number|null, left: number, share: number,
+ *   speedPercent: number}} next = clean pops the next level needs (null at Master); left = pops still to go (0 at
+ *   Master); share = 0..1 of the way from this level to the next (1 at Master); speedPercent = how much faster than a
+ *   Rookie it pops (0 to 40)
+ */
+export function masteryProgress(state, bumpType) {
+  const steps = masterySteps(bumpType);
+  const pops = cleanPops(state, bumpType);
+  const level = masteryLevel(state, bumpType);
+  const master = level >= MASTER_LEVEL;
+  const from = level === 0 ? 0 : steps[level - 1];
+  const next = master ? null : steps[level];
+  return {
+    level, pops, master, next, left: master ? 0 : next - pops,
+    share: master ? 1 : Math.max(0, Math.min(1, (pops - from) / (next - from))),
+    speedPercent: Math.round((1 - MASTERY_LEVELS[level].holdFactor) * 100),
+  };
+}
+
+/**
+ * The bump types that went up a level from `before` to `after` (one round's clean pops), in data/bumps.js order.
+ * @param {object} before the economy state before @param {object} after the economy state after
+ * @returns {{type: string, from: number, to: number, speedPercent: number}[]} the level ups (speedPercent = how much
+ *   faster than a Rookie the new level pops)
+ */
+export function masteryLevelUps(before, after) {
+  return BUMP_IDS.map((type) => ({ type, from: masteryLevel(before, type), to: masteryLevel(after, type) }))
+    .filter((u) => u.to > u.from)
+    .map((u) => ({ ...u, speedPercent: Math.round((1 - MASTERY_LEVELS[u.to].holdFactor) * 100) }));
+}
+
+/**
+ * What the result screen says about skills after a round (D34): the level ups, the kinds that just became Master
+ * (each gets its diploma), and otherwise the kind popped this round that is closest to its next level.
+ * @param {object} before the economy state before the round @param {object} after the economy state after
+ * @param {string[]} cleanTypes the bump types popped cleanly this round
+ * @returns {{ups: {type: string, from: number, to: number}[], mastered: string[],
+ *   near: ({type: string} & ReturnType<typeof masteryProgress>)|null}} near = null when a kind levelled up or no kind
+ *   popped this round still has a level to go
+ */
+export function roundSkills(before, after, cleanTypes = []) {
+  const ups = masteryLevelUps(before, after);
+  const mastered = ups.filter((u) => u.to >= MASTER_LEVEL).map((u) => u.type);
+  let near = null;
+  if (!ups.length) {
+    for (const type of BUMP_IDS.filter((id) => cleanTypes.includes(id))) {
+      const p = masteryProgress(after, type);
+      if (!p.master && (!near || p.left < near.left)) near = { type, ...p };
+    }
+  }
+  return { ups, mastered, near };
 }
 
 /** Factor to multiply a bump's starting hold time by (1 = no skill yet, 0.6 = the floor). @param {object} state @param {string} bumpType @returns {number} factor */
@@ -286,7 +347,7 @@ function itemStrips(state) {
 /**
  * The milestone strips that became playable going from `before` to `after`, so each fires once (it fires on the
  * change, not while the state stays the same). Ids: mtweezers, mlamp, mplant, mapron (bought, and scrubbed for studio
- * items), mstar (first 3-star customer), mmastery (a bump type first reaches level 2).
+ * items), mstar (first 3-star customer), mmastery (a bump type first reaches MASTERY_STRIP_LEVEL, Skilled).
  * @param {object} before the state before @param {object} after the state after @param {string[]} [seen] strip ids already shown (never returned)
  * @returns {string[]} strip ids to play, in a fixed order
  */

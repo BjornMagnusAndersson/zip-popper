@@ -28,8 +28,9 @@ import { makeFaceTexture } from '../pop/face.js';
 import { playComic } from './comic.js';
 import { ARTS, dressHeroine, studioKit } from './comic-art.js';
 import { describeRequest } from './requests.js';
-import { economyFromSave } from './economy.js';
+import { economyFromSave, masteryProgress } from './economy.js';
 import { getChapter } from '../data/chapters.js';
+import { BUMP_IDS } from '../data/bumps.js';
 import { SHOP_ITEMS } from '../data/economy-data.js';
 import { importNoticeKey, osPrefersStill, ignoreInput, backRoute } from '../screens/screen-logic.js';
 import { createTitleScreen } from '../screens/title.js';
@@ -48,7 +49,10 @@ import { createScrubScreen } from '../screens/scrub.js';
 import { createEndScreen } from '../screens/end.js';
 import { createStudioScreen } from '../screens/studio.js';
 import { createGuideScreen } from '../screens/guide.js';
-import { guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists, bossCards, addSeenBosses } from '../screens/guide-logic.js';
+import {
+  guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists, bossCards, addSeenBosses, skillCards,
+} from '../screens/guide-logic.js';
+import { createDiplomaScreen } from '../screens/diploma.js';
 import { createReveal } from '../screens/reveal.js';
 import { createAlbumScreen } from '../screens/album.js';
 import { faceSetup, recordFace, revealOn, stripFriendsMet } from '../screens/album-logic.js';
@@ -154,6 +158,11 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   const currentTwistCards = () => twistCards({ seenTwists: save.seenTwists });
   /** The Field guide's Events cards for the save as it is now (T8.4). @returns {object[]} cards (guide-logic.js bossCards) */
   const currentEventCards = () => bossCards({ seenBosses: save.seenBosses });
+  /** The Field guide's "Pop mastery" cards for the save as it is now (D34). @returns {object[]} cards (guide-logic.js skillCards) */
+  const currentSkillCards = () => {
+    const eco = economyFromSave(save);
+    return skillCards({ seenKinds: metKinds(save), progress: Object.fromEntries(BUMP_IDS.map((id) => [id, masteryProgress(eco, id)])) });
+  };
 
   /**
    * Keep a new save and write it to storage.
@@ -541,7 +550,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showGuide(back) {
-    show(createGuideScreen({ t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), onBack: back }), { back });
+    show(createGuideScreen({
+      t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(),
+      skillCards: currentSkillCards(), onBack: back,
+    }), { back });
   }
 
   /**
@@ -552,7 +564,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function openGuideOverlay() {
     if (!pop || guideOverlay) return;
     guideOverlay = createGuideScreen({
-      t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(), overlay: true, onBack: () => closeGuideOverlay(true),
+      t, reducedMotion: still(), cards: currentGuideCards(), twistCards: currentTwistCards(), eventCards: currentEventCards(),
+      skillCards: currentSkillCards(), overlay: true, onBack: () => closeGuideOverlay(true),
     });
     pop.node.inert = true;
     changedAt = performance.now(); // the double-tap guard (B85); the phone's Back closes it (B87, onBackButton)
@@ -727,6 +740,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     // Keep working goes on to its next customer (T5.4); the daily challenge goes back to the menu (T8.5).
     const onward = step.daily ? showMenu : step.keepWorking ? keepWorking : continueStory;
     if (out.failed) { playWaiting(onward); return; } // "Next customer": on with the story
+    /** The Master diplomas of this round (D34) one after the other, then the waiting strips, then on. @param {() => void} then what comes after @returns {void} */
+    const afterResult = (then) => showDiplomas(out.skills?.mastered ?? [], () => playWaiting(then));
     const tag = daily ? dailyTag(daily) : step.keepWorking ? { key: 'ui.keepWorking.pay', vars: { pct: L.KEEP_WORKING_PERCENT } } : null;
     show(createResultScreen({
       t, reducedMotion: still(), stars: out.stars, payout: daily ? dailyPayout(out.payout, daily) : out.payout, reputationChange: out.reputationChange,
@@ -735,9 +750,24 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       // "New stamp!" for a boss (T8.4) or a streak milestone (T8.5; its name key is boss.<stamp>.name, as in the album).
       stampKey: stamp && face ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
       reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '' }) : null,
-      onContinue: () => playWaiting(onward),
-      onShop: L.shopOpen(save) ? () => playWaiting(() => showShop(onward)) : undefined,
+      skills: L.skillNews(out.skills), // D34: "Level up!" or how many clean pops the next level needs
+      onContinue: () => afterResult(onward),
+      onShop: L.shopOpen(save) ? () => afterResult(() => showShop(onward)) : undefined,
     }));
+  }
+
+  /**
+   * Show the Master diploma of each kind in the list (D34), one after the other, then go on.
+   * @param {string[]} types bump ids that just reached Master
+   * @param {() => void} then what comes after the last one
+   * @returns {void}
+   */
+  function showDiplomas(types, then) {
+    if (!types.length) { then(); return; }
+    show(createDiplomaScreen({
+      t, reducedMotion: still(), type: types[0], playerName: playerName(), onContinue: () => showDiplomas(types.slice(1), then),
+    }));
+    sound.play('cheer');
   }
 
   /** Free play (SPEC section 6): random faces, the owned tools, never fails, changes no money or stats. @returns {void} */

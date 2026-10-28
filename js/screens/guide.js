@@ -4,10 +4,12 @@
 // with the shop's "more below" arrow. Which cards are open is decided in guide-logic.js; the game passes them in.
 // It opens from the main menu (a normal screen) or over the pop scene (overlay: true, from the "?" button there); Back
 // and the Escape key close it. All text comes from the string table.
+// D34: a second tab, "Pop mastery", shows her level per kind of bump (Rookie to Master), a bar to the next level and
+// how much faster each kind pops for her now.
 
 import { el, icon, header, screenShell } from './dom.js';
 import { canScrollMore } from './screen-logic.js';
-import { guideCount, useText } from './guide-logic.js';
+import { guideCount, useText, skillCount } from './guide-logic.js';
 import {
   makeCanvas, drawPimple, drawHair, hairPoints, drawDecoy, drawStrip, drawCloth,
 } from '../pop/art.js';
@@ -21,7 +23,7 @@ const PIC = 76;
  * @param {number} dpr device pixels per CSS pixel
  * @returns {HTMLCanvasElement} the picture
  */
-function drawPicture(id, dpr) {
+export function drawPicture(id, dpr) {
   const { canvas, ctx } = makeCanvas(PIC, PIC, dpr);
   const c = PIC / 2;
   ctx.save();
@@ -122,16 +124,62 @@ function drawTwistPicture(ctx, id, c) {
 }
 
 /**
+ * Draw one "Pop mastery" card (D34): the kind's picture, its name, its level and level name, five pips, a bar to the
+ * next level with the clean pops still to go, and how much faster it pops. A kind not met yet is a locked "?" card.
+ * @param {(key: string, vars?: object) => string} t the string function
+ * @param {ReturnType<typeof import('./guide-logic.js').skillCards>[number]} card the card
+ * @param {number} dpr device pixels per CSS pixel
+ * @returns {HTMLElement} the card
+ */
+function skillCardNode(t, card, dpr) {
+  const node = el('article', `app-guidecard app-skillcard${card.open ? '' : ' app-guidecard--locked'}${card.master ? ' app-skillcard--master' : ''}`);
+  const pic = el('div', 'app-guidecard__pic');
+  const text = el('div', 'app-guidecard__text');
+  if (!card.open) {
+    pic.append(el('span', 'app-guidecard__q', t('ui.guide.lockedMark')));
+    pic.setAttribute('aria-hidden', 'true');
+    text.append(el('h2', 'app-guidecard__name', t('ui.guide.locked')), el('p', 'app-guidecard__line', t('ui.skill.locked')));
+    node.append(pic, text);
+    return node;
+  }
+  const name = t(card.nameKey);
+  const art = drawPicture(card.id, dpr);
+  art.className = 'app-guidecard__art';
+  art.setAttribute('role', 'img');
+  art.setAttribute('aria-label', t('ui.guide.picture', { name }));
+  pic.append(art);
+  const level = el('p', 'app-skillcard__level', t('ui.skill.levelLine', { n: card.level, name: t(`ui.skill.level${card.level}`) }));
+  const pips = el('div', 'app-skillcard__pips');
+  pips.setAttribute('aria-hidden', 'true');
+  for (let i = 1; i < 6; i += 1) pips.append(el('span', `app-skillcard__pip${i <= card.level ? ' app-skillcard__pip--on' : ''}`));
+  const bar = el('div', 'app-skillcard__bar');
+  bar.setAttribute('role', 'progressbar');
+  bar.setAttribute('aria-valuemin', '0');
+  bar.setAttribute('aria-valuemax', '100');
+  bar.setAttribute('aria-valuenow', String(Math.round(card.share * 100)));
+  const fill = el('span', 'app-skillcard__fill');
+  fill.style.width = `${Math.round(card.share * 100)}%`;
+  bar.append(fill);
+  const goal = card.master ? t('ui.skill.masterLine') : t(card.left === 1 ? 'ui.skill.leftOne' : 'ui.skill.left', { n: card.left, level: card.level + 1 });
+  const speed = card.level > 0 ? t('ui.skill.speed', { pct: card.speedPercent }) : t('ui.skill.speedRookie');
+  text.append(el('h2', 'app-guidecard__name', name), level, pips, bar, el('p', 'app-skillcard__goal', goal), el('p', 'app-skillcard__speed', speed));
+  node.append(pic, text);
+  return node;
+}
+
+/**
  * Build the Field guide screen.
  * @param {{t: (key: string, vars?: object) => string, cards: ReturnType<typeof import('./guide-logic.js').guideCards>,
- *   twistCards?: object[], eventCards?: object[], onBack?: () => void, overlay?: boolean, reducedMotion?: boolean}} opts
+ *   twistCards?: object[], eventCards?: object[], skillCards?: object[], tab?: string, onBack?: () => void,
+ *   overlay?: boolean, reducedMotion?: boolean}} opts
  *   t = string function; cards = the cards (guide-logic.js guideCards); twistCards = the customer twist cards under a
  *   "Customers" heading (guide-logic.js twistCards, T8.3; left out = none); eventCards = the boss and event cards under
- *   an "Events" heading (guide-logic.js bossCards, T8.4; left out = none); onBack = Back (or Escape) was pressed;
- *   overlay = shown over the pop scene (it then lies on top as a dialog and takes keyboard focus)
+ *   an "Events" heading (guide-logic.js bossCards, T8.4; left out = none); skillCards = the "Pop mastery" tab's cards
+ *   (guide-logic.js skillCards, D34; left out = no tabs); tab = 'guide' or 'skills', the tab to open on; onBack = Back
+ *   (or Escape) was pressed; overlay = shown over the pop scene (it then lies on top as a dialog and takes keyboard focus)
  * @returns {{node: HTMLElement, focus: () => void, dispose: () => void}} the screen
  */
-export function createGuideScreen({ t, cards, twistCards = [], eventCards = [], onBack, overlay = false, reducedMotion = false }) {
+export function createGuideScreen({ t, cards, twistCards = [], eventCards = [], skillCards = [], tab = 'guide', onBack, overlay = false, reducedMotion = false }) {
   const shell = screenShell(`guide${overlay ? ' app-screen--overlay' : ''}`, { label: t('ui.guide.title'), reducedMotion });
   if (overlay) {
     shell.node.setAttribute('role', 'dialog');
@@ -139,7 +187,8 @@ export function createGuideScreen({ t, cards, twistCards = [], eventCards = [], 
   }
   const head = header(t, t('ui.guide.title'), onBack, shell.signal);
   const { open, total } = guideCount([...cards, ...twistCards, ...eventCards]);
-  head.append(el('p', 'app-guide__count', t('ui.guide.count', { open, total }))); // in the top row, so the list gets the room
+  const count = el('p', 'app-guide__count'); // in the top row, so the list gets the room
+  head.append(count);
   const panel = el('div', 'app-body app-shoplist app-guidelist');
   const frame = el('div', 'app-shoplistframe');
   const more = el('button', 'app-shopmore');
@@ -180,11 +229,45 @@ export function createGuideScreen({ t, cards, twistCards = [], eventCards = [], 
     return node;
   }
 
-  for (const card of cards) panel.append(cardNode(card));
-  if (twistCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.customers'))); // T8.3
-  for (const card of twistCards) panel.append(cardNode(card));
-  if (eventCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.events'))); // T8.4
-  for (const card of eventCards) panel.append(cardNode(card));
+  let active = tab === 'skills' && skillCards.length ? 'skills' : 'guide';
+  const { mastered } = skillCount(skillCards);
+  /** Fill the list with the active tab's cards and set the count pill. @returns {void} */
+  function renderList() {
+    panel.replaceChildren();
+    panel.scrollTop = 0;
+    if (active === 'skills') {
+      count.textContent = t('ui.skill.count', { n: mastered, total: skillCards.length });
+      panel.append(el('p', 'app-skill__intro', t('ui.skill.intro')));
+      for (const card of skillCards) panel.append(skillCardNode(t, card, dpr));
+      return;
+    }
+    count.textContent = t('ui.guide.count', { open, total });
+    for (const card of cards) panel.append(cardNode(card));
+    if (twistCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.customers'))); // T8.3
+    for (const card of twistCards) panel.append(cardNode(card));
+    if (eventCards.length) panel.append(el('h2', 'app-guide__group', t('ui.guide.events'))); // T8.4
+    for (const card of eventCards) panel.append(cardNode(card));
+  }
+  const tabs = el('div', 'app-tabs app-guide__tabs');
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', t('ui.guide.tabs'));
+  const tabButtons = [['guide', 'ui.guide.tabGuide'], ['skills', 'ui.guide.tabSkills']].map(([id, key]) => {
+    const b = el('button', 'app-tab', t(key));
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.addEventListener('click', () => { active = id; paintTabs(); renderList(); requestAnimationFrame(updateMore); }, { signal: shell.signal });
+    tabs.append(b);
+    return [id, b];
+  });
+  /** Mark the active tab. @returns {void} */
+  function paintTabs() {
+    for (const [id, b] of tabButtons) {
+      b.setAttribute('aria-selected', String(id === active));
+      b.classList.toggle('app-tab--on', id === active);
+    }
+  }
+  paintTabs();
+  renderList();
 
   /** Show the "more below" arrow only while the list can scroll further down. @returns {void} */
   function updateMore() {
@@ -199,7 +282,7 @@ export function createGuideScreen({ t, cards, twistCards = [], eventCards = [], 
   more.hidden = true;
   requestAnimationFrame(updateMore);
 
-  shell.node.append(head, frame);
+  shell.node.append(head, ...(skillCards.length ? [tabs] : []), frame); // the tabs only when there are skill cards (D34)
   return {
     node: shell.node,
     /** Put keyboard focus on the Back button (used when it opens over the pop scene). @returns {void} */
