@@ -42,6 +42,7 @@ import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
 import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
+import { sceneRatio } from './perf-logic.js';
 import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding } from './backdrop.js';
 import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
 import { canSqueeze } from './squeeze-logic.js';
@@ -115,14 +116,16 @@ function buzz(pattern) {
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
  *   count?: number, tier?: number, layers?: string[], career?: boolean, onReputationHit?: (amount: number) => void,
  *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void,
- *   sfxVolume?: number}} o the text lookup
+ *   sfxVolume?: number, lowDetail?: boolean, onSlow?: () => void}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
  *   bumps per face, the studio tier for the room behind (0..2) and its owned upgrade layers (T5.1a), career = a Story/Career round that can fail (free play
  *   when false), the reputation hook called by "Next customer" after a fail, and reducedMotion = true for the calm
  *   version whatever the phone says (the player's Settings switch). Field guide (T6.5): onGuide = the "?" button
  *   was pressed (left out = no button); seenKinds = the kinds she has met (left out = no first-time hints);
- *   onSeenKinds(kinds) = she just met these kinds on a new face. sfxVolume = the Settings effects volume, 0 to 1
+ *   onSeenKinds(kinds) = she just met these kinds on a new face. sfxVolume = the Settings effects volume, 0 to 1.
+ *   lowDetail = the Settings switch "Lighter graphics" (the scene drawn at pixel ratio 1); onSlow = the frames stayed
+ *   slow, so the scene switched to lighter graphics by itself (pop/perf-logic.js; the caller saves the switch)
  * @returns {{node: HTMLElement, mount: (host: HTMLElement) => void, newFace: () => void, unlock: () => void,
  *   setTier: (tier: number, layers?: string[]) => void, results: () => object[], startRound: (o: object) => void,
  *   startFree: (o?: object) => void, setUnlockedTools: (list: string[]) => void, dispose: () => void}} the scene's
@@ -131,8 +134,9 @@ function buzz(pattern) {
 export function createPopMode({
   t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, layers: firstLayers = [], career = false,
   onReputationHit = () => {}, reducedMotion = false, squeeze = false, squeezeHint = false, onSqueezeHint = () => {},
-  onGuide = null, seenKinds = null, onSeenKinds = () => {}, sfxVolume = 1,
+  onGuide = null, seenKinds = null, onSeenKinds = () => {}, lowDetail = false, onSlow = () => {}, sfxVolume = 1,
 }) {
+  let lighter = Boolean(lowDetail); // lighter graphics (owner 2026-10-28: older phones): the scene at pixel ratio 1
   const seenSet = Array.isArray(seenKinds) ? new Set(seenKinds) : null; // the kinds met so far (T6.5), null = no hints
   // Two-finger squeeze (T1.7): squeeze = the Settings switch; squeezeHint = show "squeeze between two fingers" until
   // the first pop of this scene (onSqueezeHint is told once, so the game shows it only once ever).
@@ -767,7 +771,7 @@ export function createPopMode({
     clearTimeout(back.timer);
     if (disposed) return;
     const { w, h } = stageSize();
-    const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
+    const dpr = sceneRatio(globalThis.devicePixelRatio, lighter);
     if (w !== back.w || h !== back.h || dpr !== back.dpr) {
       Object.assign(back, { w, h, dpr });
       backdrop.width = Math.round(w * dpr);
@@ -866,7 +870,7 @@ export function createPopMode({
     else if (round) spec = cfg.setup.spec;
     else spec = (cfg.kind === 'demo' ? fixedSpec : null) ?? randomFaceSpec(s);
     const { w, h } = stageSize();
-    const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
+    const dpr = sceneRatio(globalThis.devicePixelRatio, lighter); // 1 with lighter graphics
     const face = faceGeometry(w, h, spec);
     const clownNose = (spec.accessories ?? []).includes('clown-nose'); // no nose strip over a clown nose
     const wantStrip = round ? cfg.setup.strip : cfg.kind === 'free' ? toolIds.includes('noseStrip') && stripChance(s) : strip;
@@ -911,6 +915,12 @@ export function createPopMode({
         try { c.hooks.onOw?.(at); } catch (e) { console.warn('onOw failed:', e); }
       },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },
+      onSlow: () => { // frames stayed slow (an older phone): lighter graphics from now on (this room now, the next face)
+        if (lighter) return;
+        lighter = true;
+        paintBackdrop();
+        try { onSlow(); } catch (e) { console.warn('onSlow failed:', e); }
+      },
       onWarmLift: () => { // the cloth came off: back to the tool she had (SPEC D37), so she can pop the warm bumps
         if (current === c && toolId === 'warmCloth' && c.scene?.step() === 'pop') pickTool(toolIds.includes(clothBack) ? clothBack : START_TOOL);
       },

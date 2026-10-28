@@ -31,6 +31,7 @@ import {
   wipeReach, autoWipeSeconds, padStartSpot, popStepOver, stripBusy, wipeStripPress,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
+import { slowStep } from './perf-logic.js';
 import {
   canSqueeze, squeezeCandidate, closeAmount, startDrive, stepDrive, squeezeProgress, squeezeEnd, rememberSqueeze,
   resumes, padSpots, gooDirection, squeakGap, buzzGap,
@@ -127,6 +128,7 @@ function affine(s, d) {
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
  *   onStripPeeled?: () => void (the nose strip came off, B13 round 2c), onStripStuck?: () => void (the strip was
  *   stuck on during the wipe, B55), onWarmLift?: () => void (the warm cloth was lifted off, SPEC D37),
+ *   onSlow?: () => void (the moving frames stayed slow: an older phone; told once, pop/perf-logic.js),
  *   covered?: () => {x: number, y: number, w: number, h: number}[] (boxes of controls over the scene; the wipe pad
  *   waits clear of them),
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
@@ -171,6 +173,8 @@ export function createPopScene(canvas, o) {
   let tool = toolInfo(o.tool)?.implemented ? o.tool : START_TOOL; // the tool in hand
   let usable = Array.isArray(o.tools) ? o.tools : null; // tools the keyboard may pick (setTools changes it)
   const face = o.face ? { cx: o.face.cx, cy: o.face.cy, rx: o.face.rx, ry: o.face.ry } : null; // the skin oval
+  let slow = null; // the slow-phone watcher (pop/perf-logic.js slowStep)
+  let wasBusy = false; // the last frame asked for the next one (so the gap to this one is a real frame)
   let warmth = 0; // the warm meter: the warmest bump's warmth, 0..1 (each bump has its own, p.warm; SPEC D37)
   let warmSent = 0; // the warmth last told to onWarm
   let warmHold = null; // {id, x, y} the warm cloth held on the face
@@ -1309,11 +1313,16 @@ export function createPopScene(canvas, o) {
   function frame(now) {
     raf = 0;
     if (disposed) return;
+    if (wasBusy && !slow?.slow) { // the slow-phone watcher counts back-to-back moving frames only
+      slow = slowStep(slow, now - last);
+      if (slow.slow) { try { o.onSlow?.(); } catch (e) { console.warn('onSlow failed:', e); } }
+    }
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     time += dt;
     const busy = update(dt) || Boolean(faceLife()?.busy(lifeNow())); // a blink or glance keeps it going too (T8.1)
     render();
+    wasBusy = busy;
     if (busy && !raf) raf = requestAnimationFrame(frame); // a kick() during this frame may already have asked for the next
     if (!raf) planLife(); // asleep until the next blink or glance
   }

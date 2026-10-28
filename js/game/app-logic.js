@@ -846,7 +846,7 @@ export function setSetting(save, key, value) {
   if (key === 'musicVolume' || key === 'sfxVolume') {
     return { ...save, settings: { ...save.settings, [key]: clampVolume(value, save.settings?.[key]) } };
   }
-  if (!['sound', 'music', 'vibration', 'reducedMotion', 'squeeze'].includes(key)) return save;
+  if (!['sound', 'music', 'vibration', 'reducedMotion', 'squeeze', 'lowDetail'].includes(key)) return save;
   return { ...save, settings: { ...save.settings, [key]: Boolean(value) } };
 }
 

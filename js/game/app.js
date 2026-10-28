@@ -143,6 +143,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     onSqueezeHint: () => persist({ ...save, squeezeHintSeen: true }),
   });
   /**
+   * The pop scene's lighter graphics (owner 2026-10-28, older phones): the Settings switch, and switching it on by itself
+   * (saved) when the scene finds its frames slow.
+   * @returns {{lowDetail: boolean, onSlow: () => void}} createPopMode options
+   */
+  const detailOptions = () => ({
+    lowDetail: Boolean(save.settings.lowDetail),
+    onSlow: () => { if (!save.settings.lowDetail) persist(L.setSetting(save, 'lowDetail', true)); },
+  });
+  /**
    * The pop scene's Field guide options (T6.5): the "?" button, the kinds she has met (for the first-time hints) and
    * where newly met kinds go (saved at once).
    * @returns {{onGuide: () => void, seenKinds: string[], onSeenKinds: (kinds: string[]) => void}} createPopMode options
@@ -657,7 +666,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     sound.unlock();
     const tl = show(createTorchlightScreen({
       t, reducedMotion: still(), roundArgs: L.torchlightArgs(save, step.chapter, flags.seed),
-      popOptions: { storage: popStorage, sfxVolume: save.settings.sfxVolume, ...squeezeOptions() }, onContinue: done, onMenu: showMenu,
+      popOptions: { storage: popStorage, sfxVolume: save.settings.sfxVolume, ...squeezeOptions(), ...detailOptions() }, onContinue: done, onMenu: showMenu,
     }), { back: showMenu });
     tl.unlock();
   }
@@ -712,7 +721,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     clear();
     if (args.twist) persist(addSeenTwists(save, [args.twist])); // she has met this twist: its guide card opens (T8.3)
     if (args.boss) persist(addSeenBosses(save, [args.boss.id])); // ... and this boss or event: its Events card (T8.4)
-    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
+    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...detailOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     screenChanged({ back: showMenu }); // Back = the scene's Menu button (not in the end pause, B87)
@@ -788,7 +797,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   /** Free play (SPEC section 6): random faces, the owned tools, never fails, changes no money or stats. @returns {void} */
   function startFreePlay() {
     clear();
-    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...guideOptions() });
+    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...detailOptions(), ...guideOptions() });
     pop.mount(root);
     addPopMenuButton(showMenu);
     screenChanged({ back: showMenu }); // Back = the scene's Menu button (B87)
