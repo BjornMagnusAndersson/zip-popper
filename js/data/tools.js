@@ -68,13 +68,17 @@ export const GLOVES = { calm: 0.9 };
 /** Every tool id, in table order (also the order of the buttons in the tool bar). */
 export const TOOL_IDS = Object.keys(TOOLS);
 
-/** How the warm cloth works (all first guesses). */
+/**
+ * How the warm cloth works (first guesses). Owner 2026-10-28 (SPEC D37): rub it over the bumps; each bump it is on
+ * warms up by itself and cools down slowly, so you can warm a few and then pop them.
+ */
 export const WARM = {
-  fillPerSecond: 0.7, // holding the cloth on the face fills the meter in about 1.4 s
-  drainPerSecond: 1 / 14, // a full meter lasts about 14 s
-  helpsCut: 0.4, // at a full meter, bumps that like warmth (data/bumps.js warmHelps) need 40 percent less hold time
+  fillPerSecond: 1, // the cloth on a bump warms it fully in about 1 s
+  drainPerSecond: 1 / 18, // a fully warm bump stays warm for about 18 s
+  reach: 1.1, // how far round the drawn cloth it warms (a little extra: the finger hides the cloth)
+  helpsCut: 0.4, // a fully warm bump that likes warmth (data/bumps.js warmHelps) needs 40 percent less hold time
   otherCut: 0.15, // ...and other bumps 15 percent less
-  roughCut: 0.8, // at a full meter, the rough-press (Ow) chance and the irritation of a cold pop are 80 percent lower
+  roughCut: 0.8, // on a fully warm bump the rough-press (Ow) chance and the irritation of a cold pop are 80 percent lower
 };
 
 /**

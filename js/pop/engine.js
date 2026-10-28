@@ -26,7 +26,7 @@ import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadiu
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
-  START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, inStripArea, onFace, findPatchSpot,
+  START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, underCloth, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
   wipeReach, autoWipeSeconds, padStartSpot, popStepOver, stripBusy, wipeStripPress,
 } from './tool-logic.js';
@@ -37,7 +37,7 @@ import {
 } from './squeeze-logic.js';
 import {
   makeCanvas, drawPimple, drawMark, drawStrand, drawDrop, drawSplat, drawStrip, drawStripDots, drawPad, drawCream,
-  drawTweezers, drawFinger, drawCloth, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
+  drawTweezers, drawFinger, drawCloth, drawWarmBump, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
   gooLook, capList,
 } from './art.js';
 import { SWAY, TICKLE, SENSITIVE } from '../data/twists.js';
@@ -126,7 +126,7 @@ function affine(s, d) {
  *   onOw?: (o: {x: number, y: number, type: string, tool: string}) => void, onWarm?: (warmth: number) => void,
  *   onPatch?: (count: number) => void, onNote?: (note: string) => void, onIrritation?: (level: number) => void,
  *   onStripPeeled?: () => void (the nose strip came off, B13 round 2c), onStripStuck?: () => void (the strip was
- *   stuck on during the wipe, B55),
+ *   stuck on during the wipe, B55), onWarmLift?: () => void (the warm cloth was lifted off, SPEC D37),
  *   covered?: () => {x: number, y: number, w: number, h: number}[] (boxes of controls over the scene; the wipe pad
  *   waits clear of them),
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
@@ -137,8 +137,8 @@ function affine(s, d) {
  *   refuse?: (p: object) => void (the husband in armor, ch 2: the first pop is NOT done, popping stops and this is told which bump),
  *   gloves?: boolean (she owns the gloves, SPEC D32e: the squeezing fingertips are drawn in blue rubber gloves),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
- *   start, face = the skin oval (the warm cloth only works on it), tools = the usable tools (for the keyboard),
- *   onOw = a wrong-tool press, onWarm = the warm meter changed, onPatch = a patch went on, onNote = a press did nothing
+ *   start, face = the skin oval (the warm cloth goes on there), tools = the usable tools (for the keyboard),
+ *   onOw = a wrong-tool press, onWarm = the warmest bump's warmth changed, onPatch = a patch went on, onNote = a press did nothing
  *   useful ('patchFirst' = a patch on a bump that is not popped yet)
  * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), size(), keyPress(),
  *   setTool(id), tool(), setTools(ids), warmth(), irritation(), halt(), dispose(). A bump may carry hold (seconds) and
@@ -171,7 +171,7 @@ export function createPopScene(canvas, o) {
   let tool = toolInfo(o.tool)?.implemented ? o.tool : START_TOOL; // the tool in hand
   let usable = Array.isArray(o.tools) ? o.tools : null; // tools the keyboard may pick (setTools changes it)
   const face = o.face ? { cx: o.face.cx, cy: o.face.cy, rx: o.face.rx, ry: o.face.ry } : null; // the skin oval
-  let warmth = 0; // the warm meter, 0..1
+  let warmth = 0; // the warm meter: the warmest bump's warmth, 0..1 (each bump has its own, p.warm; SPEC D37)
   let warmSent = 0; // the warmth last told to onWarm
   let warmHold = null; // {id, x, y} the warm cloth held on the face
   let irr = irritationStart(); // the irritation meter (T1.2b): Ows and cold pops fill it, it calms by itself
@@ -298,7 +298,7 @@ export function createPopScene(canvas, o) {
       const due = held && !held.p.popped && tickleDue(time - held.since, held.p.zone, time - giggleAt);
       // B74: a squeeze that pops in this very frame pops; she does not giggle first (a plain whitehead's 1.1 s squeeze
       // is exactly the giggle time, so on a cheek it always giggled away at the last moment and needed a second press).
-      const popsNow = due && pressureStep(held.p.pressure, dt, true, effectiveHold(held.p.hold, held.p.tool ?? START_TOOL, held.p.type, warmth)) >= 1;
+      const popsNow = due && pressureStep(held.p.pressure, dt, true, effectiveHold(held.p.hold, held.p.tool ?? START_TOOL, held.p.type, held.p.warm ?? 0)) >= 1;
       if (due && !popsNow) giggle(held.p);
     }
     const rx = face ? face.rx : Math.min(w, h) / 3;
@@ -688,7 +688,7 @@ export function createPopScene(canvas, o) {
       // B72: the pop that clears the face stops the meter just under full, so a customer whose every bump is out
       // never storms off in that same moment (that counted as a fail with no pay, even with no Ow at all).
       const last = pimples.every((q) => q === p || q.popped);
-      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, warmth) * (p.roughMul ?? 1), last, irrScale.cold);
+      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, p.warm ?? 0) * (p.roughMul ?? 1), last, irrScale.cold);
       if (p.tool === 'cottonPad') irr = irritationSoothe(irr, 'pad');
     }
     p.popped = true;
@@ -973,7 +973,7 @@ export function createPopScene(canvas, o) {
         else if (memory?.bump === p) { /* a squeezing finger lifted a moment ago: the pressure waits for it */ }
         else if (twist === 'ticklish' && giggleBlocks(time, giggleAt)) { /* she is giggling: the press keeps what it had (R4 finding 2) */ }
         else if (keyHold?.p === p && time < keyHold.until) p.pressure = Math.min(keyHold.target, p.pressure + dt * 2.4);
-        else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, warmth));
+        else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, p.warm ?? 0));
         for (const th of [0.3, 0.6, 0.85]) {
           const key = `${p.id}:${th}`;
           if (before < th && p.pressure >= th && !warnedThresholds.has(key)) { warnedThresholds.add(key); play('squish', { level: th }); buzz(6); }
@@ -991,13 +991,24 @@ export function createPopScene(canvas, o) {
       if (p.ouch !== undefined && time - p.ouch < 0.7) busy = true; // ouch lines after an Ow
     }
     if (decoys.some((d) => d.ouch !== undefined && time - d.ouch < 0.7)) busy = true; // ouch lines round a pressed mole
-    // The warm meter: fills while the warm cloth is held on the face, then slowly cools.
+    // The warm cloth (SPEC D37): each bump under it warms up, the others slowly cool. A bump that just got fully warm
+    // gives a little buzz and a puff of steam. The meter on the button shows the warmest bump.
     const warmBefore = warmth;
-    warmth = warmStep(warmth, dt, Boolean(warmHold) && step === 'pop');
+    let warmest = 0;
+    for (const p of pimples) {
+      if (p.popped) continue;
+      const on = Boolean(warmHold) && step === 'pop' && underCloth(warmHold, p, 34 * scale);
+      const before = p.warm ?? 0;
+      p.warm = warmStep(before, dt, on);
+      if (on && before < 1 && p.warm >= 1) { p.warmAt = time; buzz(14); play('wipe'); }
+      warmest = Math.max(warmest, p.warm);
+    }
+    warmth = warmest;
     if (warmth > 0 || warmHold) busy = true;
-    // The irritation meter calms by itself after a quiet while, faster with the warm cloth or after a cotton pad.
+    // The irritation meter calms by itself after a quiet while, faster with the warm cloth on the face or after a cotton pad.
     if (step === 'pop' && irr.level > 0) {
-      irr = irritationStep(irr, dt, { warm: Boolean(warmHold), drain: irrScale.drain, calmDelay: irrScale.calm });
+      const soothing = Boolean(warmHold) && onFace(face, warmHold.x, warmHold.y);
+      irr = irritationStep(irr, dt, { warm: soothing, drain: irrScale.drain, calmDelay: irrScale.calm });
       busy = true;
       tellIrritation();
     }
@@ -1139,15 +1150,8 @@ export function createPopScene(canvas, o) {
       if (!tweezed(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
     }
     faceLife()?.draw(ctx, lifeNow()); // the blinking, glancing eyes over the picture (only while they move, T8.1)
-    if (warmth > 0.003 && face) { // a warm rosy glow on the skin while the warm meter is up (only over the person)
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-atop';
-      const g = ctx.createRadialGradient(face.cx, face.cy, face.rx * 0.2, face.cx, face.cy, face.ry * 1.1);
-      g.addColorStop(0, `rgba(255,140,110,${0.2 * warmth})`);
-      g.addColorStop(1, 'rgba(255,140,110,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(face.cx - face.rx * 1.3, face.cy - face.ry * 1.2, face.rx * 2.6, face.ry * 2.4);
-      ctx.restore();
+    for (const p of pimples) { // a warm bump glows pink and steams (SPEC D37); a ring when it just got fully warm
+      if (!p.popped && (p.warm ?? 0) > 0.01) drawWarmBump(ctx, p.x, p.y, p.r, p.warm, reduced ? 0 : time, p.warmAt === undefined ? Infinity : time - p.warmAt);
     }
     const blush = Math.max(irr.level, twist === 'sensitive' && (step === 'pop' || step === 'wipe') ? SENSITIVE.blush : 0); // delicate skin starts a bit red (T8.3)
     if (blush > 0.02 && face) drawIrritation(blush); // redder, blotchy cheeks while irritated (no motion)
@@ -1442,7 +1446,7 @@ export function createPopScene(canvas, o) {
     const out = pressOutcome(tool, p.type);
     if (out === 'ow') { ow(p); return false; }
     if (out !== 'squeeze' && out !== 'pull') return false;
-    if (!pressAgain(p) && roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
+    if (!pressAgain(p) && roll() < roughChance(tool, p.type, p.warm ?? 0, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
     if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
     delete p.sqReach; // a one-finger hold uses the drawn fingers again (not a two-finger squeeze's ghost pads)
     hold = { p, id: e.pointerId, since: time };
@@ -1573,7 +1577,7 @@ export function createPopScene(canvas, o) {
       const out = pressOutcome(tool, p.type);
       if (out === 'ow') { ow(p); return; }
       if (out !== 'squeeze' && out !== 'pull') return;
-      if (!pressAgain(p) && roll() < roughChance(tool, p.type, warmth, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
+      if (!pressAgain(p) && roll() < roughChance(tool, p.type, p.warm ?? 0, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
     }
     stale = false;
     p.tool = tool;
@@ -1618,8 +1622,8 @@ export function createPopScene(canvas, o) {
     if (!a || !b) return p.pressure;
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     sq.d0 = Math.max(sq.d0, d); // spread wider: closing counts from there (spreading never zooms)
-    const hold = effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, warmth);
-    sq.drive = stepDrive(sq.drive, dt, closeAmount(sq.d0, d), hold);
+    const hold = effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, p.warm ?? 0);
+    sq.drive =stepDrive(sq.drive, dt, closeAmount(sq.d0, d), hold);
     const next = squeezeProgress(p.pressure, sq.drive.level, dt, hold);
     aimSqueeze(sq);
     if (next > 0.04 && next >= sq.last - 1e-4 && time >= sq.nextSqueak) { // the squeak only while it holds or rises
@@ -1860,7 +1864,8 @@ export function createPopScene(canvas, o) {
     if (viewMove(e)) return;
     if (warmHold && e.pointerId === warmHold.id) {
       const pt = local(e);
-      if (onFace(face, pt.x, pt.y)) { warmHold.x = pt.x; warmHold.y = pt.y; } else warmHold = null; // slid off the face
+      warmHold.x = pt.x; // the cloth goes where the finger goes (off the face it just warms nothing, SPEC D37)
+      warmHold.y = pt.y;
       kick();
     } else if (peel && e.pointerId === peel.id) {
       const pt = local(e);
@@ -1882,7 +1887,10 @@ export function createPopScene(canvas, o) {
       hold = null;
     }
     if (peel && e.pointerId === peel.id) { peel = null; maybeNextStep(); } // the last bump may be popped already
-    if (warmHold && e.pointerId === warmHold.id) warmHold = null;
+    if (warmHold && e.pointerId === warmHold.id) { // lifted: back to the tool she had before (pop-mode.js, SPEC D37)
+      warmHold = null;
+      try { o.onWarmLift?.(); } catch (err) { console.warn('onWarmLift failed:', err); }
+    }
     if (wipe && wipe.id === e.pointerId) { wipe.id = null; wipe.last = null; }
     kick();
   }
@@ -1918,7 +1926,7 @@ export function createPopScene(canvas, o) {
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.popView = () => ({ ...view }); // for browser checks: the zoom view now (T1.4)
   // Debug and smoke-test hook: where the pimples still are (scene coordinates; on screen see popView and sceneToScreen).
-  canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type, zone: p.zone }));
+  canvas.popTargets = () => pimples.filter((p) => !p.popped).map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type, zone: p.zone, warm: p.warm ?? 0 }));
   canvas.popDecoys = () => decoys.map((d) => ({ x: d.x, y: d.y, r: d.r, kind: d.kind })); // for browser checks, like popTargets
   canvas.popStrip = () => (strip && !strip.off ? { x: strip.x, y: strip.y, w: strip.w, h: strip.h } : null);
   canvas.popStep = () => step;
@@ -1926,8 +1934,7 @@ export function createPopScene(canvas, o) {
   canvas.popSqueeze = () => (squeeze ? { pressure: squeeze.p.pressure, x: squeeze.p.x, y: squeeze.p.y } : memory ? 'resume' : stale ? 'stale' : null);
   canvas.popPressures = () => pimples.map((p) => ({ x: p.x, y: p.y, pressure: p.pressure, popped: p.popped }));
   canvas.popTool = () => tool;
-  canvas.popWarmth = () => warmth;
-  canvas.popIrritation = () => irr.level;
+  canvas.popWarmth = () => warmth;  canvas.popIrritation = () => irr.level;
   canvas.popTwist = () => ({ twist, off: { ...off }, room, swayK, giggleAt, time }); // for browser checks (T8.3)
   measureRoom();
   render();

@@ -940,6 +940,57 @@ export function drawCloth(ctx, x, y, r, time) {
 }
 
 /**
+ * A bump the warm cloth has warmed (SPEC D37): a soft pink glow round it and two little steam curls above it, both
+ * fading as it cools, and a ring that grows out once when it has just got fully warm.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x bump centre x
+ * @param {number} y bump centre y
+ * @param {number} r bump radius
+ * @param {number} warm its warmth, 0..1
+ * @param {number} time seconds, for the steam drift (0 = still, for reduced motion)
+ * @param {number} since seconds since it got fully warm (Infinity = not yet)
+ * @returns {void}
+ */
+export function drawWarmBump(ctx, x, y, r, warm, time, since) {
+  const k = Math.max(0, Math.min(1, warm));
+  const R = Math.max(r * 2.4, 14);
+  ctx.save();
+  const g = ctx.createRadialGradient(x, y, r * 0.4, x, y, R);
+  g.addColorStop(0, `rgba(255,120,110,${0.34 * k})`);
+  g.addColorStop(1, 'rgba(255,120,110,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, R, 0, Math.PI * 2);
+  ctx.fill();
+  if (k > 0.35) { // steam curls
+    const s = Math.max(6, r * 1.1);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.5, s * 0.16);
+    for (const dx of [-0.45, 0.45]) {
+      const rise = time ? ((time * 0.7 + (dx > 0 ? 0.5 : 0)) % 1) * s * 0.6 : s * 0.2; // the two curls take turns
+      ctx.globalAlpha = (k - 0.35) / 0.65 * (time ? 1 - rise / (s * 0.6) : 0.8);
+      const bx = x + dx * s;
+      const by = y - r - s * 0.3 - rise;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.bezierCurveTo(bx + s * 0.3, by - s * 0.3, bx - s * 0.3, by - s * 0.6, bx, by - s * 0.9);
+      ctx.stroke();
+    }
+  }
+  if (since < 0.6) { // just got fully warm: one ring grows out and fades
+    const t = since / 0.6;
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = Math.max(2, r * 0.25);
+    ctx.beginPath();
+    ctx.arc(x, y, r * (1.2 + t * 1.4), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
  * A hydrocolloid patch on a popped spot: a round, see-through sticker with a soft shine.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {number} x centre x

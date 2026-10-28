@@ -1,6 +1,6 @@
 // The tool rules of the pop scene (T1.2, docs/TOOLS.md), kept apart so they can be tested in Node: which tools are in
 // the tool bar, what a press with a tool on a bump does (squeeze, pull, or an "Ow" and no pop), how fast a bump pops
-// with a tool and a warm face, how the warm meter fills and drains, where the nose strip goes on, and which popped
+// with a tool on a warm bump, how a bump warms and cools under the cloth, where the nose strip goes on, and which popped
 // spot a patch lands on, the rough-press chance and the irritation meter (T1.2b), and when a customer storms off.
 // No DOM, no audio, no timers here. The tools themselves are in data/tools.js.
 import { TOOLS, TOOL_IDS, WARM, IRRITATION, PAD_WIPE, toolInfo } from '../data/tools.js';
@@ -168,7 +168,7 @@ export function autoWipeSeconds(toolId, baseSeconds) {
 }
 
 /**
- * Hold time multiplier from a warm face (the warm cloth): bumps that like warmth pop much faster, others a bit.
+ * Hold time multiplier from a warm bump (the warm cloth): bumps that like warmth pop much faster, others a bit.
  * @param {number} warmth the warm meter, 0..1
  * @param {string} bumpType a bump id
  * @returns {number} the multiplier, 1 when cold
@@ -306,15 +306,31 @@ export function isFail(level, mode) {
 }
 
 /**
- * The warm meter after a moment: it fills while the cloth is held on the face and slowly drains when it is not.
+ * One bump's warmth after a moment: it fills while the warm cloth is on that bump and slowly cools when it is not
+ * (owner 2026-10-28: the cloth warms bumps one by one, SPEC D37).
  * @param {number} warmth now, 0..1
  * @param {number} dt seconds since the last step
- * @param {boolean} holding whether the warm cloth is held on the face
+ * @param {boolean} holding whether the warm cloth is on this bump
  * @returns {number} the new warmth, 0..1
  */
 export function warmStep(warmth, dt, holding) {
   if (holding) return Math.min(1, warmth + dt * WARM.fillPerSecond);
   return Math.max(0, warmth - dt * WARM.drainPerSecond);
+}
+
+/**
+ * Whether a bump is under the warm cloth: the cloth is a towel about twice as wide as it is tall, and a bump counts
+ * when any of it is under the towel (a little extra room, since the finger hides the cloth).
+ * @param {{x: number, y: number}|null} cloth where the cloth is (scene px)
+ * @param {{x: number, y: number, r: number}} p the bump
+ * @param {number} r the cloth's half width (scene px)
+ * @returns {boolean} true when the cloth warms this bump
+ */
+export function underCloth(cloth, p, r) {
+  if (!cloth) return false;
+  const ex = (p.x - cloth.x) / (r * WARM.reach + p.r);
+  const ey = (p.y - cloth.y) / (r * 0.62 * WARM.reach + p.r);
+  return ex * ex + ey * ey <= 1;
 }
 
 /**

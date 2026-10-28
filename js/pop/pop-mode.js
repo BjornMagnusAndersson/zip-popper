@@ -209,6 +209,7 @@ export function createPopMode({
   done.append(el('p', 'pop-done__text', t('pop.finale.done')), button('pop-btn pop-btn--main', t('pop.newFace'), () => newFace(true)));
   // The tool bar: one button per tool (picture and name); the one in hand is pressed. The warm cloth shows its meter.
   let toolId = START_TOOL;
+  let clothBack = START_TOOL; // the tool in hand before the warm cloth (SPEC D37: lifting the cloth goes back to it)
   let toolIds = toolBarIds({ demo: true });
   const bar = el('div', 'pop-tools');
   bar.setAttribute('role', 'toolbar');
@@ -462,6 +463,7 @@ export function createPopMode({
    * @returns {void}
    */
   function pickTool(id) {
+    if (id === 'warmCloth' && toolId !== 'warmCloth') clothBack = toolId; // lifting the cloth gives this one back (SPEC D37)
     toolId = id;
     for (const [k, b] of toolButtons) b.setAttribute('aria-pressed', String(k === id));
     current?.scene?.setTool(id);
@@ -903,6 +905,9 @@ export function createPopMode({
         try { c.hooks.onOw?.(at); } catch (e) { console.warn('onOw failed:', e); }
       },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },
+      onWarmLift: () => { // the cloth came off: back to the tool she had (SPEC D37), so she can pop the warm bumps
+        if (current === c && toolId === 'warmCloth' && c.scene?.step() === 'pop') pickTool(toolIds.includes(clothBack) ? clothBack : START_TOOL);
+      },
       onView: (v) => { if (current === c) showView(v); },
       onIrritation: (lv) => {
         if (current !== c) return;

@@ -900,35 +900,60 @@ function drawHeadwear(ctx, f, look) {
     for (let i = 0; i < 10; i += 1) { const a = (i / 10) * Math.PI * 2; ctx.moveTo(X(0) + Math.cos(a) * rx * 0.14, Y(-1.3) + Math.sin(a) * rx * 0.14); ctx.arc(X(0) + Math.cos(a) * rx * 0.1, Y(-1.3) + Math.sin(a) * rx * 0.1, rx * 0.07, 0, Math.PI * 2); }
     ctx.fill();
   }
-  if (has('hat')) { // a round little bowler with a ribbon
+  if (has('hat')) { // a round bowler with a ribbon, sitting down on the head (owner 2026-10-28: the flat one looked perched)
     const c = look.accent;
-    const brimV = f.features.hairTop - 0.07;
-    ctx.fillStyle = shade(c, -0.25);
+    const brimV = f.features.hairTop - 0.06; // the middle of the brim; its front edge comes down to about the hairline
+    const brimW = 1.22; // half the brim width, in rx units
+    const brimH = 0.12; // half the brim depth seen from the front, in ry units
+    const crownW = 0.8; // half the crown width at the brim
+    // The crown's outline: up from the brim on the left, a round dome, down to the brim on the right.
+    const crown = () => {
+      ctx.beginPath();
+      ctx.moveTo(X(-crownW), Y(brimV));
+      ctx.bezierCurveTo(X(-0.86), Y(brimV - 0.34), X(-0.7), Y(-1.5), X(0), Y(-1.5));
+      ctx.bezierCurveTo(X(0.7), Y(-1.5), X(0.86), Y(brimV - 0.34), X(crownW), Y(brimV));
+      ctx.closePath();
+    };
+    // A soft shadow the brim throws on the hair and forehead.
+    ctx.fillStyle = 'rgba(60,30,30,0.16)';
     ctx.beginPath();
-    ctx.ellipse(X(0), Y(brimV), rx * 1.18, ry * 0.08, 0, 0, Math.PI * 2);
+    ctx.ellipse(X(0), Y(brimV + brimH * 0.9), rx * 0.95, ry * brimH * 0.8, 0, 0, Math.PI);
     ctx.fill();
+    // The back half of the brim (behind the crown).
+    ctx.fillStyle = shade(c, -0.32);
     ctx.beginPath();
-    ctx.moveTo(X(-0.7), Y(brimV));
-    ctx.bezierCurveTo(X(-0.76), Y(-1.42), X(0.76), Y(-1.42), X(0.7), Y(brimV));
-    ctx.closePath();
-    const g = ctx.createLinearGradient(X(-0.7), 0, X(0.7), 0);
-    g.addColorStop(0, shade(c, 0.1));
+    ctx.ellipse(X(0), Y(brimV), rx * brimW, ry * brimH, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    // The crown, lit from the left.
+    crown();
+    const g = ctx.createLinearGradient(X(-0.8), 0, X(0.8), 0);
+    g.addColorStop(0, shade(c, 0.12));
     g.addColorStop(1, shade(c, -0.2));
     ctx.fillStyle = g;
     ctx.fill();
+    // The ribbon: the lower part of the crown, so it follows the crown's curve.
+    ctx.save();
+    crown();
+    ctx.clip();
     ctx.fillStyle = look.accent2;
+    ctx.fillRect(X(-1), Y(brimV - 0.15), rx * 2, ry * 0.15);
+    ctx.restore();
+    // The front half of the brim, with a lighter top edge.
+    ctx.fillStyle = shade(c, -0.22);
     ctx.beginPath();
-    ctx.moveTo(X(-0.71), Y(brimV - 0.02));
-    ctx.lineTo(X(-0.73), Y(brimV - 0.12));
-    ctx.lineTo(X(0.73), Y(brimV - 0.12));
-    ctx.lineTo(X(0.71), Y(brimV - 0.02));
-    ctx.closePath();
+    ctx.ellipse(X(0), Y(brimV), rx * brimW, ry * brimH, 0, 0, Math.PI);
     ctx.fill();
+    ctx.strokeStyle = shade(c, 0.05);
+    ctx.lineWidth = lw * 1.3;
+    ctx.beginPath();
+    ctx.ellipse(X(0), Y(brimV), rx * brimW, ry * brimH, 0, 0.04, Math.PI - 0.04);
+    ctx.stroke();
+    // A shine on the dome.
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = rx * 0.04;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.arc(X(-0.1), Y(-1.0), rx * 0.42, Math.PI * 1.2, Math.PI * 1.45);
+    ctx.arc(X(-0.12), Y(-1.08), rx * 0.42, Math.PI * 1.22, Math.PI * 1.45);
     ctx.stroke();
   }
   if (has('pilot-cap')) { // navy captain's cap: crown, gold-braided band, shiny visor and a winged badge
