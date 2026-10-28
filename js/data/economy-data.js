@@ -42,6 +42,7 @@ export const SHOP_ITEMS = {
   gloves: { price: 0, tier: 1, kind: 'tool', toolId: 'gloves', story: true }, // end of chapter 5 (hygiene scare)
   lamp: { price: 100, tier: 1, kind: 'studio', strip: 'mlamp' },
   plant: { price: 80, tier: 1, kind: 'studio', strip: 'mplant' },
+  leakFix: { price: 150, tier: 1, kind: 'studio', strip: 'mleak' }, // owner 2026-10-28: paint and furniture never fixed the drip
   apron: { price: 120, tier: 1, kind: 'outfit', strip: 'mapron' },
   chair: { price: 200, tier: 2, kind: 'studio' },
   wallPaint: { price: 240, tier: 2, kind: 'studio' },

@@ -96,6 +96,7 @@ const PRECACHE = [
   './js/data/comics/strip-mmastery.js',
   './js/data/comics/strip-mapron.js',
   './js/data/comics/strip-mtweezers.js',
+  './js/data/comics/strip-mleak.js',
   './js/data/comics/strip-scare.js',
   './js/pop/art.js',
   './js/pop/backdrop.js',
@@ -112,7 +113,7 @@ const PRECACHE = [
   './assets/icons/icon-maskable-512.png',
 ];
 
-const CACHE_VERSION = 'v65';
+const CACHE_VERSION = 'v66';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

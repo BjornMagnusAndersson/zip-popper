@@ -75,6 +75,15 @@ export const VOICES = {
     k.hiss(t, 0.32, { type: 'highpass', freq: 1800, to: 4200, vol: 0.12 });
     for (let i = 0; i < 6; i += 1) k.hiss(t + Math.random() * 0.28, 0.025, { freq: 2500 + Math.random() * 2500, q: 4, vol: 0.12 });
   },
+  /**
+   * A soft water "plink" into a tin bucket (the studio leak): a quick rising bloop, a faint tin ring and a quieter echo.
+   * Kept quiet on purpose: it should nag a tiny bit, never drown the popping. @param {object} k kit @param {number} t start
+   */
+  drip(k, t) {
+    k.tone(780, t, 0.07, { type: 'sine', vol: 0.07, slideTo: 1500 });
+    k.tone(2350, t + 0.01, 0.18, { type: 'triangle', vol: 0.018 });
+    k.tone(820, t + 0.16, 0.05, { type: 'sine', vol: 0.025, slideTo: 1400 });
+  },
   /** The cotton pad's soft swish. @param {object} k kit @param {number} t start */
   wipe(k, t) {
     k.hiss(t, 0.16, { freq: 1600, to: 2400, q: 0.7, vol: 0.06 });

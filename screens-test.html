@@ -48,6 +48,7 @@ import { STRIP as mapron } from './js/data/comics/strip-mapron.js';
 import { STRIP as mtweezers } from './js/data/comics/strip-mtweezers.js';
 import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
 import { STRIP as mmastery } from './js/data/comics/strip-mmastery.js';
+import { STRIP as mleak } from './js/data/comics/strip-mleak.js';
 import { createTitleScreen } from './js/screens/title.js';
 import { createNameScreen } from './js/screens/name.js';
 import { createMenuScreen } from './js/screens/menu.js';
@@ -72,7 +73,7 @@ const say = (text) => { log.textContent = text; };
 
 const STRIPS = [
   [strip0, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'], [strip5, 'chapter'],
-  [books, 'teaser'], [mlamp, 'milestone'], [mplant, 'milestone'], [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'],
+  [books, 'teaser'], [mlamp, 'milestone'], [mplant, 'milestone'], [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'], [mleak, 'milestone'],
 ];
 const seen = ['strip0', 'strip1', 'strip2', 'mlamp'];
 let eco = economyFromSave(normalizeSave({

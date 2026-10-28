@@ -101,7 +101,7 @@ export const POSES = {
 };
 
 /** Things a figure can hold in the right hand. */
-export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'highlighter', 'book', 'key', 'pen'];
+export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'highlighter', 'book', 'key', 'pen', 'pipeJoint'];
 
 let gid = 0; // counter for unique gradient ids
 
@@ -850,6 +850,10 @@ function heldThing(what, at, k = 1) {
     pg.appendChild(el('path', { d: 'M-8 48 L8 48 L0 70Z', fill: '#fff8ee', ...ink(3.5) }));
     pg.appendChild(el('rect', { x: -10, y: -78, width: 20, height: 18, rx: 5, fill: '#2b2f3a', ...ink(3) }));
     g.appendChild(pg);
+  } else if (what === 'pipeJoint') {
+    // The shiny new pipe joint held up like a trophy (strip "mleak"): two short pipe stubs and the chrome collar.
+    for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx > 0 ? 30 : -62, y: -84, width: 32, height: 32, rx: 5, fill: '#cfd8de', ...ink(4) }));
+    g.appendChild(chromeJoint(0, -68, 24));
   } else if (what === 'snack') {
     g.appendChild(el('path', { d: 'M-30 -70 L30 -70 L24 10 L-24 10Z', fill: '#f3a33a', ...ink(4.5) }));
     for (const [x, y] of [[-14, -78], [4, -84], [18, -76]]) g.appendChild(el('circle', { cx: x, cy: y, r: 11, fill: '#fff4c8', ...ink(3.5) }));
@@ -1593,6 +1597,121 @@ function drip(l) {
 }
 
 /**
+ * The shiny new pipe joint (the leakFix upgrade, as in the game's pop/backdrop.js newJoint): a chrome collar with two
+ * bolts, a white shine and a little four-point sparkle. Middle at (x, y); r = the pipe's half thickness.
+ * @param {number} x middle @param {number} y middle @param {number} r pipe half thickness @param {boolean} [spark] add the sparkle (default true)
+ * @returns {SVGElement} the joint
+ */
+function chromeJoint(x, y, r, spark = true) {
+  const g = el('g');
+  const id = `cj${gid += 1}`;
+  g.appendChild(el('defs', {}, [el('linearGradient', { id, x1: 0, y1: 0, x2: 0, y2: 1 }, [
+    el('stop', { offset: 0, 'stop-color': '#ffffff' }), el('stop', { offset: 0.45, 'stop-color': '#cfd8de' }), el('stop', { offset: 1, 'stop-color': '#8e9aa3' })])]));
+  g.appendChild(el('rect', { x: x - r * 1.5, y: y - r * 1.5, width: r * 3, height: r * 3, rx: r * 0.5, fill: `url(#${id})`, ...ink(5) }));
+  for (const dx of [-0.85, 0.85]) g.appendChild(el('circle', { cx: x + dx * r, cy: y + r * 0.2, r: r * 0.28, fill: '#7d8890', ...ink(2.5) }));
+  g.appendChild(el('rect', { x: x - r * 1.1, y: y - r * 1.15, width: r * 2.2, height: r * 0.35, rx: r * 0.17, fill: '#ffffff', opacity: 0.85 }));
+  if (spark) {
+    const sx = x + r * 1.8;
+    const sy = y + r * 1.5;
+    const q = r * 0.9;
+    g.appendChild(el('path', { d: `M${sx} ${sy - q} Q${sx + q * 0.15} ${sy - q * 0.15} ${sx + q} ${sy} Q${sx + q * 0.15} ${sy + q * 0.15} ${sx} ${sy + q} Q${sx - q * 0.15} ${sy + q * 0.15} ${sx - q} ${sy} Q${sx - q * 0.15} ${sy - q * 0.15} ${sx} ${sy - q}Z`, fill: '#ffffff', ...ink(2.5) }));
+  }
+  return g;
+}
+
+/**
+ * The studio's old ceiling pipe (strip "mleak"; the same pipe the game's studio shows, pop/backdrop.js): a long grey
+ * pipe across the panel with one joint. joint 'old' = a dull square collar with a brown drip stain under it and a drop
+ * hanging from it; 'new' = the shiny chrome joint (leak fixed).
+ * @param {object} l layer: y (pipe middle), w (length, default 1600), x (left end, default 0), jointX, r (half
+ *   thickness, default 20), joint ('old' | 'new', default 'old'), drop (false = no hanging drop), stain (false = no stain)
+ * @returns {{node: SVGElement}} the pipe
+ */
+function pipe(l) {
+  const g = el('g');
+  const r = l.r ?? 20;
+  const x0 = l.x ?? 0;
+  const w = l.w ?? 1600;
+  const y = l.y ?? 60;
+  const jx = l.jointX ?? x0 + w / 2;
+  const old = (l.joint ?? 'old') === 'old';
+  if (old && l.stain !== false) g.appendChild(el('ellipse', { cx: jx, cy: y + r * 4, rx: r * 1.1, ry: r * 3, fill: '#786834', opacity: 0.35 }));
+  g.appendChild(el('rect', { x: x0 - 10, y: y - r, width: w + 20, height: r * 2, fill: '#6f7468', ...ink(5) }));
+  g.appendChild(el('rect', { x: x0, y: y - r * 0.8, width: w, height: r * 0.45, fill: '#ffffff', opacity: 0.25 }));
+  for (const bx of [jx - w * 0.3, jx + w * 0.3]) {
+    // Two wall brackets holding the pipe up.
+    g.appendChild(el('rect', { x: bx - r * 0.5, y: y - r * 1.3, width: r, height: r * 2.6, rx: r * 0.3, fill: '#8d9389', ...ink(4) }));
+  }
+  if (old) {
+    g.appendChild(el('rect', { x: jx - r * 1.4, y: y - r * 1.4, width: r * 2.8, height: r * 2.8, rx: r * 0.3, fill: '#8d9389', ...ink(5) }));
+    g.appendChild(el('path', { d: `M${jx - r * 0.6} ${y - r * 1.2} q${r * 0.3} ${r} 0 ${r * 2.4}`, fill: 'none', stroke: '#9a6a3a', 'stroke-width': r * 0.4, opacity: 0.7, 'stroke-linecap': 'round' }));
+    if (l.drop !== false) g.appendChild(el('path', { d: `M${jx} ${y + r * 1.4} C${jx + r * 0.7} ${y + r * 2.4} ${jx + r * 0.7} ${y + r * 3.2} ${jx} ${y + r * 3.2} C${jx - r * 0.7} ${y + r * 3.2} ${jx - r * 0.7} ${y + r * 2.4} ${jx} ${y + r * 1.4}Z`, fill: '#9ad8ff', ...ink(3.5) }));
+  } else {
+    g.appendChild(chromeJoint(jx, y, r));
+  }
+  return { node: g };
+}
+
+/**
+ * A wooden stepladder seen from the front (strip "mleak" on): two rails narrowing to a top step, round rungs, rubber
+ * feet and the back legs peeking out behind. bend (0..1) makes it bow under a heavy load: the rails curve outwards and
+ * the rungs sag; creak: true adds strain marks and little cracks. A figure stands on the top step at y - h * scale.
+ * @param {object} l layer: x, y (floor, middle), h (height, default 600), w (width at the floor, default 300), steps
+ *   (rungs, default 4), bend (0..1), creak, wobble (motion marks at the feet: it rocks), scale
+ * @returns {{node: SVGElement}} the ladder
+ */
+function ladder(l) {
+  const s = l.scale ?? 1;
+  const h = l.h ?? 600;
+  const hw = (l.w ?? 300) / 2;
+  const tw = hw * 0.7;
+  const bend = l.bend ?? 0;
+  const bow = bend * hw * 0.45;
+  const sag = bend * 44;
+  const wood = '#d39a5a';
+  const g = el('g');
+  /** Where a rail is at height t (0 = floor, 1 = top), as a curve from the foot to the top. @param {number} t @returns {number} x (right rail) */
+  const railX = (t) => (1 - t) * (1 - t) * hw + 2 * (1 - t) * t * ((hw + tw) / 2 + bow) + t * t * tw;
+  // The back legs, darker, splayed out behind.
+  for (const sx of [-1, 1]) {
+    const d = `M${sx * (hw + 34)} 0 Q${sx * ((hw + tw) / 2 + 30 + bow)} ${-h / 2} ${sx * (tw - 6)} ${-h + 16}`;
+    g.appendChild(el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 24, 'stroke-linecap': 'round' }));
+    g.appendChild(el('path', { d, fill: 'none', stroke: tint(wood, -0.25), 'stroke-width': 13, 'stroke-linecap': 'round' }));
+  }
+  const n = l.steps ?? 4;
+  for (let i = 1; i <= n; i += 1) {
+    const t = i / (n + 1);
+    const x = railX(t);
+    const y = -h * t;
+    const d = `M${-x} ${y} Q0 ${y + sag * 2} ${x} ${y}`;
+    g.appendChild(el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 26, 'stroke-linecap': 'round' }));
+    g.appendChild(el('path', { d, fill: 'none', stroke: wood, 'stroke-width': 15, 'stroke-linecap': 'round' }));
+    g.appendChild(el('path', { d: `M${-x + 14} ${y - 3} Q0 ${y + sag * 2 - 3} ${x - 14} ${y - 3}`, fill: 'none', stroke: '#ffffff', 'stroke-width': 3, opacity: 0.4 }));
+  }
+  for (const sx of [-1, 1]) {
+    const d = `M${sx * hw} 0 Q${sx * ((hw + tw) / 2 + bow)} ${-h / 2} ${sx * tw} ${-h}`;
+    g.appendChild(el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 32, 'stroke-linecap': 'round' }));
+    g.appendChild(el('path', { d, fill: 'none', stroke: wood, 'stroke-width': 20, 'stroke-linecap': 'round' }));
+    g.appendChild(el('path', { d: `M${sx * (hw - 4)} -30 Q${sx * ((hw + tw) / 2 + bow - 4)} ${-h / 2} ${sx * (tw - 4)} ${-h + 30}`, fill: 'none', stroke: tint(wood, -0.2), 'stroke-width': 4, opacity: 0.6 }));
+    g.appendChild(el('rect', { x: sx * hw - 18, y: -12, width: 36, height: 16, rx: 6, fill: '#3a3f4a', ...ink(4) }));
+  }
+  // The top step: a wide board with a paint-tray notch and a knot in the wood.
+  g.appendChild(el('rect', { x: -tw - 26, y: -h - 26, width: tw * 2 + 52, height: 34, rx: 8, fill: wood, ...ink(5) }));
+  g.appendChild(el('ellipse', { cx: tw * 0.4, cy: -h - 9, rx: 9, ry: 5, fill: 'none', ...ink(3), opacity: 0.6 }));
+  if (l.creak) {
+    // Strain marks beside the bowed rails and two small cracks: it is not built for this much armor.
+    const ym = -h * 0.5;
+    const xm = railX(0.5);
+    for (const sx of [-1, 1]) {
+      g.appendChild(line(`M${sx * (xm + 40)} ${ym - 60} q${sx * 22} 30 0 60 M${sx * (xm + 70)} ${ym - 80} q${sx * 30} 40 0 80`, 5));
+      g.appendChild(line(`M${sx * (xm - 6)} ${ym - 18} l${sx * 10} 10 l${-sx * 8} 8 l${sx * 10} 10`, 4));
+    }
+  }
+  if (l.wobble) for (const sx of [-1, 1]) g.appendChild(line(`M${sx * (hw + 40)} -30 q${sx * 20} 16 ${sx * 6} 34 M${sx * (hw + 64)} -50 q${sx * 24} 22 ${sx * 8} 48`, 5));
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${(l.flip ? -1 : 1) * s} ${s})` }, [g]) };
+}
+
+/**
  * A box of rubber gloves on its own (the inspector's gift; "Gloves. Always gloves.").
  * @param {object} l layer: x, y (bottom middle), scale, rotate
  * @returns {{node: SVGElement}} the box
@@ -1864,7 +1983,7 @@ function shopfront(l) {
 }
 
 /** Props, rooms and effects by name. */
-export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront };
+export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront, pipe, ladder };
 
 /** Every art piece a strip can name with `art:` (characters and props). Each takes the layer and returns { node, mouth? }. */
 export const ARTS = {

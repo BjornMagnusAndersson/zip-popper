@@ -50,12 +50,13 @@ import { STRIP as mmastery } from './js/data/comics/strip-mmastery.js';
 import { STRIP as mapron } from './js/data/comics/strip-mapron.js';
 import { STRIP as mtweezers } from './js/data/comics/strip-mtweezers.js';
 import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
+import { STRIP as mleak } from './js/data/comics/strip-mleak.js';
 import { STRIP as scare } from './js/data/comics/strip-scare.js';
 import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer, dressHeroine, studioKit } from './js/game/comic-art.js';
 import { stripVars } from './js/game/app-logic.js';
 import { defaultSave } from './js/core/save.js';
 
-const STRIPS = [strip0, strip0b, strip1, strip2, strip3, strip4, strip4b, plan, strip5, scare, books, mplant, mlamp, mapron, mmastery, mtweezers, mstar, testStrip, placeholder]; // add new strips here to see them in the chooser
+const STRIPS = [strip0, strip0b, strip1, strip2, strip3, strip4, strip4b, plan, strip5, scare, books, mplant, mlamp, mapron, mmastery, mtweezers, mstar, mleak, testStrip, placeholder]; // add new strips here to see them in the chooser
 const params = new URLSearchParams(location.search);
 
 /**
@@ -129,7 +130,8 @@ function showKit() {
   tile(p, 'launderette (strip plan)', 1600, 900, [{ art: 'room', kind: 'launderette', w: 1600, h: 900, floorY: 600, doorX: 0.92, windowX: 0.66, leakX: 0.5 }]);
   tile(p, 'shopfront: day + plan / evening glow + plant', 1600, 900, [{ art: 'shopfront', w: 1600, h: 900, plan: true, sky: ['#ffb86b', '#ffe2a8'], sun: true, glow: true, plantEyes: 'happy' }]);
   tile(p, 'plan sheet, key, pen, helmet over hoodie, landlord', 1400, 760, [{ art: 'plan', x: 180, y: 380 }, { art: 'heroine', x: 520, y: 740, pose: 'wave', hold: 'key', holdScale: 2, expr: 'bliss' }, { art: 'heroine', x: 760, y: 740, pose: 'point', hold: 'pen', expr: 'proud' }, { art: 'husband', x: 1000, y: 740, helmet: true, plumes: 3, pose: 'hips', expr: 'happy' }, { art: 'landlord', x: 1250, y: 740, pose: 'shrug', expr: 'happy' }]);
-  tile(p, 'plant: eyes sad, wide, smug, happy + scarf, bud, sweat', 1100, 420, ['sad', 'wide', 'smug', 'happy'].map((eyes, i) => ({ art: 'plant', x: 140 + i * 270, y: 400, eyes, scarf: i === 2 ? '#e8505b' : undefined, bud: i === 1, sweat: i === 1 })));
+  tile(p, 'pipe old / new joint, ladder straight / bent + creak, pipeJoint held (strip mleak)', 1400, 900, [{ art: 'pipe', y: 80, w: 1400, jointX: 360, joint: 'old' }, { art: 'pipe', y: 220, x: 760, w: 640, jointX: 1080, joint: 'new' }, { art: 'ladder', x: 300, y: 880, h: 560, w: 260 }, { art: 'ladder', x: 700, y: 880, h: 560, w: 260, bend: 1, creak: true, wobble: true }, { art: 'heroine', x: 1100, y: 880, pose: 'wave', hold: 'pipeJoint', expr: 'bliss', scale: 0.9 }]);
+  tile(p, 'plant: eyes sad, wide, smug, happy + scarf, bud, sweat',1100, 420, ['sad', 'wide', 'smug', 'happy'].map((eyes, i) => ({ art: 'plant', x: 140 + i * 270, y: 400, eyes, scarf: i === 2 ? '#e8505b' : undefined, bud: i === 1, sweat: i === 1 })));
 }
 
 if (params.has('kit')) showKit();

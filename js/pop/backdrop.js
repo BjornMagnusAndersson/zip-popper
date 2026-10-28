@@ -134,10 +134,12 @@ export function lampLevel(time, tier = 0, reduced = false) {
  * @param {number} time seconds since the scene started
  * @param {number|string} [tier] studio tier 0..2, or 'home' (see backdropKind)
  * @param {boolean} [reduced] reduced motion is on
+ * @param {boolean} [leak] the room drips (roomLeaks): the drop moves too
  * @returns {number} seconds (Infinity = it never changes)
  */
-export function nextBackdropChange(time, tier = 0, reduced = false) {
+export function nextBackdropChange(time, tier = 0, reduced = false, leak = false) {
   if (reduced) return Infinity;
+  if (leak) return Math.min(nextDripChange(time), nextBackdropChange(time, tier, false, false));
   if (paletteFor(tier).pulse) return PULSE_STEP;
   if (!paletteFor(tier).flicker) return Infinity;
   const k = Math.floor(time / BURST_EVERY);
@@ -1380,7 +1382,166 @@ function oldChair(ctx, c, floorY, u) {
 }
 
 /**
- * Draw one studio upgrade in its spot (wallPaint is part of the wall, painted with it, so it is skipped here).
+ * The leak's drip (owner 2026-10-28: alive, and a tiny bit annoying, so players want it fixed). One cycle in seconds:
+ * the drop swells under the joint (grow), falls (fall), plinks into the bucket and splashes (splash), then a short rest.
+ */
+export const DRIP = { every: 6.5, grow: 4.8, fall: 0.45, splash: 0.55 };
+
+/**
+ * Where the leaking joint and the bucket under it are, for a room size (the room drawing and the moving drip share it).
+ * @param {number} w width
+ * @param {number} h height
+ * @returns {{py: number, pr: number, jx: number, backX: number, backS: number, floorMid: number}} the pipe's centre y
+ *   and half thickness, the joint's x; the bucket's x, height and floor (bottom) y
+ */
+export function leakGeometry(w, h) {
+  const land = w > h;
+  const t = Math.max(26, Math.min(54, Math.round(Math.min(w, h) / 8.5)));
+  const floorY = h * (land ? 0.86 : 0.9);
+  const x = w * (land ? 0.95 : 0.89); // off to the right, clear of the sign and of the face
+  return {
+    py: Math.max(6, h * 0.035), pr: Math.max(4, t * 0.13), jx: x,
+    backX: x, backS: land ? Math.max(34, Math.min(70, h * 0.14)) : Math.max(30, w * 0.1), floorMid: floorY + (h - floorY) * 0.55,
+  };
+}
+
+/**
+ * Whether a room drips: the studio (any tier) until the leakFix upgrade; never at home.
+ * @param {number|string} kind backdrop kind (backdropKind: 0..2 or 'home')
+ * @param {string[]} [layers] owned studio layers
+ * @returns {boolean} true = the drip shows (and plinks)
+ */
+export function roomLeaks(kind, layers = []) {
+  return kind !== 'home' && !(Array.isArray(layers) && layers.includes('leakFix'));
+}
+
+/**
+ * The drip at a moment: how far the drop has swollen, or fallen, or splashed (each 0..1, or null when not in that
+ * part). With reduced motion the drop just hangs, full size and still.
+ * @param {number} time seconds since the scene started
+ * @param {boolean} [reduced] reduced motion is on
+ * @returns {{grow: number|null, fall: number|null, splash: number|null}} the parts
+ */
+export function dripAt(time, reduced = false) {
+  if (reduced || !Number.isFinite(time)) return { grow: 1, fall: null, splash: null };
+  const c = ((time % DRIP.every) + DRIP.every) % DRIP.every;
+  if (c < DRIP.grow) return { grow: c / DRIP.grow, fall: null, splash: null };
+  if (c < DRIP.grow + DRIP.fall) return { grow: null, fall: (c - DRIP.grow) / DRIP.fall, splash: null };
+  const sp = c - DRIP.grow - DRIP.fall;
+  return { grow: null, fall: null, splash: sp < DRIP.splash ? sp / DRIP.splash : null };
+}
+
+/**
+ * Whether a drop landed in the bucket between two moments (for the plink sound).
+ * @param {number} t0 the earlier time, seconds (not counted)
+ * @param {number} t1 the later time, seconds (counted)
+ * @returns {boolean} true when a drop landed in (t0, t1]
+ */
+export function dripLands(t0, t1) {
+  if (!(Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0)) return false;
+  const lands = DRIP.grow + DRIP.fall;
+  const at = Math.floor((t1 - lands) / DRIP.every) * DRIP.every + lands;
+  return at > t0 && at <= t1;
+}
+
+/**
+ * How long until the next drop lands in the bucket (with reduced motion the drop is still, but the plink plays on).
+ * @param {number} time seconds since the scene started
+ * @returns {number} seconds, more than 0
+ */
+export function nextDripLanding(time) {
+  const lands = DRIP.grow + DRIP.fall;
+  const c = (((time - lands) % DRIP.every) + DRIP.every) % DRIP.every;
+  return Math.max(0.01, DRIP.every - c);
+}
+
+/**
+ * How long until the drip looks different: a slow step while it swells, smooth frames while it falls and splashes.
+ * @param {number} time seconds since the scene started
+ * @param {boolean} [reduced] reduced motion is on (then it never changes)
+ * @returns {number} seconds (Infinity = never)
+ */
+export function nextDripChange(time, reduced = false) {
+  if (reduced) return Infinity;
+  const d = dripAt(time);
+  if (d.grow !== null) return Math.min(0.15, DRIP.grow - (((time % DRIP.every) + DRIP.every) % DRIP.every) + 0.001);
+  if (d.fall !== null || d.splash !== null) return 1 / 30;
+  return Math.max(0.01, DRIP.every - (((time % DRIP.every) + DRIP.every) % DRIP.every));
+}
+
+/**
+ * Draw the drip for a moment: a cartoon water drop swelling under the joint, falling into the bucket, and a little
+ * splash ring with two droplets at the bucket's rim.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} time seconds since the scene started
+ * @param {boolean} [reduced] reduced motion is on (a still drop)
+ * @returns {void}
+ */
+export function drawDrip(ctx, w, h, time, reduced = false) {
+  const { py, pr, jx, backS, floorMid } = leakGeometry(w, h);
+  const d = dripAt(time, reduced);
+  const hang = py + pr * 1.3; // where the drop hangs from
+  const rim = floorMid - backS; // the bucket's water line
+  const R = pr * 0.8;
+  ctx.save();
+  /** One drop: round at the bottom, pointed on top. @param {number} x centre x @param {number} y centre y @param {number} r radius @param {number} [stretch] taller when falling @returns {void} */
+  const drop = (x, y, r, stretch = 1) => {
+    ctx.fillStyle = 'rgba(175,210,222,0.92)';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI);
+    ctx.quadraticCurveTo(x - r, y - r * 1.2 * stretch, x, y - r * 2 * stretch);
+    ctx.quadraticCurveTo(x + r, y - r * 1.2 * stretch, x + r, y);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.2, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  };
+  if (d.grow !== null) {
+    const r = R * (0.3 + 0.7 * d.grow);
+    drop(jx, hang + r * 1.6, r, 0.8 + 0.3 * d.grow);
+  } else if (d.fall !== null) {
+    drop(jx, hang + R * 1.6 + (rim - hang - R * 1.6) * d.fall * d.fall, R * 0.85, 1.5);
+  } else if (d.splash !== null) {
+    const k = d.splash;
+    ctx.globalAlpha = 1 - k;
+    ctx.strokeStyle = 'rgba(175,210,222,0.95)';
+    ctx.lineWidth = Math.max(1.5, pr * 0.25);
+    ctx.beginPath(); ctx.ellipse(jx, rim, backS * (0.08 + 0.25 * k), backS * (0.03 + 0.06 * k), 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(175,210,222,0.95)';
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(jx + s * backS * 0.18 * k, rim - backS * 0.35 * Math.sin(Math.PI * k), Math.max(1.5, pr * 0.22), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/**
+ * The leakFix upgrade's shiny new pipe joint (owner 2026-10-28): a bright chrome collar with two bolts, a shine and a
+ * little sparkle, on the old pipe where the dripping joint was.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x joint centre x
+ * @param {number} y pipe centre y
+ * @param {number} r pipe half thickness
+ * @returns {void}
+ */
+function newJoint(ctx, x, y, r) {
+  const g = ctx.createLinearGradient(0, y - r * 1.5, 0, y + r * 1.5);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.45, '#cfd8de');
+  g.addColorStop(1, '#8e9aa3');
+  box(ctx, x - r * 1.5, y - r * 1.5, r * 3, r * 3, r * 0.5);
+  inked(ctx, g, Math.max(1, r * 0.18), INK);
+  ctx.fillStyle = '#7d8890'; // two bolts
+  for (const dx of [-0.85, 0.85]) { ctx.beginPath(); ctx.arc(x + dx * r, y, r * 0.28, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,0.85)'; // shine
+  ctx.fillRect(x - r * 1.1, y - r * 1.15, r * 2.2, r * 0.35);
+  sparkle(ctx, x + r * 1.7, y + r * 1.4, r * 1.1, '#ffffff', 0.95);
+}
+
+/**
+ * Draw one studio upgrade in its spot (wallPaint is part of the wall and leakFix part of the ceiling pipe, both
+ * painted with the room, so they are skipped here).
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {string} id the layer id (game/studio.js STUDIO_LAYERS)
  * @param {object} spots layerSpots result
@@ -1561,10 +1722,10 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
     ctx.beginPath(); ctx.moveTo(w * 0.55, 0); ctx.lineTo(w * 0.8, 0); ctx.lineTo(w * 1.05, h * 0.85); ctx.lineTo(w * 0.7, h * 0.85); ctx.closePath(); ctx.fill();
   }
   // The ceiling: an old pipe with a joint (tiers 0 and 1: in 0 a brown drip stain under it, in 1 taped up), or the
-  // spa's white moulding (tier 2).
-  const py = Math.max(6, h * 0.035);
-  const pr = Math.max(4, t * 0.13);
-  const jx = w * (land ? 0.62 : 0.72);
+  // spa's white moulding (tier 2). It drips in every tier until the leakFix upgrade (owner 2026-10-28: paint and
+  // furniture never fixed the leak): then a shiny new joint, no stain, no drop, no bucket.
+  const leakFixed = shown.includes('leakFix');
+  const { py, pr, jx } = leakGeometry(w, h); // the joint sits right over the bucket, clear of the sign
   if (pal.spa) {
     cornice(ctx, w, py, pr, pal);
   } else {
@@ -1572,10 +1733,13 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
     ctx.fillRect(0, py - pr, w, pr * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.25)';
     ctx.fillRect(0, py - pr, w, pr * 0.5);
-    ctx.fillStyle = pal.metal;
-    ctx.fillRect(jx - pr * 1.4, py - pr * 1.4, pr * 2.8, pr * 2.8);
+    if (leakFixed) newJoint(ctx, jx, py, pr);
+    else {
+      ctx.fillStyle = pal.metal;
+      ctx.fillRect(jx - pr * 1.4, py - pr * 1.4, pr * 2.8, pr * 2.8);
+    }
   }
-  if (pal.repairs) { // grey tape wrapped round the joint: fixed!
+  if (pal.repairs && !leakFixed) { // grey tape wrapped round the joint (it still drips through)
     ctx.fillStyle = pal.tape;
     ctx.save(); ctx.translate(jx, py); ctx.rotate(-0.25);
     ctx.fillRect(-pr * 2, -pr * 0.55, pr * 4, pr * 1.1);
@@ -1583,17 +1747,15 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
     ctx.fillRect(-pr * 1.9, -pr * 0.5, pr * 3.8, pr * 1);
     ctx.restore();
   }
-  if (pal.grime > 0.5) {
+  if (pal.grime > 0.5 && !leakFixed) { // the brown drip stain under the joint
     const len = Math.min(tileTop * 0.35, t * 2.2);
     const dg = ctx.createLinearGradient(0, py, 0, py + len);
     dg.addColorStop(0, `rgba(${pal.stain},0.4)`);
     dg.addColorStop(1, `rgba(${pal.stain},0)`);
     ctx.fillStyle = dg;
     ctx.beginPath(); ctx.ellipse(jx, py + len / 2, pr * 0.9, len / 2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(190,215,220,0.85)'; // a cartoon water drop hanging from the joint
-    ctx.beginPath(); ctx.arc(jx, py + pr * 2.4, pr * 0.55, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(jx - pr * 0.5, py + pr * 2.3); ctx.lineTo(jx, py + pr * 1.3); ctx.lineTo(jx + pr * 0.5, py + pr * 2.3); ctx.fill();
   }
+  // (the drop itself moves, so it is drawn on top each time: drawDrip)
   if (painted) paintBand(ctx, w, py + pr * 1.9, u);
   tiles(ctx, w, tileTop, floorY, t, pal, rand);
   if (pal.repairs) { // one brand-new tile where the missing one was
@@ -1624,9 +1786,7 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
   const sinkX = land ? w * 0.12 : w * 0.1;
   const sinkY = land ? h * 0.56 : tileTop + t * 0.6;
   const sinkS = land ? Math.max(60, Math.min(110, w * 0.11)) : Math.max(56, w * 0.18);
-  const backX = land ? w * 0.84 : w * 0.88;
-  const backS = land ? Math.max(34, Math.min(70, h * 0.14)) : Math.max(30, w * 0.1);
-  const floorMid = floorY + (h - floorY) * 0.55;
+  const { backX, backS, floorMid } = leakGeometry(w, h);
   if (pal.repairs) { // a little bath mat under the sink
     ctx.fillStyle = pal.mat;
     ctx.beginPath(); ctx.roundRect(sinkX - sinkS * 0.45, floorY + (h - floorY) * 0.25, sinkS * 0.9, (h - floorY) * 0.45, 6); ctx.fill();
@@ -1635,8 +1795,8 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
   else shelf(ctx, land ? w * 0.78 : w - shelfLen - w * 0.05, h * (land ? 0.34 : 0.2), shelfLen, pal, !shown.includes('plant')); // the sad plant until the shop's one arrives
   sink(ctx, sinkX, sinkY, sinkS, pal);
   if (pal.towel) towel(ctx, sinkX + sinkS * 0.72, sinkY - sinkS * 0.3, sinkS * 0.55, pal.towel);
-  if (pal.spa) diffuser(ctx, backX, floorMid, backS, pal);
-  else bucket(ctx, backX, floorMid, backS, pal);
+  if (!leakFixed) bucket(ctx, backX, floorMid, backS, pal); // under the drip until the leak is fixed (pink in the spa)
+  else if (pal.spa) diffuser(ctx, backX, floorMid, backS, pal);
   if (pal.grime > 0.5) cobweb(ctx, w, py + pr, Math.max(36, t * 1.3), -1);
   // The ceiling lamp's cord and socket (the light itself is drawn on top each time, see drawLight). Gold in the spa.
   const L = lampSpot(w, h);
@@ -1740,12 +1900,13 @@ export function drawStudio(ctx, w, h, tier, layers = [], o = {}) {
   const kind = backdropKind('studio', tier);
   drawRoom(ctx, w, h, kind, layers, o.view !== false, o.masters ?? null);
   drawLight(ctx, w, h, kind, 1);
+  if (roomLeaks(kind, layers)) drawDrip(ctx, w, h, 0, true); // a still drop hanging from the joint
 }
 
 /**
  * Where each studio upgrade sits in its close-up for the scrub job (T5.1b): big and in the middle. The grime recipes
  * in screens/scrub-logic.js are placed to match these, as shares of the picture.
- * @param {string} id studio item id (lamp, plant, chair, sign; anything else gets no spot)
+ * @param {string} id studio item id (lamp, plant, chair, sign, leakFix; anything else gets no spot)
  * @param {number} w width
  * @param {number} h height
  * @returns {{u: number, floorY: number, spot: object|null}} size unit, floor line and the item's spot for its drawer
@@ -1760,6 +1921,7 @@ export function closeupSpot(id, w, h) {
   }
   if (id === 'plant') { const s = h * 0.2; return { u: s / 8, floorY, spot: { x: w / 2, y: h * 0.3, s } }; }
   if (id === 'sign') { const s = Math.min(w * 0.69, h * 1.1); return { u: s / 29, floorY, spot: { x: w / 2, y: h * 0.1, s } }; }
+  if (id === 'leakFix') { const r = Math.min(h * 0.07, w * 0.07); return { u: r / 3, floorY, spot: { x: w / 2, y: h * 0.3, r } }; }
   return { u: h / 40, floorY, spot: null };
 }
 
@@ -1818,6 +1980,14 @@ export function drawCloseup(ctx, w, h, id) {
   else if (id === 'chair') wingChair(ctx, spot, floorY, u);
   else if (id === 'plant') hangingPlant(ctx, spot, u);
   else if (id === 'sign') shinySign(ctx, spot, u);
+  else if (id === 'leakFix') { // the old pipe across the top of the wall, with the shiny new joint in the middle
+    const { x, y, r } = spot;
+    ctx.fillStyle = PALETTES[1].pipe;
+    ctx.fillRect(0, y - r, w, r * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(0, y - r, w, r * 0.5);
+    newJoint(ctx, x, y, r);
+  }
 }
 
 const cache = new Map(); // "w x h @ dpr : tier : layers" -> offscreen canvas with the still room
@@ -1864,4 +2034,5 @@ export function drawBackdrop(ctx, w, h, o = {}) {
   const dpr = o.dpr ?? (ctx.getTransform?.().a || 1);
   ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []), 0, 0, w, h);
   drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));
+  if (roomLeaks(tier, o.layers)) drawDrip(ctx, w, h, o.time ?? 0, Boolean(o.reduced)); // drip... drip...
 }

@@ -19,7 +19,7 @@ export const KEY_REACH = 1.5;
 export const ARROW_STEP = 2;
 
 /** The studio upgrades that have their own grime recipe (game/studio.js layer ids). */
-export const SCRUB_ITEMS = ['lamp', 'plant', 'chair', 'wallPaint', 'sign'];
+export const SCRUB_ITEMS = ['lamp', 'plant', 'chair', 'wallPaint', 'sign', 'leakFix'];
 
 /**
  * The grime recipes. hardness = how much grime one sponge rub takes off (sticky stains need more rubs than dust).
@@ -72,6 +72,15 @@ const RECIPES = {
     { kind: 'smudge', x: 0.46, y: 0.73, rx: 0.06, ry: 0.09, rot: -0.3 },
     { kind: 'smudge', x: 0.63, y: 0.44, rx: 0.06, ry: 0.09, rot: 0.2 },
     { kind: 'smudge', x: 0.77, y: 0.72, rx: 0.06, ry: 0.09, rot: -0.5 },
+  ] },
+  // The fixed leak: the old olive water marks round the new pipe joint and down the wall, dust and a cobweb on the pipe.
+  leakFix: { hardness: 0.08, spots: [
+    { kind: 'water', x: 0.5, y: 0.5, rx: 0.1, ry: 0.17 },
+    { kind: 'water', x: 0.3, y: 0.42, rx: 0.08, ry: 0.12 },
+    { kind: 'water', x: 0.69, y: 0.6, rx: 0.07, ry: 0.13 },
+    { kind: 'dust', x: 0.18, y: 0.3, rx: 0.12, ry: 0.06 },
+    { kind: 'dust', x: 0.83, y: 0.3, rx: 0.12, ry: 0.06 },
+    { kind: 'web', x: 0.9, y: 0.16, rx: 0.07, ry: 0.11, rot: 0.3 },
   ] },
 };
 

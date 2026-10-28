@@ -2,12 +2,16 @@
 // The studio is one room drawing (pop/backdrop.js) with a look per tier (0 dingy and dank, 1 a bit better, 2 clean,
 // sparkly and spa-like) and, on top, one object per studio upgrade the player has bought AND scrubbed clean
 // (save.studioLayers): lamp (a ring light on a stand), plant (a hanging plant), chair (a padded wingback chair behind
-// the customer), wallPaint (fresh wall colour) and sign (a shiny new sign).
+// the customer), wallPaint (fresh wall colour), sign (a shiny new sign) and leakFix (a new pipe joint: no more drip
+// and no bucket, owner 2026-10-28).
 // The same drawing is the backdrop of the pop scene and the full-size studio view (T5.1c, screens/studio.js), whose
 // captions and her outfit (outfit tiers, T5.2) come from the helpers at the end of this file.
 
-/** Every studio layer, in the order they are drawn (back to front): the wall first, the chair before the side things. */
-export const STUDIO_LAYERS = ['wallPaint', 'sign', 'chair', 'plant', 'lamp'];
+/**
+ * Every studio layer, in the order they are drawn (back to front): the ceiling pipe and the wall first, the chair before
+ * the side things.
+ */
+export const STUDIO_LAYERS = ['leakFix', 'wallPaint', 'sign', 'chair', 'plant', 'lamp'];
 
 /**
  * Which studio layers show, in draw order (back to front). Unknown ids, doubles and non-studio items are left out.

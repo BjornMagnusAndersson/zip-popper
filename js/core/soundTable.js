@@ -26,6 +26,8 @@ export const SOUND_TABLE = {
   peel: { type: 'synth', voice: 'peel', category: 'sfx' },
   wipe: { type: 'synth', voice: 'wipe', category: 'sfx' },
   cream_heal: { type: 'synth', voice: 'cream', category: 'sfx' },
+  // the studio
+  drip: { type: 'synth', voice: 'drip', category: 'sfx' }, // the leak plinking into the bucket (until "Fix the leak")
   // voices and reactions (placeholders until recordings exist)
   ooh_happy: { type: 'synth', voice: 'ooh', category: 'sfx' },
   laugh_evil: { type: 'synth', voice: 'laughEvil', category: 'sfx' },

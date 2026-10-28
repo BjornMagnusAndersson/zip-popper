@@ -42,7 +42,7 @@ import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
 import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
-import { drawBackdrop, nextBackdropChange, backdropKind } from './backdrop.js';
+import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding } from './backdrop.js';
 import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
 import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
@@ -778,7 +778,12 @@ export function createPopMode({
     const reduced = still();
     const time = (performance.now() - back.start) / 1000;
     drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr });
-    const next = nextBackdropChange(time, backdropKind(room, tier), reduced);
+    const leak = roomLeaks(backdropKind(room, tier), layers);
+    // The leak plinks into the bucket now and then (owner 2026-10-28: a little annoying, so she wants it fixed); the
+    // sound switch decides, so it also plinks with reduced motion (the drop then just hangs still).
+    if (leak && dripLands(back.last ?? time, time)) sound.play('drip');
+    back.last = time;
+    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity);
     if (Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
   }
 

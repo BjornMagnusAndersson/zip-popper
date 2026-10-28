@@ -42,13 +42,14 @@ import { STRIP as mapron } from '../data/comics/strip-mapron.js';
 import { STRIP as mtweezers } from '../data/comics/strip-mtweezers.js';
 import { STRIP as mstar } from '../data/comics/strip-mstar.js';
 import { STRIP as mmastery } from '../data/comics/strip-mmastery.js';
+import { STRIP as mleak } from '../data/comics/strip-mleak.js';
 
 /** Every strip of version 1 in the order the Comics screen lists them, with its kind (chapter, teaser or milestone). */
 export const STRIP_LIST = [
   [strip0, 'chapter'], [strip0b, 'chapter'], [strip1, 'chapter'], [strip2, 'chapter'], [strip3, 'chapter'], [strip4, 'chapter'],
   [strip4b, 'chapter'], [plan, 'chapter'],
   [strip5, 'chapter'], [scare, 'chapter'], [books, 'teaser'], [mlamp, 'milestone'], [mplant, 'milestone'],
-  [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'],
+  [mapron, 'milestone'], [mtweezers, 'milestone'], [mstar, 'milestone'], [mmastery, 'milestone'], [mleak, 'milestone'],
 ].map(([strip, kind]) => ({ strip, id: strip.id, titleKey: strip.title, kind }));
 
 /** The career chapter (5): the shop opens and the milestone strips (set in her studio) start playing there. */
