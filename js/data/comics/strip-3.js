@@ -30,14 +30,19 @@ function cupCozy(x, y, s) {
   ];
 }
 
-/** A big knitted striped sock (the group's "talking sock"). @param {number} x top middle @param {number} y top @param {number} s size @returns {object[]} shape layers */
-function talkingSock(x, y, s) {
-  // Turns a unit offset (dx, dy) into a point on the sock, scaled by s.
-  const p = (dx, dy) => `${x + dx * s} ${y + dy * s}`;
+/**
+ * A big knitted striped sock (the group's "talking sock").
+ * @param {number} x middle of the cuff @param {number} y the cuff's edge @param {number} s size
+ * @param {boolean} [puppet] worn on a raised hand: cuff at the bottom (round the wrist), toe up (owner 2026-10-28)
+ * @returns {object[]} shape layers
+ */
+function talkingSock(x, y, s, puppet = false) {
+  // Turns a unit offset (dx, dy) into a point on the sock, scaled by s (upside down for the puppet).
+  const p = (dx, dy) => `${x + dx * s} ${y + (puppet ? -dy : dy) * s}`;
   return [
     { shape: 'path', d: `M${p(-40, 0)} L${p(40, 0)} L${p(40, 150)} Q${p(46, 190)} ${p(90, 200)} L${p(130, 210)} Q${p(160, 240)} ${p(130, 266)} L${p(10, 260)} Q${p(-44, 250)} ${p(-40, 190)}Z`, fill: '#3fae8c', stroke: true, sw: 6 },
     { shape: 'path', d: `M${p(-40, 50)} L${p(40, 50)} M${p(-40, 100)} L${p(40, 100)} M${p(-40, 150)} L${p(40, 150)}`, fill: 'none', stroke: '#ffe27a', sw: 12 },
-    { shape: 'rect', x: x - 48 * s, y: y - 10 * s, w: 96 * s, h: 34 * s, rx: 10 * s, fill: '#ffffff', stroke: true, sw: 5 },
+    { shape: 'rect', x: x - 48 * s, y: y - (puppet ? 24 : 10) * s, w: 96 * s, h: 34 * s, rx: 10 * s, fill: '#ffffff', stroke: true, sw: 5 },
     { shape: 'path', d: `M${p(-10, 236)} q30 -10 60 4 M${p(60, 222)} q20 4 30 -4`, fill: 'none', stroke: '#2a8a6c', sw: 4 },
   ];
 }
@@ -141,7 +146,11 @@ export const STRIP = {
         bg: ['#fff6d8', '#ffe8b0'],
         layers: [
           { id: 'penny', art: 'penny', x: 190, y: 640, scale: 1.2, pose: 'bust', expr: 'happy', look: 1 },
-          ...talkingSock(400, 300, 0.9),
+          // Penny holds the sock out by its cuff (owner 2026-10-28: it floated with nobody holding it).
+          ...talkingSock(380, 400, 0.7),
+          { shape: 'path', d: 'M296 600 Q362 540 376 424', fill: 'none', stroke: true, sw: 40 },
+          { shape: 'path', d: 'M296 600 Q362 540 376 424', fill: 'none', stroke: '#62402e', sw: 30 },
+          { shape: 'circle', x: 378, y: 414, r: 24, fill: '#62402e', stroke: true, sw: 5 },
           { id: 'her', art: 'heroine', x: 640, y: 640, scale: 0.95, pose: 'bust', expr: 'shocked', flip: true },
         ],
       },
@@ -158,8 +167,9 @@ export const STRIP = {
         layers: [
           hall(800, 600, { floorY: 520, windowX: 0.82, plant: false, board: false }),
           { art: 'chair', x: 330, y: 600, scale: 0.72, color: '#3fae8c' },
-          ...talkingSock(492, 196, 0.42),
           { id: 'her', art: 'heroine', x: 330, y: 610, scale: 0.75, pose: 'wave', expr: 'shocked' },
+          // the sock worn like a puppet on her raised hand, over it (owner 2026-10-28: it sat behind her hand)
+          ...talkingSock(468, 262, 0.42, true),
         ],
       },
       camera: { move: 'pushIn', focus: [330, 240], amount: 0.12, ms: 2200 },

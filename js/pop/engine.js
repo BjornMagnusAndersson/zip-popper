@@ -538,9 +538,28 @@ export function createPopScene(canvas, o) {
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(fx, fy, p.r * 1.5, 0, Math.PI * 2); ctx.fill();
     }
-    // Two fingertips pressing in from both sides (drawn after the dents so they sit on top). A two-finger squeeze
-    // shows ghost pads at the real fingers instead (drawGhostPads).
-    for (const side of p.sqReach ? [] : [-1, 1]) {
+    // The fingertips themselves are drawn later (drawFingertips), over moles, marks and other bumps (owner 2026-10-28).
+    const shine = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.2);
+    shine.addColorStop(0, `rgba(255,236,228,${(p.sqReach ? 0.36 : 0.22) * Math.min(1, a)})`); // a squeeze shines more
+    shine.addColorStop(1, 'rgba(255,236,228,0)');
+    ctx.fillStyle = shine;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /**
+   * Two fingertips pressing in from both sides of a squeezed bump, drawn after everything that belongs to the skin
+   * (moles, freckles, marks, other bumps) so the fingers are always on top. A two-finger squeeze shows ghost pads at
+   * the real fingers instead (drawGhostPads).
+   * @param {object} p the pimple
+   * @param {number} a how hard it is pressed (as for drawWarp)
+   * @returns {void}
+   */
+  function drawFingertips(p, a) {
+    if (a <= 0.04 || p.popped || p.sqReach || tweezed(p)) return; // the same bumps drawWarp gave fingers to
+    const ax = Math.cos(p.axis);
+    const ay = Math.sin(p.axis);
+    const reach = (p.r * 1.9) * (1 - 0.2 * a);
+    for (const side of [-1, 1]) {
       const fx = p.x + ax * side * (reach + p.r * 0.1);
       const fy = p.y + ay * side * (reach + p.r * 0.1);
       drawFinger(ctx, fx, fy, p.axis + (side < 0 ? Math.PI : 0), Math.max(18, p.r * 1.7), Math.min(1, a * 3), gloves);
@@ -551,11 +570,6 @@ export function createPopScene(canvas, o) {
         ctx.restore();
       }
     }
-    const shine = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.2);
-    shine.addColorStop(0, `rgba(255,236,228,${(p.sqReach ? 0.36 : 0.22) * Math.min(1, a)})`); // a squeeze shines more
-    shine.addColorStop(1, 'rgba(255,236,228,0)');
-    ctx.fillStyle = shine;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.2, 0, Math.PI * 2); ctx.fill();
   }
 
   /**
@@ -1147,6 +1161,10 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) if (!p.popped) drawPimple(ctx, p, p.pressure, p.appear, time);
     for (const s of strands) drawStrand(ctx, s);
     for (const b of blobs) drawDrop(ctx, b);
+    for (const p of pimples) { // the squeezing fingertips, over the skin's moles, marks and the other bumps
+      const shake = !reduced && !p.popped && p.pressure > 0.8 ? Math.sin(time * 70) * 0.03 : 0;
+      drawFingertips(p, (p.popped ? 0 : p.pressure) + p.wob + shake);
+    }
     if (wipe) {
       ctx.save();
       ctx.globalAlpha = wipe.fade ? Math.max(0, 1 - wipe.fade) : 1;

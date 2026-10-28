@@ -54,9 +54,10 @@ function flatFootball(cx, floor, r, sy) {
     out.push({ shape: 'path', d: `M${at(t - 15, r)} L${at(t - 13, r * 0.84)} L${at(t, r * 0.66)} L${at(t + 13, r * 0.84)} L${at(t + 15, r)} A${r} ${ry} 0 0 0 ${at(t - 15, r)} Z`, fill: ink });
   }
   out.push({ shape: 'path', d: seams, fill: 'none', stroke: ink, sw: 3 });
-  // wrinkles on top where it sags, a shine, and the air going out at the top right
+  // the top caved in (owner 2026-10-28: it must look popped): a sunken dip, shaded, with folds round it
   const top = cy - ry;
-  out.push({ shape: 'path', d: `M${cx - r * 0.5} ${top + ry * 0.28} q${r * 0.25} ${ry * 0.14} ${r * 0.5} 0 M${cx + r * 0.08} ${top + ry * 0.12} q${r * 0.2} ${ry * 0.16} ${r * 0.42} ${ry * 0.06}`, fill: 'none', stroke: true, sw: 4 });
+  out.push({ shape: 'path', d: `M${cx - r * 0.72} ${top + ry * 0.32} Q${cx} ${top + ry * 1.05} ${cx + r * 0.72} ${top + ry * 0.32} Q${cx} ${top + ry * 0.5} ${cx - r * 0.72} ${top + ry * 0.32} Z`, fill: '#cfc8c1', stroke: true, sw: 4 });
+  out.push({ shape: 'path', d: `M${cx - r * 0.72} ${top + ry * 0.32} l-${r * 0.12} ${ry * 0.22} M${cx + r * 0.72} ${top + ry * 0.32} l${r * 0.12} ${ry * 0.22} M${cx - r * 0.3} ${top + ry * 0.75} l-${r * 0.06} ${ry * 0.28} M${cx + r * 0.3} ${top + ry * 0.75} l${r * 0.06} ${ry * 0.28}`, fill: 'none', stroke: true, sw: 4 });
   out.push({ shape: 'ellipse', x: cx - r * 0.55, y: cy - ry * 0.45, rx: r * 0.12, ry: r * 0.07, fill: '#ffffff', opacity: 0.9 });
   const hx = cx + r * 0.62;
   const hy = cy - ry * 0.78;
@@ -146,7 +147,7 @@ const PANELS = [
       scene: {
         bg: ['#ffe8d6', '#f7c9b0'],
         layers: [
-          ...flatFootball(190, 565, 125, 0.8),
+          ...flatFootball(190, 565, 135, 0.55),
           { id: 'him', art: 'husband', x: 560, y: 640, scale: 1.1, pose: 'bust', expr: 'sad', flip: true },
         ],
       },

@@ -155,18 +155,40 @@ function lease(x, y) {
 }
 
 /**
- * Her arm reaching over the lease to sign (drawn over the pages, since she stands behind the machine; a bent arm about as long as her real one, R7): pink sleeve,
- * hand and a pen whose tip sits at the end of her big loop.
+ * The lease lying FLAT on the machine's top (owner 2026-10-28: it used to stand up like a board and her arm went
+ * through it). Three pages seen from a little above, so they are wide and short; tiny print and her big pink loop.
+ * @param {number} x middle @param {number} y middle of the front page @returns {object[]} shape layers
+ */
+function flatLease(x, y) {
+  /** A page as a flat four-corner shape round its middle. @param {number} cx @param {number} cy @param {string} fill @returns {object} layer */
+  const page = (cx, cy, fill) => ({ shape: 'path', d: `M${cx - 128} ${cy + 22} L${cx + 120} ${cy + 16} L${cx + 104} ${cy - 22} L${cx - 112} ${cy - 18} Z`, fill, stroke: true, sw: 4 });
+  const out = [page(x - 40, y - 6, '#f3ecdc'), page(x + 36, y - 4, '#f7f1e3'), page(x, y, '#fffaf0')];
+  for (let r = 0; r < 4; r += 1) out.push({ shape: 'path', d: `M${x - 96} ${y - 12 + r * 7} L${x + (r % 2 ? 90 : 60)} ${y - 13 + r * 7}`, stroke: '#7d8597', sw: 2, opacity: 0.6 });
+  // Her signature: one big happy loop, squashed flat like the page.
+  out.push({ shape: 'path', d: `M${x - 70} ${y + 14} C${x - 50} ${y - 8} ${x - 14} ${y - 8} ${x - 22} ${y + 8} C${x - 30} ${y + 20} ${x + 24} ${y + 18} ${x + 32} ${y + 6} C${x + 40} ${y - 2} ${x + 60} ${y + 14} ${x + 74} ${y + 10}`, fill: 'none', stroke: '#e66a8f', sw: 5 });
+  return out;
+}
+
+/**
+ * Her arm reaching over the machine top from her shoulder to the end of her loop (about as long as her real arm, R7):
+ * pink sleeve over the counter top, her hand on the page, the pen's tip on the paper.
+ * @param {number[]} tip where the pen touches the page [x, y]
  * @returns {object[]} shape layers
  */
-const signingHand = () => [
-  { shape: 'path', d: 'M694 700 Q770 778 876 724', stroke: true, sw: 48 },
-  { shape: 'path', d: 'M694 700 Q770 778 876 724', stroke: '#e66a8f', sw: 36 },
-  { shape: 'rect', x: 884, y: 700, w: 15, h: 100, rx: 6, fill: '#6a7be6', stroke: true, sw: 4, rotate: -20 },
-  { shape: 'path', d: 'M904 790 L918 788 L906 812Z', fill: '#fff8ee', stroke: true, sw: 3 },
-  { shape: 'ellipse', x: 874, y: 726, rx: 25, ry: 23, fill: '#ebb795', stroke: true, sw: 5 },
-  { shape: 'path', d: 'M930 760 l20 -10 M936 786 l22 0', stroke: true, sw: 4, opacity: 0.6 },
+const signingHand = ([tx, ty]) => [
+  // shoulder, a bent elbow resting on the machine top, then the forearm up to the page
+  { shape: 'path', d: `M676 716 Q742 772 800 760 Q860 748 ${tx - 22} ${ty - 14}`, stroke: true, sw: 46 },
+  { shape: 'path', d: `M676 716 Q742 772 800 760 Q860 748 ${tx - 22} ${ty - 14}`, stroke: '#e66a8f', sw: 34 },
+  { shape: 'rect', x: tx - 8, y: ty - 58, w: 13, h: 62, rx: 5, fill: '#6a7be6', stroke: true, sw: 4, rotate: 18 },
+  { shape: 'ellipse', x: tx - 18, y: ty - 16, rx: 22, ry: 18, fill: '#ebb795', stroke: true, sw: 5 },
+  { shape: 'path', d: `M${tx + 18} ${ty - 30} l18 -10 M${tx + 22} ${ty - 10} l20 0`, stroke: true, sw: 4, opacity: 0.6 },
 ];
+
+/**
+ * The machine's top seen from a little above, a light band in front of the people, so the lease can lie on it.
+ * @param {number} x0 left @param {number} x1 right @param {number} back far edge @param {number} front near edge (the machine's front top) @returns {object} layer
+ */
+const counterTop = (x0, x1, back, front) => ({ shape: 'path', d: `M${x0} ${front} L${x1} ${front} L${x1 - 24} ${back} L${x0 + 24} ${back} Z`, fill: '#e9e7de', stroke: true, sw: 6 });
 
 /**
  * A washing machine seen close up, filling the bottom of a panel like a counter (the lease lies on top of it).
@@ -350,9 +372,10 @@ export const STRIP = {
           ...spoon(P5_HIM),
           { id: 'her', art: 'heroine', x: 600, y: 1000, scale: 0.9, pose: 'stand', expr: 'proud' },
           { id: 'landlord', art: 'landlord', x: 1230, y: 960, pose: 'wave', flip: true, expr: 'happy', look: -1 },
-          ...counter(300, 1360, 700, 900),
-          ...lease(800, 610),
-          ...signingHand(),
+          ...counter(300, 1360, 770, 900),
+          counterTop(300, 1360, 712, 776),
+          ...flatLease(880, 744),
+          ...signingHand([954, 754]),
         ],
       },
       camera: { move: 'pushIn', focus: [860, 560], amount: 0.06, ms: 3000 },
