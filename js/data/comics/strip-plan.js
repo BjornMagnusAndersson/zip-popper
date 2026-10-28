@@ -177,8 +177,8 @@ function flatLease(x, y) {
  */
 const signingHand = ([tx, ty]) => [
   // shoulder, a bent elbow resting on the machine top, then the forearm up to the page
-  { shape: 'path', d: `M676 716 Q742 772 800 760 Q860 748 ${tx - 22} ${ty - 14}`, stroke: true, sw: 46 },
-  { shape: 'path', d: `M676 716 Q742 772 800 760 Q860 748 ${tx - 22} ${ty - 14}`, stroke: '#e66a8f', sw: 34 },
+  { shape: 'path', d: `M676 716 Q706 762 742 760 Q776 758 ${tx - 22} ${ty - 14}`, stroke: true, sw: 46 },
+  { shape: 'path', d: `M676 716 Q706 762 742 760 Q776 758 ${tx - 22} ${ty - 14}`, stroke: '#e66a8f', sw: 34 },
   { shape: 'rect', x: tx - 8, y: ty - 58, w: 13, h: 62, rx: 5, fill: '#6a7be6', stroke: true, sw: 4, rotate: 18 },
   { shape: 'ellipse', x: tx - 18, y: ty - 16, rx: 22, ry: 18, fill: '#ebb795', stroke: true, sw: 5 },
   { shape: 'path', d: `M${tx + 18} ${ty - 30} l18 -10 M${tx + 22} ${ty - 10} l20 0`, stroke: true, sw: 4, opacity: 0.6 },
@@ -374,8 +374,9 @@ export const STRIP = {
           { id: 'landlord', art: 'landlord', x: 1230, y: 960, pose: 'wave', flip: true, expr: 'happy', look: -1 },
           ...counter(300, 1360, 770, 900),
           counterTop(300, 1360, 712, 776),
-          ...flatLease(880, 744),
-          ...signingHand([954, 754]),
+          // the pen tip about one arm's reach from her shoulder (owner 2026-10-28: the arm was too long)
+          ...flatLease(790, 746),
+          ...signingHand([842, 754]),
         ],
       },
       camera: { move: 'pushIn', focus: [860, 560], amount: 0.06, ms: 3000 },
