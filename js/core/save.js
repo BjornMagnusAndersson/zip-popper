@@ -30,7 +30,8 @@ export function defaultSave(now = Date.now()) {
     outfitTier: 1,
     stats: { pops: 0, stars: 0, bestCombo: 0 },
     // squeeze (T1.7): two fingers round a bump squeeze it (off by default; old saves load with it off)
-    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, lowDetail: false, lang: 'en', musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME },
+    // squeeze true (owner 2026-10-28, SPEC D43): new players squeeze between two fingers, so the finger does not hide the pop
+    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: true, lowDetail: false, lang: 'en', musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME },
     seenComics: [],
     squeezeHintSeen: false, // the one-time "squeeze between two fingers" hint was shown (T1.7)
     // Economy fields (T3.2, docs/ECONOMY.md section 8). Added without a version bump: older saves simply get these defaults.

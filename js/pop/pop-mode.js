@@ -400,9 +400,9 @@ export function createPopMode({
       }));
     }
     if (step === 'cream' || step === 'done') return t('pop.hint.cream');
-    if (squeeze && canSqueeze(toolId)) { // T1.7: the squeeze switch is on and fingers are in hand
+    if (squeeze && canSqueeze(toolId)) { // T1.7: the squeeze switch is on and fingers (or the cotton pad, D43) are in hand
       if (squeezeHintOn) return t('round.squeezeHint');
-      return t('pop.squeezeTip'); // a short fingers hint with the squeeze in it (keeps the hint line short)
+      return t(toolId === 'cottonPad' ? 'pop.squeezeTipPad' : 'pop.squeezeTip'); // a short hint with the squeeze in it (keeps the hint line short)
     }
     return t(`tool.${toolId}.hint`);
   }

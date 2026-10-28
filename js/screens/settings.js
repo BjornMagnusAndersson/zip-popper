@@ -27,7 +27,7 @@ export function createSettingsScreen({
   canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function', osStill = false,
 }) {
   const shell = screenShell('settings', { label: t('ui.settings.title'), reducedMotion });
-  let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: false, ...settings };
+  let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: true, lowDetail: false, ...settings };
   const head = header(t, t('ui.settings.title'), onBack, shell.signal);
   const body = el('div', 'app-body app-settings');
   const notice = el('p', 'app-notice');

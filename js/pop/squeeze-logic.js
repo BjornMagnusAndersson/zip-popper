@@ -41,8 +41,11 @@ export const SQUEEZE = {
   release: 1.4,
 };
 
-/** The tools that squeeze with two fingers: bare fingers (and gloves, once they are a tool). */
-export const SQUEEZE_TOOLS = ['fingers', 'gloves'];
+/**
+ * The tools that squeeze with two fingers: bare fingers (and gloves, once they are a tool), and the cotton pad (owner
+ * 2026-10-28, SPEC D43: a pad round each fingertip; it keeps its own rules, whiteheads and gold).
+ */
+export const SQUEEZE_TOOLS = ['fingers', 'gloves', 'cottonPad'];
 
 /** Clamp to 0..1 (not a number = 0). @param {number} v value @returns {number} 0..1 */
 const unit = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
@@ -53,7 +56,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 /**
  * Whether a tool squeezes with two fingers.
  * @param {string} toolId a tool id
- * @returns {boolean} true for fingers (and gloves)
+ * @returns {boolean} true for fingers (and gloves) and the cotton pad
  */
 export function canSqueeze(toolId) {
   return SQUEEZE_TOOLS.includes(toolId);

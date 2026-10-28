@@ -45,6 +45,13 @@ export function createMenuScreen({
   cont.append(contLabel, contSub);
   cont.addEventListener('click', () => onContinue?.(), { signal: shell.signal });
   list.append(cont);
+  // "Just pop!" (owner 2026-10-28, SPEC D43): free play as a big button right under Continue, for players who only want
+  // to pop and not the story (it used to be a small button further down).
+  const pop = el('button', 'app-menubtn app-menubtn--work app-menubtn--justpop');
+  pop.type = 'button';
+  pop.append(el('span', 'app-menubtn__label', t('ui.menu.justPop')), el('span', 'app-menubtn__sub', t('ui.menu.justPopSub')));
+  pop.addEventListener('click', () => onFreePlay?.(), { signal: shell.signal });
+  list.append(pop);
   if (showKeepWorking) { // Keep working (T5.4): after the ending, random customers at lower pay
     const work = el('button', 'app-menubtn app-menubtn--work');
     work.type = 'button';
@@ -68,7 +75,6 @@ export function createMenuScreen({
     b.addEventListener('click', () => fn?.(), { signal: shell.signal });
     list.append(b);
   };
-  add('ui.menu.freePlay', onFreePlay);
   add('ui.menu.comics', onComics);
   if (onGuide) add('ui.menu.guide', onGuide); // the Field guide (T6.5): always there, like Comics (unmet cards are locked)
   if (onAlbum) add('ui.menu.album', onAlbum); // the Face album (T8.2): the game passes it from the career chapter on

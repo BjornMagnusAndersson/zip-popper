@@ -1798,6 +1798,7 @@ export function createPopScene(canvas, o) {
       ctx.beginPath();
       ctx.ellipse(0, 0, R * squash * 0.72, R * 0.8, 0, edge - 0.7, edge + 0.7);
       ctx.stroke();
+      if (p.tool === 'cottonPad') drawPad(ctx, 0, 0, R * 0.85); // with the cotton pad: a pad on each fingertip (D43)
       ctx.restore();
     }
     ctx.restore();
