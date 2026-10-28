@@ -214,6 +214,19 @@ const PANELS = [
       ],
     },
     {
+      // 9b. Close-up, owner 2026-10-28: the secret pride. Alone, he admires his smooth, sparkling chin.
+      layout: 'small',
+      scene: {
+        layers: [
+          { art: 'rays', w: 800, h: 600, x: 560, y: 380, colors: ['#d6e6ff', '#b8d2ff'] },
+          { id: 'him', art: 'husband', x: 560, y: 640, scale: 1.15, pose: 'bust', expr: 'proud', flip: true },
+          { art: 'sparkles', x: 560, y: 470, r: 80 },
+        ],
+      },
+      camera: { move: 'pushIn', focus: [560, 420], amount: 0.1, ms: 2200 },
+      bubbles: [{ kind: 'think', key: 'comic.s0.p9.think', at: [210, 150], to: 'him', w: 300 }],
+    },
+    {
       // 10. She tries her luck. Running gag: "No."
       layout: 'small',
       scene: { layers: [living(800, 600, { floorY: 520, windowX: 0.5, picture: false, plant: false, lamp: false }),
