@@ -106,6 +106,8 @@
 .app-name__title { font-size: 1.7rem; font-weight: 900; }
 .app-name__prompt, .app-name__hint { font-size: 0.95rem; }
 .app-name__hint { color: #6a5148; font-size: 0.85rem; }
+/* The first-start note (owner 2026-10-28): just a cartoon, do not try this at home. A soft yellow sticky note. */
+.app-name__cartoon { margin: 4px 0 0; padding: 8px 12px; border-radius: 12px; background: #fff3c4; border: 2px dashed #e0b84a; color: #5a4320; font-size: 0.85rem; font-weight: 700; }
 .app-namefield { display: grid; gap: 8px; text-align: left; }
 .app-field__label { font-weight: 800; font-size: 0.9rem; }
 .app-input {
@@ -199,6 +201,8 @@
   line-height: 1.2; box-shadow: 0 3px 0 var(--ink);
 }
 .app-result__stamp svg { flex: none; width: 24px; height: 24px; }
+/* A pin visit (owner 2026-10-28): "Pin taken away!" in a pale blue pill (the jar's glass), not the gold of a stamp. */
+.app-result__pin { background: linear-gradient(160deg, #eef8fb, #bfe2ee); }
 .app-rep {
   order: 3; display: flex; align-items: center; justify-content: center; gap: 8px; align-self: center; max-width: 100%; padding: 6px 16px 6px 10px; border-radius: 999px;
   border: 3px solid var(--ink); background: var(--pink-soft); font-weight: 800; box-shadow: 0 3px 0 var(--ink);

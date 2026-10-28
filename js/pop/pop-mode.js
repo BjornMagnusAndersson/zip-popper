@@ -149,6 +149,7 @@ export function createPopMode({
   let ready = false; // mounted and measured: faces can be laid out
   let tier = firstTier;
   let layers = Array.isArray(firstLayers) ? [...firstLayers] : []; // owned studio upgrades drawn in the room (T5.1a)
+  let pins = 0; // home-popping pins in the jar on the shelf (game/pin-jar.js; startRound and startFree say how many)
   let room = 'studio'; // the room behind the face: 'studio' or 'home' (startRound's room, SPEC D19)
   let moodOverride = null; // a fixed face mood from startRound or setMood (e.g. 'sleep'), null = the usual moods
   // How faces are made now: 'demo' (the old path), 'round' (one customer, startRound) or 'free' (startFree).
@@ -777,7 +778,7 @@ export function createPopMode({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const reduced = still();
     const time = (performance.now() - back.start) / 1000;
-    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr });
+    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins });
     const leak = roomLeaks(backdropKind(room, tier), layers);
     // The leak plinks into the bucket now and then (owner 2026-10-28: a little annoying, so she wants it fixed); the
     // sound switch decides, so it also plinks with reduced motion (the drop then just hangs still).
@@ -1082,6 +1083,7 @@ export function createPopMode({
       room = o.room === 'home' ? 'home' : 'studio';
       if (Number.isFinite(o.tier)) tier = o.tier;
       if (Array.isArray(o.layers)) layers = [...o.layers];
+      pins = Number(o.pins) || 0;
       paintBackdrop();
       startNow(true);
     },
@@ -1106,6 +1108,7 @@ export function createPopMode({
       room = 'studio'; // free play is always in the studio
       if (Number.isFinite(o.tier)) tier = o.tier;
       if (Array.isArray(o.layers)) layers = [...o.layers];
+      pins = Number(o.pins) || 0;
       paintBackdrop();
       startNow(true);
     },

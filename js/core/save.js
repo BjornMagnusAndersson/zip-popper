@@ -43,6 +43,7 @@ export function defaultSave(now = Date.now()) {
     pendingStrips: [], // milestone strips earned by the last customer, not yet played (B4: they survive closing the app on the result screen)
     endingSeen: false, // the "To be continued" ending was reached: the menu shows Keep working (T5.4, SPEC D23)
     keepWorkingDone: 0, // Keep working customers finished or skipped (its own count; story progress never moves in it)
+    pinJar: 0, // home-popping pins she took away from customers (owner 2026-10-28; the jar on the studio shelf)
     // Daily challenge (T8.5, game/daily-logic.js; old saves load these): streak = days in a row with the goal reached,
     // lastDone = the last rewarded day and lastPlayed = the last day tried ('YYYY-MM-DD' or ''), best = the longest
     // streak, attempts = tries in all (finished or skipped daily customers).
@@ -177,6 +178,7 @@ export function normalizeSave(raw, now = Date.now()) {
     pendingStrips: words(s.pendingStrips, d.pendingStrips),
     endingSeen: flag(s.endingSeen, d.endingSeen),
     keepWorkingDone: count(s.keepWorkingDone, d.keepWorkingDone),
+    pinJar: count(s.pinJar, d.pinJar),
     dailyStreak: count(s.dailyStreak, d.dailyStreak),
     dailyLastDone: dateText(s.dailyLastDone),
     dailyLastPlayed: dateText(s.dailyLastPlayed),

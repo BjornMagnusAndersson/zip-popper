@@ -22,16 +22,17 @@ const FIGURE_HEIGHT = 640; // comic-art.js: a standing figure at scale 1 is abou
 /**
  * Build the studio view screen.
  * @param {{t: (key: string, vars?: object) => string, tier?: number, layers?: string[], outfit?: string,
- *   masters?: string[], hang?: string|null, onDiploma?: (type: string) => void, onContinue?: () => void,
+ *   masters?: string[], hang?: string|null, pins?: number, onDiploma?: (type: string) => void, onContinue?: () => void,
  *   onBack?: () => void, reducedMotion?: boolean}} opts
  *   t = string function; tier = studio tier 0..2; layers = owned studio upgrades (draw order); outfit = what she wears
  *   (comic-art.js OUTFITS name); masters = the mastered bump ids (their frames hang on the wall of fame); hang = a bump id
  *   whose frame was just earned (hang mode: it drops onto the wall, and a Continue button shows); onDiploma = a frame
- *   was tapped; onContinue = Continue in hang mode; onBack = Back
+ *   was tapped; onContinue = Continue in hang mode; onBack = Back; pins = home-popping pins in the jar on the shelf
+ *   (game/pin-jar.js; a caption line once there is one)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createStudioScreen({
-  t, tier = 0, layers = [], outfit = 'everyday', masters = [], hang = null, onDiploma, onContinue, onBack, reducedMotion = false,
+  t, tier = 0, layers = [], outfit = 'everyday', masters = [], hang = null, pins = 0, onDiploma, onContinue, onBack, reducedMotion = false,
 }) {
   const shell = screenShell('studio', { label: t('ui.studio.title'), reducedMotion });
   const head = header(t, t('ui.studio.title'), onBack, shell.signal);
@@ -65,6 +66,7 @@ export function createStudioScreen({
   notes.append(el('p', 'app-studio__hint', t(masters.length ? 'ui.studio.fameHint' : 'ui.studio.fameEmpty')));
   notes.append(el('p', 'app-studio__tier', t(caps.tierKey)));
   if (tap) notes.append(el('p', 'app-studio__hint', t('ui.studio.capHint')));
+  if (pins > 0) notes.append(el('p', 'app-studio__tier', t('ui.studio.pinJar', { n: pins }))); // the pin jar on the shelf
   if (caps.emptyKey) notes.append(el('p', 'app-studio__empty', t(caps.emptyKey)));
   else {
     const list = el('ul', 'app-studio__list');
@@ -95,7 +97,7 @@ export function createStudioScreen({
     canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawStudio(ctx, w, h, tier, layers, { view: true, masters: dropping ? masters.filter((m) => m !== hang) : masters });
+    drawStudio(ctx, w, h, tier, layers, { view: true, masters: dropping ? masters.filter((m) => m !== hang) : masters, pins });
     const spots = layerSpots(w, h, true);
     geo = { w, h, hero: spots.hero, chair: spots.chair };
     her.setAttribute('viewBox', `0 0 ${w} ${h}`);

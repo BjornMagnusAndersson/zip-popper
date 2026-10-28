@@ -1,7 +1,7 @@
 // Did-you-know facts shown after a customer. Each entry is a string KEY (text in strings/en.json), never literal text.
 
-/** The fact keys (35, owner 2026-10-28: 25 more so they repeat less), in the order they are handed out. */
-export const FACT_KEYS = Array.from({ length: 35 }, (_, i) => `fact.${i + 1}`);
+/** The fact keys (38, owner 2026-10-28: 25 more so they repeat less, then 3 about cysts, milia and deep lumps; fact.pin is shown after a pin visit, game/pin-jar.js), in the order they are handed out. */
+export const FACT_KEYS = Array.from({ length: 38 }, (_, i) => `fact.${i + 1}`);
 
 /**
  * Returns the fact key for the n-th customer. The list cycles, so after the last fact the first one comes back.

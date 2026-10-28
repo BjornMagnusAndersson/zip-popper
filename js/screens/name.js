@@ -43,7 +43,7 @@ export function createNameField({ t, value = '', buttonKey = 'ui.name.go', showL
 }
 
 /**
- * Build the first-start name screen.
+ * Build the first-start name screen, with a short "just a cartoon, do not try this at home" note under the field.
  * @param {{t: (key: string, vars?: object) => string, name?: string, onDone?: (name: string) => void, reducedMotion?: boolean}} opts
  *   t = string function; name = a name to start with (for example when the screen is shown again); onDone = called with the
  *   clean name (the default name when the field was empty)
@@ -58,6 +58,7 @@ export function createNameScreen({ t, name = '', onDone, reducedMotion = false }
     el('p', 'app-name__prompt', t('ui.name.prompt')),
     field.node,
     el('p', 'app-name__hint', t('ui.name.hint', { max: nameLimit(), default: t('name.default') })),
+    el('p', 'app-name__cartoon', t('ui.name.cartoon')), // seen once, on first start (owner 2026-10-28; About says more)
   );
   const body = el('div', 'app-body app-body--center');
   body.append(card);

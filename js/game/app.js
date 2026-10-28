@@ -736,7 +736,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function finishRound(step, payload, again, args) {
     // A boss pays its bonus (T8.4); the visit's lines go along so the line memory counts the visit (R6-lines).
-    const out = L.applyRound(save, payload, { ...step, ...(args?.boss ? { boss: args.boss.id } : {}), ...(args?.lines ? { lines: args.lines } : {}) });
+    // A pin visit puts the pin into the jar (owner 2026-10-28, game/pin-jar.js).
+    const out = L.applyRound(save, payload, { ...step, ...(args?.boss ? { boss: args.boss.id } : {}), ...(args?.lines ? { lines: args.lines } : {}), ...(args?.pin ? { pin: true } : {}) });
     if (out.retry) { again(); return; }
     // T8.5: a daily challenge try (finished or skipped) settles the goal reward and the streak, once per day.
     const daily = step.daily
@@ -762,6 +763,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       stampKey: stamp && face ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
       reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '' }) : null,
       skills: L.skillNews(out.skills), // D34: "Level up!" or how many clean pops the next level needs
+      pinCount: out.pinJar ?? null, // "Pin taken away! Pin jar: n" after a pin visit
       onContinue: () => afterResult(onward),
       onShop: L.shopOpen(save) ? () => afterResult(() => showShop(onward)) : undefined,
     }));

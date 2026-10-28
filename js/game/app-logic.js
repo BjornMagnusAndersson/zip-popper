@@ -25,6 +25,7 @@ import { BUMP_IDS } from '../data/bumps.js';
 import { TOOL_IDS, GLOVES } from '../data/tools.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
+import { pinVisit, pinIntroKey } from './pin-jar.js';
 import { GUIDE_KINDS } from '../screens/guide-logic.js';
 import { demoAlbum } from '../screens/album-logic.js';
 import { STRIP as strip0, STRIP_BAN as strip0b } from '../data/comics/strip-0.js';
@@ -437,10 +438,11 @@ export function backdropLayers(save) {
  * What the studio view screen shows (T5.1c): the studio tier, the owned upgrades in draw order, her outfit and the
  * Master diplomas on the wall of fame (R8j).
  * @param {object} save the save
- * @returns {{tier: number, layers: string[], outfit: string, masters: string[]}} the studio view's data
+ * @returns {{tier: number, layers: string[], outfit: string, masters: string[], pins: number}} the studio view's data (pins =
+ *   the pins in the jar on the shelf, game/pin-jar.js)
  */
 export function studioViewArgs(save) {
-  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: heroOutfit(save), masters: masterKinds(save) };
+  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: heroOutfit(save), masters: masterKinds(save), pins: save.pinJar ?? 0 };
 }
 
 /**
@@ -490,6 +492,8 @@ export function backdropRoom(chapter) {
  * introKey, deadlineKey = the second line, and resultKeys); a customer who may ask for a request can instead be the
  * "Hurry, hurry, hurry!" customer (hurryLineRequest: a hurry request with line: true and an easy clock). step.hurryTier
  * picks a harder tier for a later game (data/customer-lines.js HURRY_LINE_TIERS); v1 never sets it.
+ * Pin jar (owner 2026-10-28, game/pin-jar.js): pin = this customer brought a pin from home (their intro says so);
+ * pins = how many pins are in the jar now (drawn on the studio shelf).
  * @returns {object|null} startRound arguments, or null when the chapter has no such customer
  */
 export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, forcedBoss = null) {
@@ -529,7 +533,10 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
   const lines = customerLines(save, spec.customer, {
     seed, step, timed: request?.type === 'hurry', hurryLine: request?.line ? { tier: request.tier, missPenalty: request.missPenalty } : null,
   });
-  const customer = { ...spec.customer, introKey: lines.introKey, deadlineKey: lines.secondKey, resultKeys: { ...lines.resultKeys } };
+  // The pin jar (owner 2026-10-28): now and then a customer brings a pin from home and says so first (game/pin-jar.js).
+  const pin = pinVisit(step, { boss: bossId, regular: Boolean(spec.customer?.regular) });
+  const introKey = pin ? pinIntroKey(save.pinJar ?? 0) : lines.introKey;
+  const customer = { ...spec.customer, introKey, deadlineKey: lines.secondKey, resultKeys: { ...lines.resultKeys } };
   return {
     // Gloves (SPEC D32e): once she owns them her fingertips are blue and the customer relaxes a bit (data/tools.js GLOVES).
     customer, lines, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes],
@@ -537,7 +544,7 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
     gloves: unlockedTools.includes('gloves'),
     seed, holdFactors, roughReductions, unlockedTools,
     request, room: backdropRoom(step.chapter), tier: backdropTier(save),
-    layers: backdropLayers(save), career: true,
+    layers: backdropLayers(save), pins: save.pinJar ?? 0, pin, career: true,
     decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
     twist, twistHintKey: boss ? boss.hintKey : describeTwist(twist, { ownedTools: unlockedTools })?.hintKey ?? null,
     boss: spec.boss ?? null, bossNameKey: boss?.nameKey ?? null, // T8.4
@@ -580,7 +587,7 @@ export function freeArgs(save, forcedSeed = null) {
   const { holdFactors, roughReductions } = masteryTables(save);
   return {
     unlockedTools: [...TOOL_IDS], room: 'studio', tier: backdropTier(save),
-    layers: backdropLayers(save), holdFactors, roughReductions,
+    layers: backdropLayers(save), pins: save.pinJar ?? 0, holdFactors, roughReductions, // pins: the jar on the shelf
     ...(Number.isFinite(forcedSeed) && forcedSeed > 0 ? { seed: forcedSeed } : {}),
   };
 }
@@ -659,9 +666,10 @@ export function noseLeftKey(step) {
  * @param {{chapter: number, n: number, boss?: string, lines?: object}} step the customer step that was played
  * @returns {{save: object, retry: boolean, failed: boolean, stars: number, payout: object|null, reputationChange: number,
  *   skipPenalty: number, strips: string[], factKey: string|null, reactionKey: string|undefined, boss?: string|null,
- *   skills?: ReturnType<typeof roundSkills>|null}}
+ *   skills?: ReturnType<typeof roundSkills>|null, pinJar?: number|null}}
  *   the outcome (boss = the finished boss's id, for its stamp; skills = level ups, new Masters and the closest next
- *   level, economy.js roundSkills, D34; null when failed)
+ *   level, economy.js roundSkills, D34; null when failed; pinJar = the jar count after a pin visit (step.pin), else null:
+ *   the pin goes into the jar and the fact card is the one about pins)
  */
 export function applyRound(save, payload, step) {
   const failed = Boolean(payload?.failed);
@@ -713,12 +721,15 @@ export function applyRound(save, payload, step) {
   // R6-lines: the visit's own lines (step.lines = roundArgs lines, app.js passes them) or the customer's plain keys.
   const said = failed ? undefined : reactionKey(step?.lines?.resultKeys ? { resultKeys: step.lines.resultKeys } : spec?.customer, payload.owCount ?? 0);
   // The line memory counts this visit (finished or skipped), so the next one is a return with other lines.
-  const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips] }, step?.lines, said, failed); // strips kept until played (B4)
+  const pinTaken = !failed && step?.pin === true; // a pin visit: the pin goes into the jar (game/pin-jar.js)
+  const jar = (save.pinJar ?? 0) + (pinTaken ? 1 : 0);
+  const next = recordLines({ ...economyToSave(save, after), ...moved, pendingStrips: [...strips], pinJar: jar }, step?.lines, said, failed); // strips kept until played (B4)
   // Nose dots left on: the customer says so instead (owner 2026-10-28); the line memory keeps the usual line.
   const shown = !failed && payload.stripLeft === true ? noseLeftKey(step) : said;
   return {
     save: next, retry: false, failed, stars, payout, reputationChange: after.reputation - before.reputation, skipPenalty,
-    strips, factKey: failed ? null : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
+    strips, factKey: failed ? null : pinTaken ? 'fact.pin' : factForCustomer(kw ? step.n - 1 : step.chapter * 20 + step.n - 1),
+    pinJar: pinTaken ? jar : null, // the jar count after a pin visit, for the result line; null = no pin this time
     reactionKey: shown,
     boss: !failed && isBoss(step?.boss) ? step.boss : null, // a finished boss: its stamp goes into the album (T8.4)
     skills: failed ? null : roundSkills(before, after, payload.cleanBumpTypes ?? []), // level ups and the next goal (D34)

@@ -19,6 +19,7 @@ import { rng } from './logic.js';
 import { drawPimple, drawHair, hairPoints } from './art.js';
 import { studioLayersShown, studioKey } from '../game/studio.js';
 import { BUMP_IDS } from '../data/bumps.js';
+import { pinsDrawn } from '../game/pin-jar.js';
 
 /** The backdrop tiers there are (same as the studio tiers in SPEC section 4). */
 export const BACKDROP_TIERS = [0, 1, 2];
@@ -1382,6 +1383,71 @@ function oldChair(ctx, c, floorY, u) {
 }
 
 /**
+ * Where the shelf is (the dingy shelf or the spa shelf: the same place), so things drawn on top later sit on it.
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number|string} kind backdrop kind 0..2
+ * @returns {{x: number, y: number, len: number, rot: number}} left end, top of the plank, length and tilt
+ */
+export function shelfSpot(w, h, kind) {
+  const land = w > h;
+  const len = Math.max(70, Math.min(130, w * 0.2));
+  const pal = paletteFor(kind);
+  return { x: land ? w * 0.78 : w - len - w * 0.05, y: h * (land ? 0.34 : 0.2), len, rot: !pal.spa && pal.grime > 0.5 ? 0.04 : 0 };
+}
+
+/**
+ * The pin jar on the right end of the shelf (owner 2026-10-28, game/pin-jar.js): a little glass jar with a red lid,
+ * filling up with the home-popping safety pins she took away from customers. Nothing before the first pin.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number|string} kind backdrop kind 0..2
+ * @param {number} count pins to draw (game/pin-jar.js pinsDrawn)
+ * @returns {void}
+ */
+export function drawPinJar(ctx, w, h, kind, count) {
+  if (!(count > 0)) return;
+  const { x, y, len, rot } = shelfSpot(w, h, kind);
+  const k = len / 120;
+  const lw = Math.max(1, 1.3 * k);
+  const jw = 15 * k;
+  const jh = 22 * k;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.translate(113 * k, 0);
+  box(ctx, -jw / 2, -jh, jw, jh, 3 * k); // the glass, a faint tint
+  ctx.fillStyle = 'rgba(215,238,245,0.45)';
+  ctx.fill();
+  const cols = ['#e2524f', '#4f8fe2', '#f2c14e', '#5fbf8e', '#c46fe0'];
+  for (let i = 0; i < count; i += 1) { // the pins: rows of four from the bottom up, each a little tilted
+    const row = Math.floor(i / 4);
+    const px = (-4.5 + (i % 4) * 3 + (row % 2) * 1.2) * k;
+    const py = -2.5 * k - row * 2.6 * k;
+    const a = ((i * 37) % 7 - 3) * 0.25;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a);
+    ctx.strokeStyle = '#9aa4ab';
+    ctx.lineWidth = Math.max(0.8, 0.8 * k);
+    ctx.beginPath(); ctx.moveTo(-2.2 * k, 0); ctx.lineTo(2.2 * k, 0); ctx.stroke();
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.beginPath(); ctx.arc(-2.4 * k, 0, 0.95 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  box(ctx, -jw / 2, -jh, jw, jh, 3 * k); // the glass outline and a shine on top of the pins
+  ctx.strokeStyle = INK.ink;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillRect(-jw / 2 + 2 * k, -jh + 3 * k, 1.8 * k, jh - 7 * k);
+  box(ctx, -jw / 2 - 1 * k, -jh - 4 * k, jw + 2 * k, 4.5 * k, 1.5 * k); // the red lid
+  inked(ctx, '#e2524f', lw, INK);
+  ctx.restore();
+}
+
+/**
  * The leak's drip (owner 2026-10-28: alive, and a tiny bit annoying, so players want it fixed). One cycle in seconds:
  * the drop swells under the joint (grow), falls (fall), plinks into the bucket and splashes (splash), then a short rest.
  */
@@ -1891,7 +1957,7 @@ function drawLight(ctx, w, h, tier, level) {
  * @param {number} h height in CSS px
  * @param {number} tier studio tier 0..2 (unknown tiers fall back to 0)
  * @param {string[]} [layers] owned studio layer ids (save.studioLayers)
- * @param {{view?: boolean, masters?: string[]}} [o] view: true (default) = the studio view's places and sizes for the
+ * @param {{view?: boolean, masters?: string[], pins?: number}} [o] pins = pins in the jar (game/pin-jar.js); view: true (default) = the studio view's places and sizes for the
  *   layers (no face in front, so the chair is chair-sized and stands on the floor); false = the pop scene's places;
  *   masters = the wall of fame's framed diplomas (bump ids; left out = no wall of fame, R8j)
  * @returns {void}
@@ -1901,6 +1967,7 @@ export function drawStudio(ctx, w, h, tier, layers = [], o = {}) {
   drawRoom(ctx, w, h, kind, layers, o.view !== false, o.masters ?? null);
   drawLight(ctx, w, h, kind, 1);
   if (roomLeaks(kind, layers)) drawDrip(ctx, w, h, 0, true); // a still drop hanging from the joint
+  drawPinJar(ctx, w, h, kind, pinsDrawn(o.pins)); // the pin jar on the shelf (game/pin-jar.js)
 }
 
 /**
@@ -2023,7 +2090,8 @@ function roomCanvas(w, h, tier, dpr, layers = []) {
  * @param {CanvasRenderingContext2D} ctx where to draw (already scaled so 1 unit = 1 CSS px)
  * @param {number} w width in CSS px
  * @param {number} h height in CSS px
- * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number}} [o] room
+ * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number, pins?: number}} [o] pins =
+ *   the pins in the jar on the shelf (game/pin-jar.js); room
  *   'studio' (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), the owned studio layers (save.studioLayers,
  *   T5.1a; the home room ignores them), seconds since the scene started (for the flicker or the home lamp's
  *   breathing), reduced motion (steady light), pixel ratio (read from ctx when left out)
@@ -2035,4 +2103,5 @@ export function drawBackdrop(ctx, w, h, o = {}) {
   ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []), 0, 0, w, h);
   drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));
   if (roomLeaks(tier, o.layers)) drawDrip(ctx, w, h, o.time ?? 0, Boolean(o.reduced)); // drip... drip...
+  if (tier !== 'home') drawPinJar(ctx, w, h, tier, pinsDrawn(o.pins)); // the pin jar on the shelf (game/pin-jar.js)
 }

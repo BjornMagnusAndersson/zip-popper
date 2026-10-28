@@ -15,7 +15,7 @@ import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-l
  *   reputationChange?: number, skipPenalty?: number, factKey?: string, reactionKey?: string, playerName?: string,
  *   onContinue?: () => void, onShop?: () => void, onTryAgain?: () => void, onNext?: () => void, reducedMotion?: boolean,
  *   tagKey?: string|null, tagVars?: object|null, reveal?: {node: HTMLElement, dispose?: () => void}|null,
- *   stampKey?: string|null, skills?: ReturnType<typeof import('../game/app-logic.js').skillNews>}} opts
+ *   stampKey?: string|null, skills?: ReturnType<typeof import('../game/app-logic.js').skillNews>, pinCount?: number|null}} opts
  *   t = string function; stars = 0 to 3; failed = the customer stormed off; payout = from roundPayout; reputationChange =
  *   points earned (not failed); skipPenalty = reputation "Next customer" costs (failed); factKey = info-card string key;
  *   reactionKey = what the customer says (a resultKeys string key); playerName = for the {name} in that line;
@@ -23,13 +23,14 @@ import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-l
  *   tagKey + tagVars = an optional small line under the stars (Keep working's reduced pay, T5.4);
  *   reveal = the before and after card (T8.2, screens/reveal.js createReveal) shown as the top card, or null;
  *   stampKey = the name key of a finished boss or event (T8.4): a gold "New stamp!" line under the coins, or null;
- *   skills = the skill lines (app-logic.js skillNews, D34): level ups, or how many clean pops the next level needs
+ *   skills = the skill lines (app-logic.js skillNews, D34): level ups, or how many clean pops the next level needs;
+ *   pinCount = after a pin visit (game/pin-jar.js), the pins now in the jar: a "Pin taken away!" line; null = none
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
   onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null, stampKey = null,
-  skills = [],
+  skills = [], pinCount = null,
 }) {
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
@@ -72,6 +73,11 @@ export function createResultScreen({
       const stamp = el('p', 'app-result__stamp');
       stamp.append(starIcon(true, 24), el('span', '', t('ui.result.stamp', { name: t(stampKey) })));
       main.append(stamp);
+    }
+    if (pinCount) { // a pin visit (owner 2026-10-28): she took the customer's pin from home away, into the jar
+      const pin = el('p', 'app-result__stamp app-result__pin');
+      pin.append(icon('bulb'), el('span', '', t('ui.pin.taken', { n: pinCount })));
+      main.append(pin);
     }
     if (reactionKey) main.append(el('p', 'app-result__quote', t(reactionKey, { name: playerName })));
     for (const line of skills) { // D34: "Level up! Whitehead: level 3" or "Red bump: 4 more clean pops to level 2"
