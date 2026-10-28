@@ -8,8 +8,8 @@
 // Running gags: his helmet gets fancier (three plumes, now with cereal loops still stuck on it), the plant (sad,
 // then amazed, then happy and greener), the roof. Visual surprise: the dream studio. Format: docs/COMIC-FORMAT.md.
 
-/** Her husband in his helmet over the hoodie, three plumes (the helmet ladder, see STORY.md). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
-const helmeted = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, helmet: true, visor: 'up', plumes: 3, ...o });
+/** Her husband in his full armor, visor up, three plumes (the helmet ladder, see STORY.md; owner 2026-10-28: full armor, as he slept in it in strip 4 and wears it in strip 5). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
+const helmeted = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, outfit: 'armor', visor: 'up', plumes: 3, ...o });
 
 /** Where a husband layer's head is (centre and size), for things stuck to his helmet. @param {object} l the layer @returns {{x: number, y: number, k: number}} head centre and head scale */
 function headOf(l) {
@@ -255,16 +255,17 @@ export const STRIP = {
         layers: [
           { art: 'room', kind: 'kitchen', w: 1600, h: 900, floorY: 600, windowX: 0.5, plant: false },
           { id: 'her', art: 'heroine', x: 420, y: 860, pose: 'sit', expr: 'happy', look: 1 },
-          { id: 'him', art: 'husband', x: 1170, y: 860, pose: 'sitHands', expr: 'neutral', look: -1 },
+          // In his armor at breakfast, helmet off (it is his cereal bowl).
+          { id: 'him', art: 'husband', x: 1170, y: 860, pose: 'sitHands', expr: 'neutral', look: -1, outfit: 'armor', helmet: false },
           ...table(-20, 1620, 640, 900),
-          // His arms reach up to the plan; the plan is upside down.
+          // His armored arms reach up to the plan; the plan is upside down. Steel sleeves and gauntlets.
           { shape: 'path', d: 'M1098 590 Q1040 640 1018 620', stroke: true, sw: 52 },
-          { shape: 'path', d: 'M1098 590 Q1040 640 1018 620', stroke: '#6a7be6', sw: 40 },
+          { shape: 'path', d: 'M1098 590 Q1040 640 1018 620', stroke: '#c9d3de', sw: 40 },
           { shape: 'path', d: 'M1242 590 Q1250 650 1190 626', stroke: true, sw: 52 },
-          { shape: 'path', d: 'M1242 590 Q1250 650 1190 626', stroke: '#6a7be6', sw: 40 },
+          { shape: 'path', d: 'M1242 590 Q1250 650 1190 626', stroke: '#c9d3de', sw: 40 },
           { id: 'plan', art: 'plan', x: 1104, y: 600, scale: 0.5, rotate: 176 },
-          { shape: 'ellipse', x: 1022, y: 616, rx: 24, ry: 26, fill: '#d29a6c', stroke: true, sw: 5 },
-          { shape: 'ellipse', x: 1186, y: 622, rx: 24, ry: 26, fill: '#d29a6c', stroke: true, sw: 5 },
+          { shape: 'ellipse', x: 1022, y: 616, rx: 24, ry: 26, fill: '#aeb9c6', stroke: true, sw: 5 },
+          { shape: 'ellipse', x: 1186, y: 622, rx: 24, ry: 26, fill: '#aeb9c6', stroke: true, sw: 5 },
           ...helmetBowl(1430, 640, 0.9),
           { shape: 'rect', x: 640, y: 560, w: 64, h: 78, rx: 12, fill: '#e66a8f', stroke: true, sw: 5 },
           { shape: 'path', d: 'M704 576 q34 4 30 26 q-4 20 -30 18', fill: 'none', stroke: true, sw: 6 },

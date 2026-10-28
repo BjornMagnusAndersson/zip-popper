@@ -27,6 +27,46 @@ function bubbleWrap(x, y, cols, rows, popped) {
   return out;
 }
 
+/**
+ * A classic black-and-white football going flat (owner 2026-10-28): a centre patch, five patches round the edge that
+ * follow its curve, the seams between them, squashed down towards the floor, with wrinkles on top and the last air
+ * puffing out.
+ * @param {number} cx middle @param {number} floor where it touches the floor @param {number} r radius
+ * @param {number} sy how round it still is (1 = round, smaller = flatter) @returns {object[]} shape layers
+ */
+function flatFootball(cx, floor, r, sy) {
+  const ry = r * sy;
+  const cy = floor - ry;
+  /** A point on the squashed ball: angle in degrees, distance from the middle. @param {number} deg @param {number} d @returns {string} "x y" */
+  const at = (deg, d) => { const a = (deg * Math.PI) / 180; return `${(cx + Math.cos(a) * d).toFixed(1)} ${(cy + Math.sin(a) * d * sy).toFixed(1)}`; };
+  const ink = '#2a211d';
+  const out = [
+    { shape: 'ellipse', x: cx, y: floor + 4, rx: r * 1.15, ry: 12, fill: '#000000', opacity: 0.15 },
+    { shape: 'ellipse', x: cx, y: cy, rx: r, ry, fill: '#ffffff', stroke: true, sw: 6 },
+  ];
+  const tips = [0, 1, 2, 3, 4].map((k) => -90 + 72 * k);
+  // the centre patch
+  out.push({ shape: 'path', d: `M${tips.map((t) => at(t, r * 0.3)).join(' L')} Z`, fill: ink });
+  let seams = '';
+  for (const t of tips) {
+    seams += `M${at(t, r * 0.3)} L${at(t, r * 0.66)} M${at(t + 13, r * 0.84)} L${at(t + 36, r)} M${at(t - 13, r * 0.84)} L${at(t - 36, r)} `;
+    // an edge patch: from the rim in, round its inner tip, back out to the rim, then along the rim
+    out.push({ shape: 'path', d: `M${at(t - 15, r)} L${at(t - 13, r * 0.84)} L${at(t, r * 0.66)} L${at(t + 13, r * 0.84)} L${at(t + 15, r)} A${r} ${ry} 0 0 0 ${at(t - 15, r)} Z`, fill: ink });
+  }
+  out.push({ shape: 'path', d: seams, fill: 'none', stroke: ink, sw: 3 });
+  // wrinkles on top where it sags, a shine, and the air going out at the top right
+  const top = cy - ry;
+  out.push({ shape: 'path', d: `M${cx - r * 0.5} ${top + ry * 0.28} q${r * 0.25} ${ry * 0.14} ${r * 0.5} 0 M${cx + r * 0.08} ${top + ry * 0.12} q${r * 0.2} ${ry * 0.16} ${r * 0.42} ${ry * 0.06}`, fill: 'none', stroke: true, sw: 4 });
+  out.push({ shape: 'ellipse', x: cx - r * 0.55, y: cy - ry * 0.45, rx: r * 0.12, ry: r * 0.07, fill: '#ffffff', opacity: 0.9 });
+  const hx = cx + r * 0.62;
+  const hy = cy - ry * 0.78;
+  out.push({ shape: 'circle', x: hx + 26, y: hy - 22, r: 15, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.9 });
+  out.push({ shape: 'circle', x: hx + 52, y: hy - 48, r: 11, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.75 });
+  out.push({ shape: 'circle', x: hx + 72, y: hy - 70, r: 7, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.6 });
+  out.push({ shape: 'path', d: `M${hx + 4} ${hy - 30} l-6 -24 M${hx + 34} ${hy + 4} l24 -4`, fill: 'none', stroke: true, sw: 4 });
+  return out;
+}
+
 /** A balloon on a string. @param {number} x middle @param {number} y middle @param {string} fill colour @returns {object[]} shape layers */
 const balloon = (x, y, fill) => [
   { shape: 'path', d: `M${x} ${y + 70} q-20 60 10 120 q20 50 -5 110`, fill: 'none', stroke: true, sw: 4 },
@@ -106,23 +146,7 @@ const PANELS = [
       scene: {
         bg: ['#ffe8d6', '#f7c9b0'],
         layers: [
-          { shape: 'ellipse', x: 205, y: 566, rx: 145, ry: 14, fill: '#000000', opacity: 0.14 },
-          { shape: 'path', d: 'M80 560 C55 470 100 385 190 380 C240 378 275 395 285 415 C258 432 244 455 262 472 C292 472 332 492 336 530 L336 560 Z', fill: '#ffffff', stroke: true, sw: 6 },
-          // seams between the patches
-          { shape: 'path', d: 'M180 446 L188 412 M205 464 L262 472 M196 492 L210 540 M164 492 L140 538 M155 463 L102 470', fill: 'none', stroke: '#2a211d', sw: 3 },
-          // the patches: one whole in the middle, the others cut by the edge or squashed by the dent
-          { shape: 'path', d: 'M180 446 L205 464 L196 492 L164 492 L155 463 Z', fill: '#2a211d' },
-          { shape: 'path', d: 'M168 384 L212 384 L206 408 L176 414 Z', fill: '#2a211d' },
-          { shape: 'path', d: 'M68 488 L100 470 L110 505 L84 528 L74 522 Z', fill: '#2a211d' },
-          { shape: 'path', d: 'M192 540 L232 534 L240 560 L188 560 Z', fill: '#2a211d' },
-          { shape: 'path', d: 'M290 494 L322 504 L328 536 L296 542 Z', fill: '#2a211d' },
-          // wrinkles where it caved in
-          { shape: 'path', d: 'M262 472 q-16 12 -36 6 M284 418 q12 22 -2 40 M300 480 q-6 10 -18 10', fill: 'none', stroke: true, sw: 4 },
-          // the last air puffing out of the dent
-          { shape: 'circle', x: 318, y: 404, r: 18, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.85 },
-          { shape: 'circle', x: 350, y: 376, r: 14, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.75 },
-          { shape: 'circle', x: 376, y: 354, r: 10, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.6 },
-          { shape: 'path', d: 'M300 380 l18 -26 M330 418 l30 -8', fill: 'none', stroke: true, sw: 4 },
+          ...flatFootball(190, 565, 125, 0.8),
           { id: 'him', art: 'husband', x: 560, y: 640, scale: 1.1, pose: 'bust', expr: 'sad', flip: true },
         ],
       },
@@ -130,7 +154,7 @@ const PANELS = [
       sound: 'squish',
       bubbles: [
         { kind: 'caption', key: 'comic.s0.p4.cap', at: [260, 46], w: 420 },
-        { kind: 'say', key: 'comic.s0.p4.him', at: [200, 270], to: 'him', w: 260 },
+        { kind: 'say', key: 'comic.s0.p4.him', at: [400, 200], to: 'him', w: 260 },
       ],
     },
     {

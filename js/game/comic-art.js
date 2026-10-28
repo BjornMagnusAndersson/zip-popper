@@ -401,8 +401,9 @@ function head(c, e) {
   const g = el('g', { transform: `rotate(${(e.tilt ?? 0) * (c.flip ? -1 : 1)})` });
   const skin = SKIN[c.skin] ?? c.skin;
   const col = HAIR[c.hairColor] ?? c.hairColor;
-  // `helmet: true` on a layer = his knight's helmet over everyday clothes (strip "plan": helmet on, hoodie still on).
-  const armor = OUTFITS[c.outfit]?.armor || c.helmet === true;
+  // `helmet: true` on a layer = his knight's helmet over everyday clothes; `helmet: false` = the armor without its
+  // helmet, his own hair shows (strip "plan" panel 1: the helmet is his cereal bowl, owner 2026-10-28).
+  const armor = c.helmet === false ? false : OUTFITS[c.outfit]?.armor || c.helmet === true;
   const skinFill = shading(g, skin);
   const back = armor ? null : hairBack(c, col, g);
   if (back) g.appendChild(back);
