@@ -759,7 +759,9 @@ export function createPopMode({
   function faceTexture(c) {
     const cleared = c.scene ? c.scene.all().filter((p) => p.popped).length : 0;
     // a short wince after an Ow; a short happy face after a giggle (ticklish, T8.3)
-    const mood = c.wince && !c.healed ? 'ow' : c.giggle && !c.healed ? 'happy' : moodOverride ?? faceMood(cleared, c.total, c.healed);
+    // a reluctant customer (the chapter 0 husband) keeps the stern face even as his skin clears up
+    const usual = cfg.kind === 'round' && cfg.reluctant ? 'grim' : faceMood(cleared, c.total, c.healed);
+    const mood = c.wince && !c.healed ? 'ow' : c.giggle && !c.healed ? 'happy' : moodOverride ?? usual;
     const redness = c.healed ? 0 : 1 - cleared / Math.max(1, c.total);
     const { canvas, ctx } = makeCanvas(c.w, c.h, c.dpr);
     ctx.lineCap = 'butt';
@@ -1014,6 +1016,7 @@ export function createPopMode({
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
         hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
         escape: o.customer?.escape === true, // the husband in armor (chapter 2) refuses the first pop and runs off
+        reluctant: o.customer?.reluctant === true, // the chapter 0 husband: stern the whole round, never beams (owner 2026-10-28)
         gloves: o.gloves === true, // she owns the gloves (app-logic.js roundArgs, SPEC D32e)
         twist: typeof o.twist === 'string' ? o.twist : null, // T8.3: the customer's twist
         twistHint: typeof o.twistHintKey === 'string' ? o.twistHintKey : null,

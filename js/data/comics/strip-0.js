@@ -1,6 +1,7 @@
 // Chapter 0 strip "Happy hands" (T4.2): how the Great Popping Ban began. 11 panels, played in two parts (see PANELS).
 // Beginning: {name} pops everything (bubble wrap, then a week-long montage: balloons, peas, his football).
-// Middle: she spots a teeny bump on his chin, the happy hands come, POP. End: the Great Popping Ban, rule by rule.
+// Middle: she spots a teeny bump on his chin, the happy hands come (the pop is the round). End: his NOOOO, then the
+// Great Popping Ban, rule by rule, while he strokes his suspiciously smooth chin.
 // Button: that very night, a torch glows under the blanket. Running gag: everything she asks, he answers "No."
 // Visual surprise: the rule scroll, one rule per tap. Format: docs/COMIC-FORMAT.md.
 
@@ -35,8 +36,7 @@ const balloon = (x, y, fill) => [
 
 // SPEC D32a (owner, 2026-10-27): the strip is played in two parts around the husband round, so the first pop happens
 // in play and the ban comes after it: STRIP = panels 1 to 7 (up to "Not the happy hands!"), then the round, then
-// STRIP_BAN = panels 9 to 11 (the ban, "No.", that very night). Panel 8 (the POP splash) is kept here but not played:
-// the round is the pop now.
+// STRIP_BAN = panels 8 to 11 (his NOOOO right after the round, the ban, "No.", that very night). The round is the pop.
 const PANELS = [
     {
       // 1. Meet {name}: popping bubble wrap with joy. He watches TV with the patience of a saint.
@@ -99,16 +99,30 @@ const PANELS = [
       bubbles: [{ kind: 'caption', key: 'comic.s0.p3.cap', at: [250, 46], w: 400 }],
     },
     {
-      // 4. Montage, Wednesday: his football. He is sad about it.
+      // 4. Montage, Wednesday: his football, half flat (owner 2026-10-28: the old flat oval read as a paint palette).
+      // A black-and-white patched ball, round on the left, caved in and wrinkled on the right, the last air puffing
+      // out of the dent. He is sad about it.
       layout: 'small',
       scene: {
         bg: ['#ffe8d6', '#f7c9b0'],
         layers: [
-          { shape: 'ellipse', x: 200, y: 520, rx: 130, ry: 38, fill: '#ffffff', stroke: true, sw: 6 },
-          { shape: 'ellipse', x: 200, y: 512, rx: 30, ry: 12, fill: '#2a211d' },
-          { shape: 'ellipse', x: 110, y: 524, rx: 20, ry: 9, fill: '#2a211d' },
-          { shape: 'ellipse', x: 290, y: 524, rx: 20, ry: 9, fill: '#2a211d' },
-          { shape: 'path', d: 'M330 480 l40 -30 M340 505 l50 -10 M80 470 l-30 -30', fill: 'none', stroke: true, sw: 4 },
+          { shape: 'ellipse', x: 205, y: 566, rx: 145, ry: 14, fill: '#000000', opacity: 0.14 },
+          { shape: 'path', d: 'M80 560 C55 470 100 385 190 380 C240 378 275 395 285 415 C258 432 244 455 262 472 C292 472 332 492 336 530 L336 560 Z', fill: '#ffffff', stroke: true, sw: 6 },
+          // seams between the patches
+          { shape: 'path', d: 'M180 446 L188 412 M205 464 L262 472 M196 492 L210 540 M164 492 L140 538 M155 463 L102 470', fill: 'none', stroke: '#2a211d', sw: 3 },
+          // the patches: one whole in the middle, the others cut by the edge or squashed by the dent
+          { shape: 'path', d: 'M180 446 L205 464 L196 492 L164 492 L155 463 Z', fill: '#2a211d' },
+          { shape: 'path', d: 'M168 384 L212 384 L206 408 L176 414 Z', fill: '#2a211d' },
+          { shape: 'path', d: 'M68 488 L100 470 L110 505 L84 528 L74 522 Z', fill: '#2a211d' },
+          { shape: 'path', d: 'M192 540 L232 534 L240 560 L188 560 Z', fill: '#2a211d' },
+          { shape: 'path', d: 'M290 494 L322 504 L328 536 L296 542 Z', fill: '#2a211d' },
+          // wrinkles where it caved in
+          { shape: 'path', d: 'M262 472 q-16 12 -36 6 M284 418 q12 22 -2 40 M300 480 q-6 10 -18 10', fill: 'none', stroke: true, sw: 4 },
+          // the last air puffing out of the dent
+          { shape: 'circle', x: 318, y: 404, r: 18, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.85 },
+          { shape: 'circle', x: 350, y: 376, r: 14, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.75 },
+          { shape: 'circle', x: 376, y: 354, r: 10, fill: '#ffffff', stroke: '#c9b8ad', sw: 3, opacity: 0.6 },
+          { shape: 'path', d: 'M300 380 l18 -26 M330 418 l30 -8', fill: 'none', stroke: true, sw: 4 },
           { id: 'him', art: 'husband', x: 560, y: 640, scale: 1.1, pose: 'bust', expr: 'sad', flip: true },
         ],
       },
@@ -157,27 +171,27 @@ const PANELS = [
       bubbles: [{ kind: 'shout', key: 'comic.s0.p7.him', at: [210, 130], to: 'him', w: 300 }],
     },
     {
-      // 8. The big moment: POP!
-      layout: 'splash',
+      // 8. Right after the round (owner 2026-10-28): he clutches his chin, NOOOO, while she glows. This is why the ban
+      // comes. Opens part 2; the pop itself was the round, so no POP here.
+      layout: 'wide',
       scene: {
-        bg: '#ffe9a8',
         layers: [
-          { art: 'rays', w: 1000, h: 1000, x: 330, y: 260, colors: ['#ffe9a8', '#ffd25a'] },
-          { art: 'burst', x: 300, y: 240, r: 210, color: '#ff9cbc' },
-          { id: 'him', art: 'husband', x: 300, y: 1000, pose: 'chin', expr: 'shocked' },
-          { art: 'sparkles', x: 330, y: 560, r: 100 },
-          { id: 'her', art: 'heroine', x: 720, y: 1000, pose: 'cheer', expr: 'bliss' },
+          living(1600, 900, { floorY: 640, windowX: 0.62, pictureX: 0.2 }),
+          { art: 'sofa', x: 1100, y: 840, w: 760 },
+          { id: 'him', art: 'husband', x: 1100, y: 880, pose: 'chin', expr: 'shocked' },
+          { id: 'her', art: 'heroine', x: 430, y: 880, pose: 'cheer', expr: 'bliss' },
+          { art: 'sparkles', x: 430, y: 330, r: 170 },
         ],
       },
       camera: { move: 'shake' },
-      sound: 'pop_big',
       bubbles: [
-        { kind: 'shout', key: 'comic.s0.p8.pop', at: [300, 240] },
-        { kind: 'say', key: 'comic.s0.p8.her', at: [760, 170], to: 'her', w: 380, sound: 'ooh_happy' },
+        { kind: 'shout', key: 'comic.s0.p8.him', at: [1300, 150], to: 'him', w: 420 },
+        { kind: 'say', key: 'comic.s0.p8.her', at: [560, 120], to: 'her', w: 380, sound: 'ooh_happy' },
       ],
     },
     {
-      // 9. The Great Popping Ban: a rule scroll unrolls, one rule per tap.
+      // 9. The Great Popping Ban: a rule scroll unrolls, one rule per tap. The elephant in the room (owner 2026-10-28):
+      // he strokes his smooth, sparkling chin with pride while he bans the thing that made it smooth. Nobody says it.
       layout: 'splash',
       scene: {
         layers: [
@@ -185,7 +199,8 @@ const PANELS = [
           { shape: 'rect', x: 45, y: 220, w: 590, h: 720, rx: 12, fill: '#fff4d6', stroke: true, sw: 6 },
           { shape: 'rect', x: 25, y: 200, w: 630, h: 44, rx: 22, fill: '#f3dca8', stroke: true, sw: 6 },
           { shape: 'rect', x: 25, y: 920, w: 630, h: 44, rx: 22, fill: '#f3dca8', stroke: true, sw: 6 },
-          { id: 'him', art: 'husband', x: 830, y: 1000, scale: 0.9, pose: 'hips', expr: 'proud' },
+          { id: 'him', art: 'husband', x: 830, y: 1000, scale: 0.9, pose: 'chin', expr: 'proud' },
+          { art: 'sparkles', x: 810, y: 640, r: 60 },
         ],
       },
       camera: { move: 'pullOut', focus: [500, 450], amount: 0.15, ms: 2500 },
@@ -235,5 +250,5 @@ const PANELS = [
 /** Part 1 (chapter 0's opening strip): panels 1 to 7, up to the moment before the pop. */
 export const STRIP = { id: 'strip0', title: 'comic.s0.title', panels: PANELS.slice(0, 7) };
 
-/** Part 2 (after the husband round, SPEC D32a): panels 9 to 11, the Great Popping Ban and that very night. */
-export const STRIP_BAN = { id: 'strip0b', title: 'comic.s0b.title', panels: PANELS.slice(8) };
+/** Part 2 (after the husband round, SPEC D32a): panels 8 to 11, his NOOOO, the Great Popping Ban and that very night. */
+export const STRIP_BAN = { id: 'strip0b', title: 'comic.s0b.title', panels: PANELS.slice(7) };

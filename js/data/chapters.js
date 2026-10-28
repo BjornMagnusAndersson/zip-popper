@@ -22,6 +22,7 @@ export const HUSBAND = {
   bumps: 3,
   bumpTypes: ['whitehead'],
   chapter: 0,
+  reluctant: true, // owner 2026-10-28: he does NOT want this; stern face all round, protest lines after (the ban follows)
 };
 
 /**
