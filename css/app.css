@@ -376,6 +376,27 @@
 .app-studio__list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 0.95rem; }
 .app-studio__item { display: flex; align-items: flex-start; gap: 6px; }
 .app-studio__item .app-icon { width: 20px; height: 20px; }
+/* R8j: the wall of fame. See-through buttons over the framed diplomas; the new frame drops onto its nail and swings. */
+.app-studio__wall { position: absolute; inset: 0; pointer-events: none; }
+.app-studio__frame {
+  position: absolute; margin: 0; padding: 0; border: 0; border-radius: 10px; background: transparent; cursor: pointer;
+  pointer-events: auto; -webkit-tap-highlight-color: transparent;
+}
+.app-studio__frame:focus-visible { outline: 4px dashed var(--ink); outline-offset: 1px; }
+.app-studio__drop { position: absolute; transform-origin: 50% 8%; animation: app-hang 1300ms ease-out both; }
+@keyframes app-hang {
+  0% { transform: translateY(-260%) rotate(-24deg); opacity: 0; }
+  12% { opacity: 1; }
+  45% { transform: translateY(6%) rotate(10deg); filter: drop-shadow(0 0 0 rgba(255, 206, 84, 0)); }
+  60% { transform: translateY(0) rotate(-7deg); filter: drop-shadow(0 0 14px rgba(255, 206, 84, 1)); }
+  74% { transform: rotate(4deg); }
+  87% { transform: rotate(-2deg); }
+  100% { transform: none; filter: drop-shadow(0 0 0 rgba(255, 206, 84, 0)); }
+}
+@media (prefers-reduced-motion: reduce) { .app-studio__drop { animation: none; } }
+.app-studio__hung { font-weight: 900; font-size: 1.05rem; }
+.app-studio__go { margin: 6px 0 8px; }
+.app-studio__fame { font-weight: 800; }
 .app-shop-studio { width: 100%; }
 .app-shoplist > .app-empty { grid-column: 1 / -1; }
 

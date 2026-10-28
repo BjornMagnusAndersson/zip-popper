@@ -595,12 +595,20 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
 
   /**
-   * The studio view (T5.1c): her whole studio with every upgrade she has, and her in it.
-   * @param {() => void} back where Back goes
+   * The studio view (T5.1c): her whole studio with every upgrade she has, her in it, and the wall of fame (R8j: a tap
+   * on a frame opens that diploma again).
+   * @param {() => void} back where Back goes (in hang mode also Continue: back into the game)
+   * @param {string|null} [hang] a new Master's bump id: its frame drops onto the wall (right after its diploma)
    * @returns {void}
    */
-  function showStudio(back) {
-    show(createStudioScreen({ t, reducedMotion: still(), ...L.studioViewArgs(save), onBack: back }), { back });
+  function showStudio(back, hang = null) {
+    const again = () => showStudio(back); // after reading a diploma again, back to the studio (no longer in hang mode)
+    show(createStudioScreen({
+      t, reducedMotion: still(), ...L.studioViewArgs(save), hang, onBack: back, onContinue: back,
+      onDiploma: (type) => show(createDiplomaScreen({
+        t, reducedMotion: still(), type, playerName: playerName(), buttonKey: 'ui.diploma.back', onContinue: again,
+      }), { back: again }),
+    }), { back });
   }
 
   /**
@@ -767,8 +775,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function showDiplomas(types, then) {
     if (!types.length) { then(); return; }
+    // "Hang it up!": the studio view, where the new frame drops onto the wall of fame; its Continue goes on (R8j)
     show(createDiplomaScreen({
-      t, reducedMotion: still(), type: types[0], playerName: playerName(), onContinue: () => showDiplomas(types.slice(1), then),
+      t, reducedMotion: still(), type: types[0], playerName: playerName(), buttonKey: 'ui.diploma.hang',
+      onContinue: () => showStudio(() => showDiplomas(types.slice(1), then), types[0]),
     }));
     sound.play('cheer');
   }

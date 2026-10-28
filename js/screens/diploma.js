@@ -1,7 +1,8 @@
 // The Master diploma (D34, owner 2026-10-28): when a kind of bump reaches the top mastery level (Master), a framed
 // cartoon diploma shows after the result screen: the kind's picture on a gold rosette, "Master of the Whitehead", her
-// name, a funny line from Greta and Nils for that kind, their signatures and a Continue button. Once per kind; the
-// kind's card on the Field guide's "Pop mastery" tab keeps a gold ribbon. All text comes from the string table.
+// name, a funny line from Greta and Nils for that kind, their signatures and a "Hang it up!" button (it then hangs on
+// the studio's wall of fame, R8j, where a tap opens it again). Once per kind; the kind's card on the Field guide's
+// "Pop mastery" tab keeps a gold ribbon. All text comes from the string table.
 
 import { el, button, screenShell } from './dom.js';
 import { drawPicture } from './guide.js';
@@ -9,11 +10,12 @@ import { drawPicture } from './guide.js';
 /**
  * Build the diploma screen.
  * @param {{t: (key: string, vars?: object) => string, type: string, playerName?: string, onContinue?: () => void,
- *   reducedMotion?: boolean}} opts t = string function; type = the bump id she mastered; playerName = her name;
- *   onContinue = the Continue button
+ *   buttonKey?: string, reducedMotion?: boolean}} opts t = string function; type = the bump id she mastered;
+ *   playerName = her name; onContinue = the button; buttonKey = its label ("Hang it up!" for a new Master, "Back to
+ *   the studio" when read again from the wall of fame, R8j)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
-export function createDiplomaScreen({ t, type, playerName = '', onContinue, reducedMotion = false }) {
+export function createDiplomaScreen({ t, type, playerName = '', onContinue, buttonKey = 'ui.diploma.continue', reducedMotion = false }) {
   const kind = t(`ui.guide.${type}.name`);
   const shell = screenShell('diploma', { label: t('ui.diploma.title', { kind }), reducedMotion });
   const body = el('div', 'app-body app-body--center app-diploma');
@@ -32,7 +34,7 @@ export function createDiplomaScreen({ t, type, playerName = '', onContinue, redu
     el('p', 'app-diploma__line', t(`ui.diploma.${type}`)),
     el('p', 'app-diploma__speed', t('ui.diploma.speed')),
     el('p', 'app-diploma__sign', t('ui.diploma.signed')),
-    button('app-btn app-btn--main app-btn--big', t('ui.diploma.continue'), () => onContinue?.(), shell.signal),
+    button('app-btn app-btn--main app-btn--big', t(buttonKey), () => onContinue?.(), shell.signal),
   );
   body.append(card);
   shell.node.append(body);

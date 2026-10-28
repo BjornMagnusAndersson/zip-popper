@@ -7,7 +7,8 @@
 // wallPaint (fresh lavender wall with a stencilled band), sign (a shiny new sign with a tick), chair (a pink tufted
 // wingback chair behind the customer), plant (a hanging plant with little eyes on its pot) and lamp (a ring light on
 // a stand). They sit where the face does not cover them, in portrait and landscape. drawStudio paints the same room
-// without the face in mind, for the studio view (T5.1c).
+// without the face in mind, for the studio view (T5.1c), with the wall of fame: a gold frame per mastered kind of bump
+// and an empty nail for the rest (R8j, fameSpots and fameFrame).
 // Before the studio (chapters 0 to 4, SPEC D19) the pop scene is at home instead: room 'home' paints the couple's
 // living room in the comics' colours, with a floor lamp whose warm light breathes gently (steady with reduced motion).
 // Cartoon only: stains are olive and brown water marks, never anything like blood.
@@ -15,7 +16,9 @@
 // lamp's light is drawn on top each time it changes. With reduced motion the lamp never flickers.
 // The pure parts (lampLevel, nextBackdropChange) need no DOM, so they can be tested in Node.
 import { rng } from './logic.js';
+import { drawPimple, drawHair, hairPoints } from './art.js';
 import { studioLayersShown, studioKey } from '../game/studio.js';
+import { BUMP_IDS } from '../data/bumps.js';
 
 /** The backdrop tiers there are (same as the studio tiers in SPEC section 4). */
 export const BACKDROP_TIERS = [0, 1, 2];
@@ -1390,6 +1393,120 @@ function drawLayer(ctx, id, spots) {
   else if (id === 'lamp') ringLight(ctx, spots.lamp, spots.floorY, spots.u);
 }
 
+/** How much each frame on the wall of fame leans (radians), so the row looks hung by hand. */
+const FAME_TILTS = [-0.05, 0.04, -0.02, 0.06, -0.04, 0.03, -0.06];
+
+/**
+ * The wall of fame in the studio view (R8j): one nail per kind of bump (data/bumps.js order) where that kind's Master
+ * diploma hangs. Upright: two rows (4 and 3) on the upper wall, left of the shelf and under the sign; sideways: one row
+ * along the top, between the ceiling lamp's cord and the sign, above her head. Only the studio view has it: in the pop
+ * scene the face covers that wall.
+ * @param {number} w width
+ * @param {number} h height
+ * @returns {{type: string, x: number, y: number, s: number, tilt: number}[]} per kind: the nail (x, y), the frame's
+ *   width (s; it is 1.2 s tall and hangs 0.25 s below the nail) and its lean
+ */
+export function fameSpots(w, h) {
+  const n = BUMP_IDS.length;
+  if (w > h) {
+    const s = Math.min(w * 0.05, h * 0.085);
+    return BUMP_IDS.map((type, i) => ({ type, x: w * (0.3 + (0.42 * i) / (n - 1)), y: h * 0.085, s, tilt: FAME_TILTS[i % 7] }));
+  }
+  const s = Math.min(w * 0.11, h * 0.07);
+  const top = Math.ceil(n / 2);
+  return BUMP_IDS.map((type, i) => {
+    const row = i < top ? 0 : 1;
+    const col = row ? i - top + 0.5 : i;
+    // from 0.27 of the width: clear of the hanging plant and its vines on the left, and of the shelf on the right
+    return { type, x: w * (0.27 + col * 0.13), y: h * (row ? 0.305 : 0.19), s, tilt: FAME_TILTS[i % 7] };
+  });
+}
+
+/**
+ * A tiny bump of a kind on the diploma in a frame (the Field guide's pictures, much smaller).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {string} type bump id
+ * @param {number} x middle of the skin circle
+ * @param {number} y middle of the skin circle
+ * @param {number} r the skin circle's radius
+ * @returns {void}
+ */
+function fameBump(ctx, type, x, y, r) {
+  /** One bump, standing still. @param {number} k its size as a share of r @param {number} [dx] @param {number} [dy] @returns {void} */
+  const bump = (k, dx = 0, dy = 0) => drawPimple(ctx, { x: x + dx * r, y: y + dy * r, r: r * k, type }, 0, 1, 0.35);
+  if (type === 'horn') bump(0.42, 0, 0.26);
+  else if (type === 'hair') {
+    bump(0.32, -0.38, 0.38);
+    drawHair(ctx, hairPoints(x - r * 0.38, y + r * 0.38, -0.7, r * 1.6, r / 46, 0), Math.max(0.8, r * 0.06));
+  } else bump({ whitehead: 0.48, red: 0.5, blackhead: 0.38, big: 0.66, gold: 0.5 }[type] ?? 0.48);
+}
+
+/**
+ * One spot on the wall of fame: a gold frame with the kind's diploma (cream paper, the bump on a patch of skin, two
+ * lines of writing and a red seal) hanging on a string from its nail, or, not earned yet, only the nail and a faint
+ * dashed outline where the frame will go.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {{type: string, x: number, y: number, s: number, tilt: number}} p the spot (fameSpots)
+ * @param {boolean} earned true = that kind is a Master
+ * @returns {void}
+ */
+export function fameFrame(ctx, p, earned) {
+  const s = p.s;
+  const fh = s * 1.2;
+  const drop = s * 0.25;
+  const lw = Math.max(1, s * 0.045);
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  if (earned) {
+    ctx.rotate(p.tilt);
+    ctx.strokeStyle = INK.ink;
+    ctx.lineWidth = Math.max(1, s * 0.03);
+    ctx.beginPath(); ctx.moveTo(-s * 0.3, drop + s * 0.06); ctx.lineTo(0, 0); ctx.lineTo(s * 0.3, drop + s * 0.06); ctx.stroke();
+    ctx.fillStyle = 'rgba(30,20,20,0.22)';
+    box(ctx, -s / 2 + s * 0.07, drop + s * 0.07, s, fh, s * 0.06); ctx.fill();
+    box(ctx, -s / 2, drop, s, fh, s * 0.06);
+    inked(ctx, '#e8b84a', lw, INK);
+    ctx.fillStyle = '#f7d77a'; // the frame's lighter inner edge
+    box(ctx, -s * 0.44, drop + s * 0.06, s * 0.88, fh - s * 0.12, s * 0.04); ctx.fill();
+    box(ctx, -s * 0.37, drop + s * 0.13, s * 0.74, fh - s * 0.26, s * 0.03);
+    inked(ctx, '#fff7e2', lw * 0.6, INK);
+    const cy = drop + fh * 0.4;
+    const r = s * 0.22;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(0, cy, r, 0, Math.PI * 2);
+    inked(ctx, '#f8cfb2', lw * 0.6, INK);
+    ctx.clip();
+    fameBump(ctx, p.type, 0, cy, r);
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(42,33,29,0.45)'; // two lines of writing
+    ctx.lineWidth = Math.max(0.8, s * 0.025);
+    for (const [f, len] of [[0.7, 0.24], [0.78, 0.16]]) { ctx.beginPath(); ctx.moveTo(-s * len, drop + fh * f); ctx.lineTo(s * len, drop + fh * f); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(s * 0.2, drop + fh * 0.86, s * 0.075, 0, Math.PI * 2); // the red seal
+    inked(ctx, '#e8505b', lw * 0.5, INK);
+  } else {
+    ctx.setLineDash([s * 0.1, s * 0.08]);
+    ctx.strokeStyle = 'rgba(42,33,29,0.3)';
+    ctx.lineWidth = Math.max(1, s * 0.035);
+    box(ctx, -s / 2, drop, s, fh, s * 0.06); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.beginPath(); ctx.arc(0, 0, Math.max(1.5, s * 0.06), 0, Math.PI * 2); // the nail
+  inked(ctx, '#a9aeb5', lw * 0.7, INK);
+  ctx.restore();
+}
+
+/**
+ * The whole wall of fame: every kind's spot, framed for the Masters, an empty nail for the rest.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {string[]} masters the bump ids that are Masters
+ * @returns {void}
+ */
+function fameWall(ctx, w, h, masters) {
+  for (const p of fameSpots(w, h)) fameFrame(ctx, p, masters.includes(p.type));
+}
+
 /**
  * Paint the still part of the room (everything but the ceiling lamp's light) for a tier and the owned upgrades.
  * Tier 0 dingy and dank, tier 1 a bit better (repairs), tier 2 the spa; then each owned layer in draw order.
@@ -1400,9 +1517,11 @@ function drawLayer(ctx, id, spots) {
  * @param {string[]} [layers] owned studio layer ids (save.studioLayers); the home room ignores them
  * @param {boolean} [view] true = the studio view's places and sizes for the layers (layerSpots); the pop scene leaves
  *   it out
+ * @param {string[]|null} [masters] the studio view's wall of fame: the bump ids that are Masters (each gets its framed
+ *   diploma, the rest an empty nail); null = no wall of fame
  * @returns {void}
  */
-function drawRoom(ctx, w, h, tier, layers = [], view = false) {
+function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
   const pal = paletteFor(tier);
   if (pal.pulse) { drawHome(ctx, w, h, pal); return; }
   const shown = studioLayersShown(layers);
@@ -1526,6 +1645,7 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false) {
   ctx.beginPath(); ctx.moveTo(L.x, 0); ctx.quadraticCurveTo(L.x + 4, L.y * 0.5, L.x, L.y - L.r * 1.6); ctx.stroke();
   ctx.fillStyle = pal.spa ? pal.metal : '#3a3f37';
   ctx.beginPath(); ctx.roundRect(L.x - L.r * 0.55, L.y - L.r * 1.8, L.r * 1.1, L.r * 1.0, 2); ctx.fill();
+  if (view && Array.isArray(masters)) fameWall(ctx, w, h, masters); // on the wall, behind the furniture (R8j)
   // The upgrades the player owns, back to front.
   const spots = layerSpots(w, h, view);
   // The first versions the comics show (R7): the plain chair and the crooked sign stay until the shop's ones replace them.
@@ -1611,13 +1731,14 @@ function drawLight(ctx, w, h, tier, level) {
  * @param {number} h height in CSS px
  * @param {number} tier studio tier 0..2 (unknown tiers fall back to 0)
  * @param {string[]} [layers] owned studio layer ids (save.studioLayers)
- * @param {{view?: boolean}} [o] view: true (default) = the studio view's places and sizes for the layers (no face in
- *   front, so the chair is chair-sized and stands on the floor); false = the pop scene's places
+ * @param {{view?: boolean, masters?: string[]}} [o] view: true (default) = the studio view's places and sizes for the
+ *   layers (no face in front, so the chair is chair-sized and stands on the floor); false = the pop scene's places;
+ *   masters = the wall of fame's framed diplomas (bump ids; left out = no wall of fame, R8j)
  * @returns {void}
  */
 export function drawStudio(ctx, w, h, tier, layers = [], o = {}) {
   const kind = backdropKind('studio', tier);
-  drawRoom(ctx, w, h, kind, layers, o.view !== false);
+  drawRoom(ctx, w, h, kind, layers, o.view !== false, o.masters ?? null);
   drawLight(ctx, w, h, kind, 1);
 }
 

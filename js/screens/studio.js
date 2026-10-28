@@ -6,9 +6,14 @@
 // In scrubs (T5.2b) she starts with her scrub cap on and a hint line says so: tapping her (or Enter/Space, she is a
 // button) takes the cap off with a little hop, the cap floats over onto the chair, and her bun shows; again puts it
 // back. With reduced motion the cap just swaps, no hop and no flight.
+// The wall of fame (R8j): a gold frame on the wall for each kind of bump she has mastered, an empty nail for the rest
+// (pop/backdrop.js fameSpots). Each frame is a button that opens its diploma again. Right after a new Master's diploma
+// ("Hang it up!") the screen opens in hang mode: the new frame drops onto its nail with a little swing (no motion with
+// reduced motion), a line says so, and Continue goes on with the game.
 
-import { el, svg, icon, header, screenShell } from './dom.js';
-import { drawStudio, layerSpots } from '../pop/backdrop.js';
+import { el, svg, icon, header, screenShell, button } from './dom.js';
+import { drawStudio, layerSpots, fameSpots, fameFrame } from '../pop/backdrop.js';
+import { BUMP_IDS } from '../data/bumps.js';
 import { drawCharacter, drawScrubCap, headSpot, OUTFITS } from '../game/comic-art.js';
 import { studioCaptions, capFlight, studioCapStart, CAP_FLIGHT_MS } from '../game/studio.js';
 
@@ -17,15 +22,22 @@ const FIGURE_HEIGHT = 640; // comic-art.js: a standing figure at scale 1 is abou
 /**
  * Build the studio view screen.
  * @param {{t: (key: string, vars?: object) => string, tier?: number, layers?: string[], outfit?: string,
+ *   masters?: string[], hang?: string|null, onDiploma?: (type: string) => void, onContinue?: () => void,
  *   onBack?: () => void, reducedMotion?: boolean}} opts
  *   t = string function; tier = studio tier 0..2; layers = owned studio upgrades (draw order); outfit = what she wears
- *   (comic-art.js OUTFITS name); onBack = Back
+ *   (comic-art.js OUTFITS name); masters = the mastered bump ids (their frames hang on the wall of fame); hang = a bump id
+ *   whose frame was just earned (hang mode: it drops onto the wall, and a Continue button shows); onDiploma = a frame
+ *   was tapped; onContinue = Continue in hang mode; onBack = Back
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
-export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyday', onBack, reducedMotion = false }) {
+export function createStudioScreen({
+  t, tier = 0, layers = [], outfit = 'everyday', masters = [], hang = null, onDiploma, onContinue, onBack, reducedMotion = false,
+}) {
   const shell = screenShell('studio', { label: t('ui.studio.title'), reducedMotion });
   const head = header(t, t('ui.studio.title'), onBack, shell.signal);
   const caps = studioCaptions(tier, layers);
+  const kindName = (type) => t(`ui.guide.${type}.name`); // a bump kind's name, for the lines and the frame buttons
+  let dropping = Boolean(hang) && !reducedMotion; // the new frame is still on its way to the wall
 
   const body = el('div', 'app-studio');
   const stage = el('div', 'app-studio__stage');
@@ -33,7 +45,8 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', `${t('ui.studio.picture')} ${t(caps.tierKey)}`);
   const her = svg('svg', { class: 'app-studio__her', 'aria-hidden': 'true' });
-  stage.append(canvas, her);
+  const wall = el('div', 'app-studio__wall'); // the frame buttons and the frame that is dropping in
+  stage.append(canvas, her, wall);
   const capState = studioCapStart(outfit, OUTFITS);
   let capOn = capState.capOn;
   // The cap toggle (scrubs only): a see-through button over her, so it works by tap, mouse and keyboard.
@@ -44,6 +57,12 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
   }
 
   const notes = el('div', 'app-studio__notes');
+  if (hang) {
+    notes.append(el('p', 'app-studio__hung', t('ui.studio.hung', { kind: kindName(hang) })));
+    notes.append(button('app-btn app-btn--main app-studio__go', t('ui.studio.continue'), () => (onContinue ?? onBack)?.(), shell.signal));
+  }
+  notes.append(el('p', 'app-studio__fame', t('ui.studio.fame', { n: masters.length, total: BUMP_IDS.length })));
+  notes.append(el('p', 'app-studio__hint', t(masters.length ? 'ui.studio.fameHint' : 'ui.studio.fameEmpty')));
   notes.append(el('p', 'app-studio__tier', t(caps.tierKey)));
   if (tap) notes.append(el('p', 'app-studio__hint', t('ui.studio.capHint')));
   if (caps.emptyKey) notes.append(el('p', 'app-studio__empty', t(caps.emptyKey)));
@@ -76,12 +95,48 @@ export function createStudioScreen({ t, tier = 0, layers = [], outfit = 'everyda
     canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawStudio(ctx, w, h, tier, layers, { view: true });
+    drawStudio(ctx, w, h, tier, layers, { view: true, masters: dropping ? masters.filter((m) => m !== hang) : masters });
     const spots = layerSpots(w, h, true);
     geo = { w, h, hero: spots.hero, chair: spots.chair };
     her.setAttribute('viewBox', `0 0 ${w} ${h}`);
     stopFlight();
     drawHer();
+    placeFrames(w, h, dpr);
+  }
+
+  /**
+   * Put a button over each framed diploma (it opens that diploma), and in hang mode the new frame dropping onto its
+   * nail; when it lands, the room is painted again with that frame in it.
+   * @param {number} w picture width @param {number} h picture height @param {number} dpr pixel ratio
+   * @returns {void}
+   */
+  function placeFrames(w, h, dpr) {
+    wall.replaceChildren();
+    for (const p of fameSpots(w, h)) {
+      if (!masters.includes(p.type)) continue;
+      const bw = Math.max(40, p.s * 1.3);
+      const bh = Math.max(44, p.s * 1.6);
+      if (onDiploma) {
+        const b = button('app-studio__frame', '', () => onDiploma(p.type), shell.signal);
+        b.setAttribute('aria-label', t('ui.studio.frame', { kind: kindName(p.type) }));
+        Object.assign(b.style, { left: `${p.x - bw / 2}px`, top: `${p.y + p.s * 0.85 - bh / 2}px`, width: `${bw}px`, height: `${bh}px` });
+        wall.append(b);
+      }
+      if (dropping && p.type === hang) {
+        const cw = p.s * 1.5;
+        const ch = p.s * 1.8;
+        const drop = el('canvas', 'app-studio__drop');
+        drop.width = Math.round(cw * dpr);
+        drop.height = Math.round(ch * dpr);
+        drop.setAttribute('aria-hidden', 'true');
+        Object.assign(drop.style, { left: `${p.x - cw / 2}px`, top: `${p.y - p.s * 0.15}px`, width: `${cw}px`, height: `${ch}px` });
+        const dc = drop.getContext('2d');
+        dc.setTransform(dpr, 0, 0, dpr, 0, 0);
+        fameFrame(dc, { ...p, x: cw / 2, y: p.s * 0.15 }, true);
+        drop.addEventListener('animationend', () => { dropping = false; size = ''; paint(); }, { once: true, signal: shell.signal });
+        wall.append(drop);
+      }
+    }
   }
 
   /** Her layer for the studio view (standing, hands on hips, cap on or off). @returns {object} the comic-art layer */

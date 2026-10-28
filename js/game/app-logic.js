@@ -433,12 +433,24 @@ export function backdropLayers(save) {
 }
 
 /**
- * What the studio view screen shows (T5.1c): the studio tier, the owned upgrades in draw order and her outfit.
+ * What the studio view screen shows (T5.1c): the studio tier, the owned upgrades in draw order, her outfit and the
+ * Master diplomas on the wall of fame (R8j).
  * @param {object} save the save
- * @returns {{tier: number, layers: string[], outfit: string}} the studio view's data
+ * @returns {{tier: number, layers: string[], outfit: string, masters: string[]}} the studio view's data
  */
 export function studioViewArgs(save) {
-  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: heroOutfit(save) };
+  return { tier: backdropTier(save), layers: backdropLayers(save), outfit: heroOutfit(save), masters: masterKinds(save) };
+}
+
+/**
+ * The kinds of bump that are Masters (D34), in data/bumps.js order: their diplomas hang on the studio's wall of fame
+ * (R8j). Worked out from the clean pop counts, so an old save gets its frames at once.
+ * @param {object} save the save
+ * @returns {string[]} bump ids
+ */
+export function masterKinds(save) {
+  const state = economyFromSave(save);
+  return BUMP_IDS.filter((type) => masteryLevel(state, type) >= MASTER_LEVEL);
 }
 
 /**
