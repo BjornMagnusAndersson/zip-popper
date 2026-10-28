@@ -725,6 +725,8 @@ function drawFrontHair(ctx, f, look) {
     ctx.beginPath();
     ctx.ellipse(X(-0.3), Y(-0.86), rx * 0.22, ry * 0.07, -0.35, 0, Math.PI * 2);
     ctx.fill();
+    // Under a beanie the tufts are tucked in (owner 2026-10-28: they peeked out below it as loose pink smudges).
+    if (look.acc.includes('beanie')) return;
     // Tufts above the ears: a crescent that hugs the head outline (R7: they stood off the head as loose dark slivers).
     for (const s of [-1, 1]) {
       const vs = [];
@@ -893,25 +895,44 @@ function drawHeadwear(ctx, f, look) {
   if (has('beanie')) {
     // Owner 2026-10-28: the folded band stuck out past the sides like little wings. Now the beanie is one shape (the
     // dome down to its lower edge) and the band is cut from the bottom of that same shape, so it never sticks out.
+    // Owner 2026-10-28 (v74 test): the lower corners still flared out past the head like a bell, with a flat end. Now
+    // the sides hug the head (a little bulkier than it) and the lower edge curves up into them in a round corner.
     const c = look.accent;
-    const side = 1.06; // half the beanie's width at its lower edge
-    // Lower edge of the beanie at x-unit u, just under the hairline.
-    const bottom = (u) => { // ...curving up a little at the very ends, so the corners are round, not pointed
-      const k = Math.max(0, Math.abs(u) - 0.8) / (side - 0.8);
-      return hairline(f, Math.max(-side, Math.min(side, u))) + 0.03 - 0.14 * Math.min(1, k) ** 2;
+    const sx = 1.08; // how much wider than the head the knit is
+    const afro = look.hairStyle === 'afro'; // see below: the knit goes over the whole cloud of curls
+    const round = afro ? 0.4 : 0.24; // how far in from the side the corner starts to curve up
+    const lift = afro ? 0.24 : 0.12; // how high the corner curves up (more on an afro: the curls puff out under it)
+    let side = 1.06; // half the beanie's width at its lower edge (worked out below)
+    // Lower edge of the beanie at x-unit u, just under the hairline, curving up at the ends into a round corner.
+    const bottom = (u) => {
+      const a = Math.min(Math.abs(u), side);
+      const k = Math.min(1, Math.max(0, a - (side - round)) / round);
+      return hairline(f, a) + 0.03 - lift * (1 - Math.sqrt(1 - k * k));
     };
-    // Where the top's curve meets the lower edge, in x-units (the lower edge ends exactly there: no spike at the corners).
-    const t0 = Math.asin(Math.max(-0.95, Math.min(0.95, (bottom(side) + 0.04) / 1.2)));
-    const ends = (headPoint(f, t0, 1.1, 1.2, -0.04)[0] - cx) / rx;
+    // Owner 2026-10-28: on an afro the curls stuck out over the top of the beanie (a small hat sunk into the hair). There
+    // the knit stretches over the whole cloud of curls (an oval as big as the cloud in drawBackHair), so the curls
+    // only puff out below it at the sides.
+    const oV = -0.4; // the afro oval's middle, in y-units
+    const oA = 1.27; // its half width
+    const oB = 0.85 + (0.2 * rx) / ry; // its half height (the cloud's outer puffs reach 0.2 rx past its own oval)
+    // The angle on the afro oval at height v (negative = above its middle).
+    const oAngle = (v) => Math.asin(Math.max(-0.95, Math.min(0.95, (v - oV) / oB)));
+    // Where the top's curve meets the lower edge: settle the width so the corner ends exactly on the knit's side.
+    for (let i = 0; i < 6; i += 1) {
+      if (afro) { side = oA * Math.cos(oAngle(bottom(side))); continue; }
+      const t0 = Math.asin(Math.max(-0.95, Math.min(0.95, (bottom(side) + 0.04) / 1.2)));
+      side = (headPoint(f, t0, sx, 1.2, -0.04)[0] - cx) / rx;
+    }
+    const top = afro ? oV - oB : -1.3; // the crown's highest point (the pom-pom sits there)
     // The whole beanie's outline: along the lower edge from left to right, then over the top of a larger head.
     const shape = () => {
       ctx.beginPath();
-      for (let i = 0; i <= 24; i += 1) { const u = -ends + (2 * ends * i) / 24; ctx.lineTo(X(u), Y(bottom(u))); }
-      topArc(ctx, f, bottom(side), 1.1, 1.2, -0.04);
+      for (let i = 0; i <= 32; i += 1) { const u = -side + (2 * side * i) / 32; ctx.lineTo(X(u), Y(bottom(u))); }
+      if (afro) { const a0 = oAngle(bottom(side)); ctx.ellipse(X(0), Y(oV), oA * rx, oB * ry, 0, a0, Math.PI - a0, true); } else topArc(ctx, f, bottom(side), sx, 1.2, -0.04);
       ctx.closePath();
     };
     shape();
-    const g = ctx.createLinearGradient(0, Y(-1.3), 0, Y(-0.6));
+    const g = ctx.createLinearGradient(0, Y(top), 0, Y(-0.6));
     g.addColorStop(0, shade(c, 0.15));
     g.addColorStop(1, shade(c, -0.1));
     ctx.fillStyle = g;
@@ -939,7 +960,7 @@ function drawHeadwear(ctx, f, look) {
     // The pom-pom.
     ctx.fillStyle = look.accent2;
     ctx.beginPath();
-    for (let i = 0; i < 10; i += 1) { const a = (i / 10) * Math.PI * 2; ctx.moveTo(X(0) + Math.cos(a) * rx * 0.14, Y(-1.3) + Math.sin(a) * rx * 0.14); ctx.arc(X(0) + Math.cos(a) * rx * 0.1, Y(-1.3) + Math.sin(a) * rx * 0.1, rx * 0.07, 0, Math.PI * 2); }
+    for (let i = 0; i < 10; i += 1) { const a = (i / 10) * Math.PI * 2; ctx.moveTo(X(0) + Math.cos(a) * rx * 0.14, Y(top) + Math.sin(a) * rx * 0.14); ctx.arc(X(0) + Math.cos(a) * rx * 0.1, Y(top) + Math.sin(a) * rx * 0.1, rx * 0.07, 0, Math.PI * 2); }
     ctx.fill();
   }
   if (has('hat')) { // a round bowler with a ribbon (owner 2026-10-28: it must sit ON the head for every hair style)
