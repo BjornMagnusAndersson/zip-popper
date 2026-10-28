@@ -936,7 +936,9 @@ export function drawCharacter(who, l) {
       const side = i ? 1 : -1;
       const dy = [elb[1] + down, hand[1] + down];
       const held = i === 1 && c.hold ? heldThing(c.hold, [hand[0], dy[1]], c.holdScale) : null;
-      const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side, hold: !!held, handFill };
+      // `grip: true` on the layer = the scene draws her right fist round its own prop (the watering can), so the arm
+      // stops at the wrist (owner 2026-10-28: an open hand showed under the fist).
+      const o = { open: pose.open?.[i], wiggle: pose.wiggle, point: pose.point && i === 1, side, hold: !!held || (i === 1 && c.grip === true), handFill };
       body.appendChild(arm(shoulders[i], [elb[0], dy[0]], [hand[0], dy[1]], out, skinFill, o));
       if (held) {
         // The fist goes over the thing, fingers wrapped across it and the thumb on top, so it looks gripped.

@@ -263,7 +263,7 @@ const P7_HIM = helmeted(470, 880, 0.85, { pose: 'stand', expr: 'happy', look: 1 
 const P7_WINDOW_X = 0.68;
 const P7_PLANT = littlePlant(1190, 386, 0.32, 'wide');
 const P7_CHAIR = { art: 'chair', x: 760, y: 880, scale: 1, color: '#9a8f6a' };
-const P7_HER = { id: 'her', art: 'heroine', x: 760, y: 880 - 138 * P7_CHAIR.scale, scale: 0.85, pose: 'wave', expr: 'happy', look: 1 };
+const P7_HER = { id: 'her', art: 'heroine', x: 760, y: 880 - 138 * P7_CHAIR.scale, scale: 0.85, pose: 'wave', expr: 'happy', look: 1, grip: true };
 const P7_LAND = [1180, 304];
 
 export const STRIP = {

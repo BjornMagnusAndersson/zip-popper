@@ -43,8 +43,29 @@ function talkingSock(x, y, s, puppet = false) {
     { shape: 'path', d: `M${p(-40, 0)} L${p(40, 0)} L${p(40, 150)} Q${p(46, 190)} ${p(90, 200)} L${p(130, 210)} Q${p(160, 240)} ${p(130, 266)} L${p(10, 260)} Q${p(-44, 250)} ${p(-40, 190)}Z`, fill: '#3fae8c', stroke: true, sw: 6 },
     { shape: 'path', d: `M${p(-40, 50)} L${p(40, 50)} M${p(-40, 100)} L${p(40, 100)} M${p(-40, 150)} L${p(40, 150)}`, fill: 'none', stroke: '#ffe27a', sw: 12 },
     { shape: 'rect', x: x - 48 * s, y: y - (puppet ? 24 : 10) * s, w: 96 * s, h: 34 * s, rx: 10 * s, fill: '#ffffff', stroke: true, sw: 5 },
-    { shape: 'path', d: `M${p(-10, 236)} q30 -10 60 4 M${p(60, 222)} q20 4 30 -4`, fill: 'none', stroke: '#2a8a6c', sw: 4 },
+    ...puppetFace(p, s), // the same face whether it is held or worn (owner 2026-10-28)
   ];
+}
+
+/**
+ * The sock puppet's face on its toe (owner 2026-10-28: a fun talking sock): two googly eyes looking different ways
+ * and a big open smile with a pink tongue.
+ * @param {(dx: number, dy: number) => string} p the sock's point maker @param {number} s size @returns {object[]} shape layers
+ */
+function puppetFace(p, s) {
+  /** A point as numbers. @param {number} dx @param {number} dy @returns {number[]} [x, y] */
+  const n = (dx, dy) => p(dx, dy).split(' ').map(Number);
+  const out = [];
+  for (const [dx, dy, lx, ly] of [[40, 234, -9, 6], [88, 240, 9, -5]]) { // googly: the pupils point different ways
+    const [ex, ey] = n(dx, dy);
+    out.push({ shape: 'circle', x: ex, y: ey, r: 26 * s, fill: '#ffffff', stroke: true, sw: 4 });
+    out.push({ shape: 'circle', x: ex + lx * s, y: ey + ly * s, r: 12 * s, fill: '#2a211d' });
+  }
+  // a wide open smile across the toe, with a pink tongue
+  out.push({ shape: 'path', d: `M${p(96, 222)} Q${p(132, 176)} ${p(162, 236)} Q${p(128, 230)} ${p(96, 222)}Z`, fill: '#7a2a3a', stroke: true, sw: 4 });
+  const [tx, ty] = n(130, 210);
+  out.push({ shape: 'ellipse', x: tx, y: ty, rx: 14 * s, ry: 9 * s, fill: '#f28aa0' });
+  return out;
 }
 
 /** A ball of yarn with a loose end. @param {number} x middle @param {number} y middle @param {number} r radius @param {string} fill colour @returns {object[]} shape layers */
@@ -147,10 +168,10 @@ export const STRIP = {
         layers: [
           { id: 'penny', art: 'penny', x: 190, y: 640, scale: 1.2, pose: 'bust', expr: 'happy', look: 1 },
           // Penny holds the sock out by its cuff (owner 2026-10-28: it floated with nobody holding it).
-          ...talkingSock(380, 400, 0.7),
-          { shape: 'path', d: 'M296 600 Q362 540 376 424', fill: 'none', stroke: true, sw: 40 },
-          { shape: 'path', d: 'M296 600 Q362 540 376 424', fill: 'none', stroke: '#62402e', sw: 30 },
-          { shape: 'circle', x: 378, y: 414, r: 24, fill: '#62402e', stroke: true, sw: 5 },
+          ...talkingSock(380, 340, 0.7),
+          { shape: 'path', d: 'M296 600 Q366 520 376 364', fill: 'none', stroke: true, sw: 40 },
+          { shape: 'path', d: 'M296 600 Q366 520 376 364', fill: 'none', stroke: '#62402e', sw: 30 },
+          { shape: 'circle', x: 378, y: 354, r: 24, fill: '#62402e', stroke: true, sw: 5 },
           { id: 'her', art: 'heroine', x: 640, y: 640, scale: 0.95, pose: 'bust', expr: 'shocked', flip: true },
         ],
       },
@@ -169,7 +190,7 @@ export const STRIP = {
           { art: 'chair', x: 330, y: 600, scale: 0.72, color: '#3fae8c' },
           { id: 'her', art: 'heroine', x: 330, y: 610, scale: 0.75, pose: 'wave', expr: 'shocked' },
           // the sock worn like a puppet on her raised hand, over it (owner 2026-10-28: it sat behind her hand)
-          ...talkingSock(468, 262, 0.42, true),
+          ...talkingSock(468, 290, 0.62, true),
         ],
       },
       camera: { move: 'pushIn', focus: [330, 240], amount: 0.12, ms: 2200 },
