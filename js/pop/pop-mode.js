@@ -611,6 +611,35 @@ export function createPopMode({
     }, 600);
   }
 
+  /**
+   * The bumps are done but the nose dots are still on (owner 2026-10-28: easy to forget, and left on they cost the
+   * third star): the customer says so in a bubble over the nose, the Nose strip button glows until the strip goes on,
+   * and the hint line (which says what to do) flashes once. Only when she owns the strip and it is not on yet.
+   * @param {object} c the current face
+   * @returns {void}
+   */
+  function noseNudge(c) {
+    if (!c.strip || c.stripPeeled || !toolIds.includes('noseStrip') || c.scene?.stripStuck?.() || !c.scene?.stripOn?.()) return;
+    const bubble = el('p', 'pop-ow pop-nudge', t('pop.noseNudge'));
+    bubble.setAttribute('aria-hidden', 'true'); // the hint line says it for screen readers
+    const sp = c.scene?.toScreen(c.strip.x + c.strip.w / 2, c.strip.y) ?? { x: c.strip.x, y: c.strip.y };
+    bubble.style.left = `${sp.x}px`;
+    bubble.style.top = `${sp.y}px`;
+    stage.append(bubble);
+    setTimeout(() => bubble.remove(), 2600);
+    toolButtons.get('noseStrip')?.classList.add('pop-tool--nudge');
+    if (!still()) { // restart the hint line's little flash
+      hint.classList.remove('pop-hint--flash');
+      void hint.offsetWidth;
+      hint.classList.add('pop-hint--flash');
+    }
+  }
+
+  /** Stop the Nose strip button's glow (the strip went on, came off, or the face is done). @returns {void} */
+  function endNoseNudge() {
+    toolButtons.get('noseStrip')?.classList.remove('pop-tool--nudge');
+  }
+
   /** Show how many bumps are left and how many Ow so far (only while popping). @returns {void} */
   function drawCount() {
     const scene = current?.scene;
@@ -848,6 +877,7 @@ export function createPopMode({
     const c = {
       canvas, w, h, dpr, face, spec, seed: s, total: pimples.length, healed: false, scene: null,
       round: createRound(pimples.length), wince: false, winceTimer: 0, patches: 0, stripPeeled: false, hasStrip: Boolean(lay.strip),
+      strip: lay.strip ?? null, // where the nose dots are (scene px), for the reminder bubble (noseNudge)
       owed: new Set(), cleanTypes: [], cleanTools: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
       request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
       hooks: round ? cfg.hooks : {}, // a special mode's onPop and onOw listeners (T4.5)
@@ -856,6 +886,7 @@ export function createPopMode({
       giggle: false, giggleTimer: 0, // a short happy face after a giggle (ticklish, T8.3)
     };
     current = c;
+    endNoseNudge(); // a new face: no reminder glow left over from the last one
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
       width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze,
@@ -881,9 +912,14 @@ export function createPopMode({
       onPatch: (n) => { c.patches = n; }, // each patched spot pays a small tip (economy.js roundPayout)
       onStripPeeled: () => { // the peeled nose strip pays a bonus (economy.js roundPayout)
         c.stripPeeled = true;
+        endNoseNudge();
         if (current === c && c.scene?.step() === 'wipe') paintHint('wipe'); // peeled while wiping (B55): the strip tip goes
       },
-      onStripStuck: () => { if (current === c && c.scene?.step() === 'wipe') paintHint('wipe'); }, // stuck on while wiping (B55): "peel it"
+      onStripStuck: () => { // stuck on while wiping (B55): "peel it"; the button's reminder glow has done its job
+        if (current !== c) return;
+        endNoseNudge();
+        if (c.scene?.step() === 'wipe') paintHint('wipe');
+      },
       covered: () => coveredRects(), // where the tool bar and buttons sit over the face, so the wipe pad rests clear of them
       onNote: (n) => { if (n === 'patchFirst' && current === c) { hint.textContent = t('tool.patch.notYet'); hint.classList.remove('pop-hint--new', 'pop-hint--flash'); } },
       onPop: (p) => {
@@ -911,6 +947,8 @@ export function createPopMode({
       onStep: (step) => {
         paintHint(step);
         drawCount();
+        if (step === 'wipe' && current === c) noseNudge(c); // every bump done, the nose dots still on: remind her
+        else endNoseNudge();
         if (step === 'done') {
           c.round = registerCleanup(c.round);
           c.healed = true;
