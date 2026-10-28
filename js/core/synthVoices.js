@@ -132,33 +132,43 @@ export const VOICES = {
   /**
    * The ticklish customer's giggle: five quick, bright "hee" bursts, each a small rise-and-fall in a high voice (about 560 to
    * 800 Hz, an "ee" vowel), a little softer toward the end. The pitch, the gaps and the number of bursts change a little
-   * every time, so two giggles in a row never sound the same. About 0.6 s. @param {object} k kit @param {number} t start
+   * every time, so two giggles in a row never sound the same. About 0.8 s (owner 2026-10-28: "a bit fast but cute", so
+   * each "hee" is a little longer with a little more room after it). @param {object} k kit @param {number} t start
    */
   giggle(k, t) {
     const n = 4 + Math.floor(Math.random() * 3); // 4 to 6 "hee"
     const base = 560 + Math.random() * 90; // this giggle's own voice height
     let at = 0;
     for (let i = 0; i < n; i += 1) {
-      const len = 0.065 + Math.random() * 0.02;
+      const len = 0.082 + Math.random() * 0.022;
       const f = base * (1 + (i % 2 ? 0.1 : 0) + Math.random() * 0.06); // every other "hee" a little higher
       const vol = 0.17 * (1 - (i / n) * 0.4);
       k.vowel(f, t + at, len, { slideTo: f * 1.28, formants: [330, 2700], vol }); // up...
       k.vowel(f * 1.28, t + at + len * 0.85, len * 0.8, { slideTo: f * 0.9, formants: [330, 2700], vol: vol * 0.8 }); // ...and down
       k.hiss(t + at, 0.03, { type: 'highpass', freq: 5000, vol: 0.02 }); // the breath of each "hee"
-      at += len * 1.2 + 0.02 + Math.random() * 0.015; // about 0.12 s per "hee": 4 to 6 of them last 0.5 to 0.75 s
+      at += len * 1.2 + 0.045 + Math.random() * 0.02; // about 0.16 s per "hee": 4 to 6 of them last 0.65 to 1 s
     }
   },
   /**
-   * The warm cloth left on too long: a short cartoon sizzle. A bright hiss that fades fast, a sputter of crackles on top,
-   * and a small whistle that rises like steam from a kettle. About 0.45 s. @param {object} k kit @param {number} t start
+   * The warm cloth left on too long: a frying-pan sizzle (owner 2026-10-28: the first one, with a rising whistle, sounded
+   * like a whistle played backwards). A steady, flickering hiss at one height (no sweep, no tone), made of short
+   * overlapping noise bursts that slowly die away, with a dense crackle of tiny fat pops and a few bigger spits.
+   * About 0.75 s. @param {object} k kit @param {number} t start
    */
   sizzle(k, t) {
-    k.hiss(t, 0.42, { type: 'highpass', freq: 3500, to: 6500, vol: 0.12 }); // the steam hiss, fading out
-    k.hiss(t, 0.3, { type: 'bandpass', freq: 5200, q: 1.5, vol: 0.08 });
-    for (let i = 0; i < 7; i += 1) { // the sputter: tiny crackles, fewer at the end
-      k.hiss(t + 0.02 + Math.random() * 0.3, 0.02, { type: 'bandpass', freq: 3000 + Math.random() * 3500, q: 3, vol: 0.09 * (1 - i / 10) });
+    const len = 0.75;
+    for (let d = 0; d < len; d += 0.05) { // the frying hiss: overlapping bursts, flickering a little, fading out
+      const fade = 1 - (d / len) * 0.75;
+      k.hiss(t + d, 0.11, { type: 'highpass', freq: 2600 + Math.random() * 600, vol: (0.05 + Math.random() * 0.025) * fade });
     }
-    k.tone(900, t + 0.04, 0.38, { type: 'sine', vol: 0.045, slideTo: 1900 }); // the small rising whistle
+    for (let i = 0; i < 38; i += 1) { // the crackle: many tiny fat pops, thinning out toward the end
+      const d = len * Math.pow(Math.random(), 1.4);
+      // at least 14 ms: hiss() fades in over 8 ms, a shorter pop would get stuck at full volume instead of fading
+      k.hiss(t + d, 0.014 + Math.random() * 0.01, { type: 'bandpass', freq: 1800 + Math.random() * 4500, q: 2, vol: (0.05 + Math.random() * 0.07) * (1 - (d / len) * 0.6) });
+    }
+    for (let i = 0; i < 4; i += 1) { // a few bigger spits, lower and wetter
+      k.hiss(t + Math.random() * len * 0.7, 0.02, { type: 'bandpass', freq: 900 + Math.random() * 700, q: 1.5, vol: 0.09 });
+    }
   },
   /** Money in: a bright two-note ka-ching. @param {object} k kit @param {number} t start */
   cash(k, t) {

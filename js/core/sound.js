@@ -88,6 +88,7 @@ export function createSound({ sfxOn = true, musicOn = true, sfxVolume = 1, onCha
   function tone(freq, at, dur, o = {}) {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
+    g.gain.value = 0.0001; // silent from the very first sample (a gain starts at 1: a click when `at` falls between samples)
     osc.type = o.type ?? 'sine';
     osc.frequency.setValueAtTime(freq, at);
     if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(o.slideTo, at + dur);
@@ -112,10 +113,14 @@ export function createSound({ sfxOn = true, musicOn = true, sfxVolume = 1, onCha
     src.loop = true;
     const f = ctx.createBiquadFilter();
     f.type = o.type ?? 'bandpass';
+    f.frequency.value = o.freq ?? 1500; // the filter's own height from the first sample too
     f.frequency.setValueAtTime(o.freq ?? 1500, at);
     if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, at + dur);
     f.Q.value = o.q ?? 1;
     const g = ctx.createGain();
+    // Silent from the very first sample: a gain starts at 1, and when `at` falls between two samples the noise could
+    // slip through at full loudness for one sample: a sharp click (owner heard the sizzle "wrong"; peak 0.4 found, 2026-10-28).
+    g.gain.value = 0.0001;
     g.gain.setValueAtTime(0.0001, at);
     g.gain.exponentialRampToValueAtTime(o.vol ?? 0.3, at + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
@@ -139,6 +144,7 @@ export function createSound({ sfxOn = true, musicOn = true, sfxVolume = 1, onCha
     osc.frequency.setValueAtTime(freq, at);
     if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(o.slideTo, at + dur);
     const g = ctx.createGain();
+    g.gain.value = 0.0001; // silent from the very first sample (see hiss)
     g.gain.setValueAtTime(0.0001, at);
     g.gain.exponentialRampToValueAtTime(o.vol ?? 0.2, at + 0.03);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
