@@ -124,6 +124,21 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     return card;
   }
 
+  /**
+   * The "Coming soon" card at the end of the Tools tab (owner 2026-10-28, SPEC D42): a greyed mystery card that hints
+   * more is planned without saying what (customers already ask for facials). Nothing to buy.
+   * @returns {HTMLElement} the card
+   */
+  function soonCard() {
+    const card = el('article', 'app-item app-item--locked app-item--soon');
+    card.append(
+      el('span', 'app-item__badge app-item__badge--soon', '?'),
+      (() => { const text = el('div', 'app-item__text'); text.append(el('h2', 'app-item__name', t('ui.shop.soon.name')), el('p', 'app-item__desc', t('ui.shop.soon.desc'))); return text; })(),
+      (() => { const side = el('div', 'app-item__side'); side.append(el('span', 'app-soon-tag', t('ui.shop.soon.tag'))); return side; })(),
+    );
+    return card;
+  }
+
   /** Draw the tabs and the list of the active tab, keeping the scroll place. @returns {void} */
   function render() {
     const keep = panel.scrollTop;
@@ -140,6 +155,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     if (activeTab === 'studio' && onStudio) extras.append(button('app-btn app-shop-studio', t('ui.shop.seeStudio'), () => onStudio(), shell.signal));
     if (entries.length === 0) panel.append(el('p', 'app-empty', t('ui.shop.empty')));
     for (const item of entries) panel.append(itemCard(item, kindIcon));
+    if (activeTab === 'tools') panel.append(soonCard()); // more is coming (SPEC D42)
     panel.scrollTop = keep;
     updateMore();
   }

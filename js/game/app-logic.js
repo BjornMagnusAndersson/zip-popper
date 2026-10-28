@@ -26,6 +26,7 @@ import { TOOL_IDS, GLOVES } from '../data/tools.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
 import { pinVisit, pinIntroKey } from './pin-jar.js';
+import { serviceAskKey } from './service-asks.js';
 import { GUIDE_KINDS } from '../screens/guide-logic.js';
 import { demoAlbum } from '../screens/album-logic.js';
 import { STRIP as strip0, STRIP_BAN as strip0b } from '../data/comics/strip-0.js';
@@ -493,7 +494,8 @@ export function backdropRoom(chapter) {
  * "Hurry, hurry, hurry!" customer (hurryLineRequest: a hurry request with line: true and an easy clock). step.hurryTier
  * picks a harder tier for a later game (data/customer-lines.js HURRY_LINE_TIERS); v1 never sets it.
  * Pin jar (owner 2026-10-28, game/pin-jar.js): pin = this customer brought a pin from home (their intro says so);
- * pins = how many pins are in the jar now (drawn on the studio shelf).
+ * pins = how many pins are in the jar now (drawn on the studio shelf). Service asks (SPEC D42, game/service-asks.js): a
+ * few customers' second line asks if the studio does facials or exfoliating yet.
  * @returns {object|null} startRound arguments, or null when the chapter has no such customer
  */
 export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, forcedBoss = null) {
@@ -536,7 +538,9 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
   // The pin jar (owner 2026-10-28): now and then a customer brings a pin from home and says so first (game/pin-jar.js).
   const pin = pinVisit(step, { boss: bossId, regular: Boolean(spec.customer?.regular) });
   const introKey = pin ? pinIntroKey(save.pinJar ?? 0) : lines.introKey;
-  const customer = { ...spec.customer, introKey, deadlineKey: lines.secondKey, resultKeys: { ...lines.resultKeys } };
+  // Now and then a customer asks if the studio does facials yet (a hint of later services, game/service-asks.js).
+  const ask = serviceAskKey(step, { boss: bossId, regular: Boolean(spec.customer?.regular), pin, timed: request?.type === 'hurry' });
+  const customer = { ...spec.customer, introKey, deadlineKey: ask ?? lines.secondKey, resultKeys: { ...lines.resultKeys } };
   return {
     // Gloves (SPEC D32e): once she owns them her fingertips are blue and the customer relaxes a bit (data/tools.js GLOVES).
     customer, lines, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes],

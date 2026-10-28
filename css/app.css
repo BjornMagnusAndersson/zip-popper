@@ -761,3 +761,7 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
   .app-scrub__title { font-size: 1.25rem; }
   .app-scrub__text { font-size: 0.9rem; }
 }
+/* The "Coming soon" mystery card at the end of the Tools tab (owner 2026-10-28, SPEC D42): dashed and greyed, a "?". */
+.app-item--soon { border-style: dashed; opacity: 0.85; }
+.app-item__badge--soon { font-weight: 900; font-size: 1.4rem; display: grid; place-items: center; }
+.app-soon-tag { padding: 3px 10px; border-radius: 999px; border: 2px dashed var(--ink); font-weight: 900; font-size: 0.85rem; white-space: nowrap; }
