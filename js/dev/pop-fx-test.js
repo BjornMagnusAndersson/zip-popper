@@ -6,5 +6,8 @@ import C from './popfx/c.js';
 import D from './popfx/d.js';
 import E from './popfx/e.js';
 import F from './popfx/f.js';
+import G from './popfx/g.js';
+import H from './popfx/h.js';
+import I from './popfx/i.js';
 
-start([A, B, C, D, E, F]);
+start([A, B, C, D, E, F, G, H, I]);

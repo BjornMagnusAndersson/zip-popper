@@ -23,6 +23,9 @@ const PRECACHE = [
   './js/dev/popfx/d.js',
   './js/dev/popfx/e.js',
   './js/dev/popfx/f.js',
+  './js/dev/popfx/g.js',
+  './js/dev/popfx/h.js',
+  './js/dev/popfx/i.js',
   './js/screens/dom.js',
   './js/screens/mascot.js',
   './js/screens/screen-logic.js',
@@ -129,7 +132,7 @@ const PRECACHE = [
   './assets/audio/sizzle.wav',
 ];
 
-const CACHE_VERSION = 'v95';
+const CACHE_VERSION = 'v96';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the
