@@ -145,7 +145,10 @@ export const STRIP = {
           kitchen(800, 600, { floorY: 520, windowX: 0.8, plant: false }),
           { id: 'him', art: 'husband', x: 420, y: 660, scale: 1.2, pose: 'bust', outfit: 'armor', visor: 'up', expr: 'neutral', look: -1 },
           // low on his jaw, where the chink and the round's gap are (R8 Q16: at the eye corner it read as a stye)
-          { shape: 'circle', x: 322, y: 455, r: 11, fill: '#ff8fa8', stroke: true, sw: 3 },
+          // B107(5): bigger, on a small patch of skin with a shine dot, so it reads on the dark beard
+          { shape: 'circle', x: 322, y: 452, r: 25, fill: '#d29a6c' },
+          { shape: 'circle', x: 322, y: 452, r: 16, fill: '#ff8fa8', stroke: true, sw: 4 },
+          { shape: 'circle', x: 317, y: 447, r: 5, fill: '#ffffff' },
           { art: 'sparkles', x: 318, y: 458, r: 50 },
         ],
       },
@@ -211,8 +214,9 @@ export const STRIP = {
           kitchen(800, 600, { floorY: 520, windowX: 0.5, plant: false }),
           { id: 'him', art: 'husband', x: 560, y: 660, scale: 1.15, pose: 'bust', outfit: 'armor', visor: 'down', expr: 'grumpy', flip: true },
           { id: 'her', art: 'heroine', x: 150, y: 690, scale: 1.0, pose: 'bust', expr: 'happy', look: 1 },
-          ...bigTweezers(262, 572, 50, 1.8),
-          ...tweezerHand(226, 660, 262, 572),
+          // B107(5): the fist higher up so more of her sleeve shows above the panel edge (the tips still in the visor slit)
+          ...bigTweezers(300, 530, 55, 1.8),
+          ...tweezerHand(215, 650, 300, 530),
         ],
       },
       camera: { move: 'shake' },
@@ -243,11 +247,12 @@ export const STRIP = {
       scene: {
         layers: [
           kitchen(800, 600, { floorY: 520, windowX: 0.85, plant: false }),
-          { id: 'him', art: 'husband', x: 560, y: 680, scale: 1.1, pose: 'bust', outfit: 'armor', visor: 'down', expr: 'shocked', flip: true },
-          ...chink(452, 547, 0.9),
-          { id: 'her', art: 'heroine', x: 170, y: 700, scale: 1.05, pose: 'bust', expr: 'bliss', look: 1 },
-          ...bigTweezers(240, 572, 83, 1.25),
-          ...tweezerHand(200, 660, 240, 572),
+          { id: 'him', art: 'husband', x: 600, y: 680, scale: 1.1, pose: 'bust', outfit: 'armor', visor: 'down', expr: 'shocked', flip: true },
+          ...chink(492, 547, 0.9),
+          { id: 'her', art: 'heroine', x: 150, y: 700, scale: 1.05, pose: 'bust', expr: 'bliss', look: 1 },
+          // B107(5): the fist higher up so more of her sleeve shows (the tips still one hair from the bump)
+          ...bigTweezers(290, 545, 91, 1.2),
+          ...tweezerHand(215, 650, 290, 545),
         ],
       },
       camera: { move: 'pushIn', focus: [440, 540], amount: 0.12, ms: 3000 },
@@ -286,7 +291,10 @@ export const STRIP = {
       scene: {
         layers: [
           kitchen(1600, 900, { floorY: 600, windowX: 0.5, plant: false }),
-          ...shield(1460, 560, 0.6), // his new shield leaning by his chair, behind the table
+          // his new shield hangs on the wall by his chair, on a nail and a cord (B107(5): low down it read as lying on the counter)
+          { shape: 'path', d: 'M1451 334 L1515 292 L1579 334', fill: 'none', stroke: true, sw: 5 },
+          { shape: 'circle', x: 1515, y: 292, r: 9, fill: '#8a96a6', stroke: true, sw: 4 },
+          ...shield(1515, 330, 0.6),
           { id: 'him', art: 'husband', x: 1220, y: 960, pose: 'sit', outfit: 'armor', visor: 'down', expr: 'grumpy', plumes: 1, flip: true },
           { id: 'her', art: 'heroine', x: 380, y: 960, pose: 'pop', expr: 'bliss', look: 1 },
           ...table(-20, 1620, 700, 900),

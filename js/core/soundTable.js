@@ -38,6 +38,11 @@ export const SOUND_TABLE = {
   // the warm cloth left on too long (D41, B101), played with the Ow. Owner 2026-10-28 picked "cooking oil" by cvgre,
   // freesound.org/s/754892, CC0 (public domain), cut to its best 1.1 s with a fade. The synth voice is the fallback.
   sizzle: { type: 'file', url: 'assets/audio/sizzle.wav', fallback: 'sizzle', category: 'sfx' },
+  // the sleeping husband by torchlight (chapter 1, B28): quiet, low and soft
+  sleep_twitch: { type: 'synth', voice: 'sleepTwitch', category: 'sfx' }, // a tiny "hnf"
+  sleep_mumble: { type: 'synth', voice: 'sleepMumble', category: 'sfx' }, // a lazy "mmh"
+  sleep_shift: { type: 'synth', voice: 'sleepShift', category: 'sfx' }, // the blanket rustles
+  sleep_stir: { type: 'synth', voice: 'sleepStir', category: 'sfx' }, // a bigger rustle and a drowsy "hm?"
   // rewards
   cheer: { type: 'synth', voice: 'cheer', category: 'sfx' },
   cash: { type: 'synth', voice: 'cash', category: 'sfx' },

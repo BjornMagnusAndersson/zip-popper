@@ -114,15 +114,21 @@ export function allLineKeys() {
 }
 
 /**
- * Who a customer is for the line memory: a named regular's id, a walk-in's name key (two strangers with the same name
- * count as the same person: the player only sees the name), or null for the husband (his lines are fixed story).
+ * Who a customer is for the line memory: a named regular's id, a walk-in's name key plus their face seed (B89: two
+ * strangers with the same name are two people, the album keeps them apart the same way), or null for the husband (his
+ * lines are fixed story). Old saves kept walk-ins under the plain name key; those entries are no longer looked up (the
+ * album, or the new memory after one more visit, tells who she has met) and fall out of the memory as it fills.
  * @param {{id?: string, regular?: boolean, nameKey?: string}|null|undefined} customer the customer
+ * @param {number} [seed] the face seed of this visit (the album's seed too); without it the customer's own id is used
  * @returns {string|null} the memory id
  */
-export function lineId(customer) {
+export function lineId(customer, seed) {
   if (!customer) return null;
   if (REGULARS.some((r) => r.id === customer.id)) return customer.id;
-  if (!customer.regular && typeof customer.nameKey === 'string' && customer.nameKey) return customer.nameKey;
+  if (!customer.regular && typeof customer.nameKey === 'string' && customer.nameKey) {
+    const who = Number.isFinite(seed) && seed > 0 ? Math.floor(seed) : String(customer.id ?? '');
+    return `${customer.nameKey}#${who}`;
+  }
   return null;
 }
 
@@ -151,15 +157,17 @@ function careerMet(save, id, step) {
  * @param {object} save the save
  * @param {object} customer the customer
  * @param {object} [step] the step being played
+ * @param {number} [seed] the face seed of this visit (tells two walk-ins with one name apart)
  * @returns {boolean} true = a return visit
  */
-export function metBefore(save, customer, step = null) {
-  const id = lineId(customer);
+export function metBefore(save, customer, step = null, seed = undefined) {
+  const id = lineId(customer, seed);
   if (!id) return false;
   if ((save?.customerLines?.[id]?.visits ?? 0) > 0) return true;
   const album = Array.isArray(save?.albumFaces) ? save.albumFaces : [];
   if (REGULARS.some((r) => r.id === id)) return album.some((e) => e?.id === id) || careerMet(save, id, step);
-  return album.some((e) => e?.nameKey === id);
+  // A walk-in is the same person only with the same name AND face seed (a different face with the same name is new).
+  return album.some((e) => e?.nameKey === customer.nameKey && (Number.isFinite(seed) ? e?.seed === Math.floor(seed) : false));
 }
 
 /**
@@ -188,7 +196,7 @@ export function pickLine(pool, seed, salt, avoid) {
  *   met: boolean, hurryLine: object|null}} the keys (id = the line memory id, null = not remembered)
  */
 export function customerLines(save, customer, { seed, step = null, timed = false, hurryLine = null }) {
-  const id = lineId(customer);
+  const id = lineId(customer, seed);
   if (!id) { // the husband: his own story lines; the clock joke only with a clock
     const aside = HUSBAND_ASIDES[customer?.id] ?? null;
     return {
@@ -197,7 +205,7 @@ export function customerLines(save, customer, { seed, step = null, timed = false
     };
   }
   const memo = save?.customerLines?.[id] ?? {};
-  const met = metBefore(save, customer, step);
+  const met = metBefore(save, customer, step, seed);
   const regular = REGULARS.some((r) => r.id === id);
   let intros;
   let seconds;

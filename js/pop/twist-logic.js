@@ -5,6 +5,7 @@
 // (roughChance). No DOM, no clock: engine.js passes the time in, so Node can test every rule.
 
 import { SWAY, TICKLE } from '../data/twists.js';
+import { clampView } from './logic.js';
 
 /**
  * A number, or 0 when it is not a finite number.
@@ -93,6 +94,26 @@ export function clampOffset(off, max) {
   const len = Math.hypot(x, y);
   if (len <= m || len === 0) return { x, y };
   return { x: (x / len) * m, y: (y / len) * m };
+}
+
+/**
+ * The view as it is drawn and touched with the twist offset (the fidgety sway and a giggle's jerk, screen px) on top
+ * of the zoom view. Zoomed in, the moved view keeps inside the same pan limits the zoom itself uses (logic.js
+ * clampView: nothing outside the scene shows and the middle stays over the face), so at an edge the face sways less
+ * in that direction instead of sliding off (B52(4)). At the whole-face view (zoom 1) swayRoom already keeps the sway
+ * small, so it is not clamped there (clampView would take it all away).
+ * @param {{z: number, x: number, y: number}} view the zoom view
+ * @param {{x: number, y: number}} off the twist offset, screen px
+ * @param {number} w scene width @param {number} h scene height
+ * @param {{cx: number, cy: number, rx: number, ry: number}|null} [face] the face oval
+ * @returns {{z: number, x: number, y: number}} the view moved by the offset
+ */
+export function swayView(view, off, w, h, face = null) {
+  const x = num(off?.x);
+  const y = num(off?.y);
+  if (!x && !y) return view;
+  const moved = { z: view.z, x: view.x - x / view.z, y: view.y - y / view.z };
+  return view.z > 1 ? clampView(moved, w, h, face) : moved;
 }
 
 /**

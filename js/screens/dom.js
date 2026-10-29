@@ -96,11 +96,13 @@ const TRIM = '#f2a33a'; // the apron's orange trim (as comic-art.js OUTFITS.apro
  * An item missing here (a future one) gets its tab's icon instead (tool, studio or outfit).
  */
 export const ITEM_ICONS = {
-  // a round fluffy pad with a stitched ring
+  // two soft white square skin-care pads, one peeking out behind the other, the front one with a blue toner drop and a
+  // pressed edge line (stacked pads with a drop do not read as a cookie, and differ from the round patch on its card)
   cottonPad: [
-    ['path', { d: 'M12 4.8A3 3 0 0 1 16.6 6.5A3 3 0 0 1 19.1 10.7A3 3 0 0 1 18.2 15.6A3 3 0 0 1 14.5 18.8A3 3 0 0 1 9.5 18.8A3 3 0 0 1 5.8 15.6A3 3 0 0 1 4.9 10.7A3 3 0 0 1 7.4 6.5A3 3 0 0 1 12 4.8Z', fill: '#ffffff' }, 2.2],
-    ['path', { d: 'M8.6 11.2a3.6 3.6 0 0 1 3.2-3', fill: 'none', stroke: '#c7b5ab' }, 1.6],
-    ['path', { d: 'M15.4 12.8a3.6 3.6 0 0 1-3.2 3', fill: 'none', stroke: '#c7b5ab' }, 1.6],
+    ['rect', { x: 2.6, y: 3.6, width: 14.5, height: 14.5, rx: 4.2, fill: '#e9e0f2', transform: 'rotate(12 9.8 10.8)' }, 2],
+    ['rect', { x: 5.6, y: 7, width: 15, height: 15, rx: 4.4, fill: '#ffffff', transform: 'rotate(-8 13.1 14.5)' }, 2.2],
+    ['path', { d: 'M9 17.6a5 5 0 0 1-0.4-5.6', fill: 'none', stroke: '#cfc5e0' }, 1.1],
+    ['path', { d: 'M18.8 1.2c1.2 1.7 2.2 2.8 2.2 4.1a2.2 2.2 0 0 1-4.4 0c0-1.3 1-2.4 2.2-4.1z', fill: '#7cc8f2' }, 1.4],
   ],
   // silver tweezers, tips a little apart, tilted
   tweezers: [
@@ -133,11 +135,12 @@ export const ITEM_ICONS = {
     ['path', { d: 'M7 21V17L4.6 13.6a1.4 1.4 0 0 1 2.3-1.6L8 13.4V5.6a1.3 1.3 0 0 1 2.6 0V11V4.4a1.3 1.3 0 0 1 2.6 0V11V5.2a1.3 1.3 0 0 1 2.6 0V11.6V7.4a1.3 1.3 0 0 1 2.6 0V15c0 3-1.4 6-3 6Z', fill: '#6fc3ef' }, 2],
     ['rect', { x: 6.2, y: 18.6, width: 9.8, height: 3.4, rx: 1.2, fill: '#bfe6fa' }, 1.8],
   ],
-  // a ring light: a glowing ring with light rays, on a stand
+  // a ring light: a glowing ring with a phone in the middle, on a tripod stand
   lamp: [
-    ['path', { d: 'M12 16.5V21.5M8.5 21.5h7', fill: 'none' }, 2.2],
-    ['path', { d: 'M2.8 3.2l1.6 1.4M21.2 3.2l-1.6 1.4M1.8 10h2M20.2 10h2', fill: 'none' }, 1.6],
-    ['path', { d: 'M5.5 10a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0zM8.4 10a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0z', fill: '#fffbe0', 'fill-rule': 'evenodd' }, 2.2],
+    ['path', { d: 'M12 19.2V20.4M12 20.4L6.4 22.8M12 20.4V22.8M12 20.4l5.6 2.4', fill: 'none' }, 2],
+    ['path', { d: 'M3 10.2a9 9 0 1 0 18 0a9 9 0 1 0-18 0zM6.6 10.2a5.4 5.4 0 1 0 10.8 0a5.4 5.4 0 1 0-10.8 0z', fill: '#ffe066', 'fill-rule': 'evenodd' }, 1.8],
+    ['rect', { x: 10.5, y: 8, width: 3, height: 4.6, rx: 0.8, fill: '#ffffff' }, 1.2],
+    ['path', { d: 'M5.4 6.8a7.2 7.2 0 0 1 2.6-2.4', fill: 'none', stroke: '#ffffff' }, 1.3],
   ],
   // a green plant in a pot that has two little watching eyes
   plant: [
@@ -152,12 +155,14 @@ export const ITEM_ICONS = {
     ['rect', { x: 12.2, y: 12.2, width: 6.4, height: 3.6, rx: 1, fill: '#ffd23f' }, 1.8],
     ['path', { d: 'M6 13l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z', fill: '#ffffff' }, 1.4],
   ],
-  // a mint salon chair with a padded (stitched) back
+  // a mint salon chair: a padded back with two buttons, a seat and a single pedestal foot
   chair: [
-    ['path', { d: 'M7 16v5M17 16v5', fill: 'none' }, 2.2],
-    ['path', { d: 'M7.5 3.5h9a2 2 0 0 1 2 2V13h-13V5.5a2 2 0 0 1 2-2z', fill: '#5eead4' }, 2.2],
-    ['path', { d: 'M10 6.5v3.5M14 6.5v3.5', fill: 'none' }, 1.5],
-    ['rect', { x: 3.5, y: 12, width: 17, height: 4.2, rx: 2, fill: '#5eead4' }, 2.2],
+    ['path', { d: 'M12 16V20M6.8 21.8h10.4', fill: 'none' }, 2.4],
+    ['path', { d: 'M7.5 2.8h9a2.2 2.2 0 0 1 2.2 2.2V12.4h-13.4V5a2.2 2.2 0 0 1 2.2-2.2z', fill: '#5eead4' }, 2.2],
+    ['rect', { x: 8, y: 4.6, width: 8, height: 5.2, rx: 2, fill: '#b5f5ea' }, 0],
+    ['circle', { cx: 10.3, cy: 7.2, r: 1, fill: INK }, 0],
+    ['circle', { cx: 13.7, cy: 7.2, r: 1, fill: INK }, 0],
+    ['rect', { x: 3, y: 11.8, width: 18, height: 4.6, rx: 2.3, fill: '#5eead4' }, 2.2],
   ],
   // a paint roller dripping fresh lilac paint
   wallPaint: [

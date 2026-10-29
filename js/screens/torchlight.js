@@ -4,16 +4,18 @@
 // light. His 3 bumps are popped by the SAME pop scene as every round (pop/pop-mode.js: hold, or the two-finger squeeze
 // when that switch is on); this screen only wraps it: a dark layer over the room with a hole for the torch, his
 // sleeping face, a hidden wake-up meter (game/torchlight-logic.js) and his reactions (a twitch, a mumble in a bubble,
-// a shift on the sofa, then he calms). If the meter fills he stirs and the round starts again softly (no penalty, no
-// money). After the last pop the scripted catch plays (his phone light comes on, a big CAUGHT) and Continue calls
-// onContinue, so the story goes on to strip 2.
+// a shift on the sofa, then he calms), each with a soft sound of its own (core/synthVoices.js). If the meter fills he
+// stirs: popping pauses for a moment, then goes on; the bumps already popped stay popped, a half-squeezed one starts
+// over and he sleeps only lightly (torchlight-logic.js stirWake, B28). After the last pop the scripted catch plays (his
+// phone light comes on, the goo is gone, a big CAUGHT) and Continue calls onContinue, so the story goes on to strip 2.
+// Zoom is off here (the zoom buttons would not show in the dark, and a pinch would lose the torch, B28).
 // Keyboard: the arrow keys move the torch, Space or Enter pops (the torch jumps to the bump being popped).
 // Reduced motion: no shaking, no shifting, no flash (the light fades in slowly). All text comes from t().
 
 import { createPopMode } from '../pop/pop-mode.js';
 import { BUMPS } from '../data/bumps.js';
 import {
-  createWake, stepWake, popWake, owWake, takeReactions, isAwake, isCaught, catchScript, torchLight, torchRadius,
+  createWake, stepWake, popWake, owWake, stirWake, takeReactions, isAwake, isCaught, catchScript, torchLight, torchRadius,
   popLoudness, moveTorchByKey, mumbleIndex,
 } from '../game/torchlight-logic.js';
 
@@ -21,7 +23,7 @@ import {
 const MUMBLES = 4;
 /** How long a bubble stays up (ms). */
 const BUBBLE_MS = 2200;
-/** How long he stirs before the round starts again (ms; shorter with reduced motion). */
+/** How long he stirs before popping can go on (ms; shorter with reduced motion). */
 const STIR_MS = 2600;
 const STIR_MS_STILL = 1800;
 
@@ -78,7 +80,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   const still = () => reducedMotion === true || prefersReducedMotion();
   const node = el('section', `tl${still() ? ' tl--still' : ''}`);
   node.setAttribute('aria-label', t('special.torchlight.region'));
-  const pop = createPopMode({ t, reducedMotion, ...popOptions });
+  const pop = createPopMode({ t, reducedMotion, ...popOptions, zoom: false }); // no zoom in the dark (B28)
   pop.mount(node);
   const scene = pop.node;
   scene.classList.add('tl-scene');
@@ -125,7 +127,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   caught.append(stamp, go);
   scene.append(dark, phone, zzz, bubble, notice, caught);
 
-  let phase = 'play'; // play, stir (he is waking: the round starts again soon) or catch (the scripted end)
+  let phase = 'play'; // play, stir (he is waking: popping pauses, then goes on) or catch (the scripted end)
   let wake = createWake();
   let mumbles = 0;
   let torch = null; // {x, y} in scene px (the pop scene's own box), null until the face is laid out
@@ -258,36 +260,47 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
     if (id === 'twitch') {
       animateFace('tl-twitch', 500);
       say(t('special.torchlight.twitch'));
+      pop.play('sleep_twitch');
       buzz(12);
     } else if (id === 'mumble') {
       say(t(`special.torchlight.mumble${mumbleIndex(mumbles, MUMBLES)}`));
+      pop.play('sleep_mumble');
       mumbles += 1;
     } else if (id === 'shift') {
       animateFace('tl-shift', 1500);
       say(t('special.torchlight.shift'));
+      pop.play('sleep_shift');
       buzz([20, 40, 20]);
     }
   }
 
-  /** The meter is full: he stirs; popping stops, and a moment later the round starts again softly. @returns {void} */
+  /**
+   * The meter is full: he stirs. Popping pauses (a half-squeezed bump lets go and loses its squeeze); a moment later he
+   * settles again and popping goes on, with every popped bump still popped (B28). @returns {void}
+   */
   function stir() {
     phase = 'stir';
     pop.halt();
+    pop.play('sleep_stir');
     say(t('special.torchlight.stir'));
     notice.textContent = t('special.torchlight.stirNotice');
     notice.hidden = false;
     animateFace('tl-shift', 1500);
     buzz([30, 60, 30]);
-    later(restart, still() ? STIR_MS_STILL : STIR_MS);
+    later(settle, still() ? STIR_MS_STILL : STIR_MS);
   }
 
-  /** Start the round again (a fresh face, the same bumps, the meter back to asleep). @returns {void} */
-  function restart() {
-    wake = createWake();
+  /**
+   * He settles again after a stir (B28): the same face, popped bumps stay popped, the meter only falls to a light
+   * sleep (stirWake), the torch goes back below his chin, and popping goes on. @returns {void}
+   */
+  function settle() {
+    wake = stirWake(wake);
     phase = 'play';
     notice.hidden = true;
-    torch = null; // placed again below his face once the new face is laid out
-    startRound();
+    pointers.clear(); // a finger still down from before the stir no longer steers the torch
+    torch = null; // placed again below his face by the next frame
+    pop.resume();
   }
 
   /**
@@ -319,6 +332,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
       later(() => {
         if (step === 'phone') {
           phone.hidden = false;
+          pop.clearGoo(); // she has dabbed it off in the dark: no goo left on his face when the light comes on (B28)
           scene.classList.add('tl-scene--lit');
           zzz.hidden = true;
           pop.setMood('grim'); // eyes open: he was awake
@@ -335,7 +349,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
     }
   }
 
-  /** Start (or restart) the round in the pop scene with this screen's listeners. @returns {void} */
+  /** Start the round in the pop scene with this screen's listeners. @returns {void} */
   function startRound() {
     pop.startRound({ ...roundArgs, onPop, onOw, onFinish: () => {} });
     pop.setTitle(t('special.torchlight.title')); // after startRound, which puts "Pop them!" there

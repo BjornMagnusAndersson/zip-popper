@@ -100,7 +100,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.44, bulbX: 0.3, signX: 0.76, signY: 0.21, plantX: 0.93, plantEyes: 'sad' }), // B9: the sign hangs under the pipe so CLEAN! shows
+          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.44, bulbX: 0.3, signX: 0.76, signY: 0.21, plantX: 0.93, plantEyes: 'sad', ringX: 0.6 }), // B109: ring light (once bought) right of the window. B9: the sign hangs under the pipe so CLEAN! shows
           { art: 'pipe', y: 140, w: 1600, jointX: 1060, joint: 'old' },
           { art: 'drip', x: 1060, y: 520, r: 24 },
           { art: 'bucket', x: 1060, y: 850, scale: 0.6 },
@@ -183,7 +183,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, door: false, windowX: 0.3, bulbX: 0.12, signX: 0.9, plantX: 0.06, plantEyes: 'smug' }),
+          studio(1600, 900, { floorY: 600, door: false, windowX: 0.3, bulbX: 0.12, signX: 0.9, plantX: 0.06, plantEyes: 'smug', ringX: 0.88 }), // B109: ring light (once bought) under the sign
           { art: 'pipe', y: 90, w: 1600, jointX: 832, r: 18, joint: 'new' },
           { art: 'bucket', x: 1160, y: 850, scale: 0.55, ripple: false },
           stepladder(720, 880, 0.75, { wobble: true }),

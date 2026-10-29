@@ -44,6 +44,7 @@ import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
 import { sceneRatio } from './perf-logic.js';
 import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding } from './backdrop.js';
+import { createPauseTimers } from './pause-timers.js';
 import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
 import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
@@ -116,7 +117,7 @@ function buzz(pattern) {
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
  *   count?: number, tier?: number, layers?: string[], career?: boolean, onReputationHit?: (amount: number) => void,
  *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void,
- *   sfxVolume?: number, lowDetail?: boolean, onSlow?: () => void}} o the text lookup
+ *   sfxVolume?: number, lowDetail?: boolean, onSlow?: () => void, zoom?: boolean}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
  *   bumps per face, the studio tier for the room behind (0..2) and its owned upgrade layers (T5.1a), career = a Story/Career round that can fail (free play
@@ -125,7 +126,8 @@ function buzz(pattern) {
  *   was pressed (left out = no button); seenKinds = the kinds she has met (left out = no first-time hints);
  *   onSeenKinds(kinds) = she just met these kinds on a new face. sfxVolume = the Settings effects volume, 0 to 1.
  *   lowDetail = the Settings switch "Lighter graphics" (the scene drawn at pixel ratio 1); onSlow = the frames stayed
- *   slow, so the scene switched to lighter graphics by itself (pop/perf-logic.js; the caller saves the switch)
+ *   slow, so the scene switched to lighter graphics by itself (pop/perf-logic.js; the caller saves the switch);
+ *   zoom = false turns zooming off (no buttons, pinch, wheel or keys; the torchlight dark, B28)
  * @returns {{node: HTMLElement, mount: (host: HTMLElement) => void, newFace: () => void, unlock: () => void,
  *   setTier: (tier: number, layers?: string[]) => void, results: () => object[], startRound: (o: object) => void,
  *   startFree: (o?: object) => void, setUnlockedTools: (list: string[]) => void, dispose: () => void}} the scene's
@@ -134,7 +136,7 @@ function buzz(pattern) {
 export function createPopMode({
   t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, layers: firstLayers = [], career = false,
   onReputationHit = () => {}, reducedMotion = false, squeeze = false, squeezeHint = false, onSqueezeHint = () => {},
-  onGuide = null, seenKinds = null, onSeenKinds = () => {}, lowDetail = false, onSlow = () => {}, sfxVolume = 1,
+  onGuide = null, seenKinds = null, onSeenKinds = () => {}, lowDetail = false, onSlow = () => {}, zoom = true, sfxVolume = 1,
 }) {
   let lighter = Boolean(lowDetail); // lighter graphics (owner 2026-10-28: older phones): the scene at pixel ratio 1
   const seenSet = Array.isArray(seenKinds) ? new Set(seenKinds) : null; // the kinds met so far (T6.5), null = no hints
@@ -162,6 +164,7 @@ export function createPopMode({
   const backdrop = el('canvas', 'pop-backdrop'); // the studio room, behind the face canvas
   backdrop.setAttribute('aria-hidden', 'true');
   const back = { w: 0, h: 0, dpr: 1, timer: 0, start: performance.now() };
+  const timers = createPauseTimers(); // the short bubble, face and end-of-round timers: they stand still while the round is paused (B106(2))
 
   const root = el('section', 'pop-game');
   // Reduced motion (the player's switch or the phone's): pop.css stops the Ow float, storm-off slide and hint flash.
@@ -510,7 +513,7 @@ export function createPopMode({
     c.round = registerFail(c.round);
     c.popEnd ??= elapsedFor(c); // the round's clock stops here
     drawRequest(c);
-    clearTimeout(c.winceTimer);
+    timers.cancel(c.winceTimer);
     c.wince = true;
     c.scene?.setTexture(faceTexture(c));
     sound.play('ow_customer');
@@ -519,7 +522,7 @@ export function createPopMode({
     foot.hidden = true;
     bar.hidden = true;
     zoomBox.hidden = true;
-    c.failTimer = setTimeout(() => {
+    c.failTimer = timers.later(() => {
       if (current !== c) return;
       sound.play('splat'); // the door slams
       fail.hidden = false;
@@ -539,14 +542,14 @@ export function createPopMode({
     newBtn.disabled = true;
     c.round = registerFail(c.round);
     c.popEnd ??= elapsedFor(c);
-    clearTimeout(c.winceTimer);
+    timers.cancel(c.winceTimer);
     sound.play('splat'); // CLANK
     buzz([40, 30, 90]);
     c.canvas.classList.add('pop-canvas--storm');
     foot.hidden = true;
     bar.hidden = true;
     zoomBox.hidden = true;
-    c.failTimer = setTimeout(() => {
+    c.failTimer = timers.later(() => {
       if (current !== c) return;
       escape.hidden = false;
       escape.querySelector('button')?.focus({ preventScroll: true });
@@ -583,11 +586,11 @@ export function createPopMode({
     bubble.style.left = `${sp.x}px`;
     bubble.style.top = `${sp.y}px`;
     stage.append(bubble);
-    setTimeout(() => bubble.remove(), 900);
-    clearTimeout(c.winceTimer);
+    timers.later(() => bubble.remove(), 900);
+    timers.cancel(c.winceTimer);
     c.wince = true;
     c.scene?.setTexture(faceTexture(c));
-    c.winceTimer = setTimeout(() => {
+    c.winceTimer = timers.later(() => {
       if (current !== c || !c.scene) return;
       c.wince = false;
       c.scene.setTexture(faceTexture(c));
@@ -608,11 +611,11 @@ export function createPopMode({
     bubble.style.left = `${sp.x}px`;
     bubble.style.top = `${sp.y}px`;
     stage.append(bubble);
-    setTimeout(() => bubble.remove(), 900);
-    clearTimeout(c.giggleTimer);
+    timers.later(() => bubble.remove(), 900);
+    timers.cancel(c.giggleTimer);
     c.giggle = true;
     c.scene?.setTexture(faceTexture(c));
-    c.giggleTimer = setTimeout(() => {
+    c.giggleTimer = timers.later(() => {
       if (current !== c || !c.scene) return;
       c.giggle = false;
       c.scene.setTexture(faceTexture(c));
@@ -634,7 +637,7 @@ export function createPopMode({
     bubble.style.left = `${sp.x}px`;
     bubble.style.top = `${sp.y}px`;
     stage.append(bubble);
-    setTimeout(() => bubble.remove(), 2600);
+    timers.later(() => bubble.remove(), 2600);
     toolButtons.get('noseStrip')?.classList.add('pop-tool--nudge');
     if (!still()) { // restart the hint line's little flash
       hint.classList.remove('pop-hint--flash');
@@ -685,8 +688,13 @@ export function createPopMode({
       pause = end.pause;
       pausedTotalMs += end.shiftMs;
       if (current) current.startAt += end.shiftMs;
+      back.start += end.shiftMs; // the room's drip and sparkles go on where they stopped (B106(2))
     }
     current?.scene?.setPaused?.(isPaused(pause));
+    timers.setPaused(isPaused(pause)); // the Ow and giggle bubbles, the wince and the end-of-round wait stand still too
+    for (const b of stage.querySelectorAll('.pop-ow')) b.style.animationPlayState = isPaused(pause) ? 'paused' : '';
+    if (isPaused(pause)) clearTimeout(back.timer); // the room stands still: no repaints, no plink
+    else if (!on && back.w) paintBackdrop(); // and goes on
     if (!on) drawRequest(current);
   }
 
@@ -732,7 +740,7 @@ export function createPopMode({
   function finishRound(c, choice = null) {
     if (!c || c.finished || cfg.kind !== 'round') return;
     c.finished = true;
-    clearTimeout(c.endTimer);
+    timers.cancel(c.endTimer);
     clearInterval(c.reqTimer);
     fail.hidden = true;
     escape.hidden = true;
@@ -802,15 +810,16 @@ export function createPopMode({
     const ctx = backdrop.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const reduced = still();
-    const time = (performance.now() - back.start) / 1000;
-    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins });
+    const frozen = isPaused(pause); // the round is paused (Field guide, hidden page): the room stands still (B106(2))
+    const time = ((frozen ? pause.since : performance.now()) - back.start) / 1000;
+    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins, twinkle: !lighter }); // lighter graphics: still sparkles (B33d)
     const leak = roomLeaks(backdropKind(room, tier), layers);
     // The leak plinks into the bucket now and then (owner 2026-10-28: a little annoying, so she wants it fixed); the
     // sound switch decides, so it also plinks with reduced motion (the drop then just hangs still).
-    if (leak && dripLands(back.last ?? time, time)) sound.play('drip');
+    if (leak && !frozen && dripLands(back.last ?? time, time)) sound.play('drip');
     back.last = time;
-    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity);
-    if (Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
+    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak, !lighter), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity);
+    if (!frozen && Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
   }
 
   /**
@@ -862,8 +871,8 @@ export function createPopMode({
     const prev = current;
     if (prev && !again && !prev.counted && (prev.failed || prev.healed)) results.push(prev.round); // a finished customer
     prev?.scene?.dispose();
-    clearTimeout(prev?.failTimer);
-    clearTimeout(prev?.endTimer);
+    timers.cancel(prev?.failTimer);
+    timers.cancel(prev?.endTimer);
     clearInterval(prev?.reqTimer);
     root.classList.remove('pop-game--ending'); // a new face: the game's Menu button may show again
     fail.hidden = true;
@@ -872,14 +881,14 @@ export function createPopMode({
     newBtn.disabled = false;
     newBtn.hidden = cfg.kind === 'round'; // a customer round has no "New face" (the game picks the next customer)
     stage.replaceChildren(backdrop, zoomBox);
-    zoomBox.hidden = false;
+    zoomBox.hidden = zoom === false; // no zoom buttons when zooming is off (B28)
     showView({ z: 1, x: 0, y: 0 }); // every new customer starts with the whole face (SPEC D9)
     paintBackdrop();
     done.hidden = true;
     foot.hidden = false;
     bar.hidden = false;
     showWarmth(0);
-    clearTimeout(current?.winceTimer);
+    timers.cancel(current?.winceTimer);
     const round = cfg.kind === 'round';
     let s; // Try again = the same customer, a fresh face; a round uses the seed the game gave
     if (again && prev) s = prev.seed;
@@ -922,7 +931,7 @@ export function createPopMode({
     endNoseNudge(); // a new face: no reminder glow left over from the last one
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
-      width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze,
+      width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze, zoom: zoom !== false,
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
@@ -936,10 +945,11 @@ export function createPopMode({
         try { c.hooks.onOw?.(at); } catch (e) { console.warn('onOw failed:', e); }
       },
       onWarm: (wv) => { if (current === c) showWarmth(wv); },
-      onSlow: () => { // frames stayed slow (an older phone): lighter graphics from now on (this room now, the next face)
+      onSlow: () => { // frames stayed slow (an older phone): lighter graphics from now on (this room and this face now)
         if (lighter) return;
         lighter = true;
         paintBackdrop();
+        if (current === c && c.scene?.setRatio) { c.dpr = sceneRatio(globalThis.devicePixelRatio, true); c.scene.setRatio(c.dpr, faceTexture(c)); } // B99(2)
         try { onSlow(); } catch (e) { console.warn('onSlow failed:', e); }
       },
       onWarmLift: () => { // the cloth came off: back to the tool she had (SPEC D37), so she can pop the warm bumps
@@ -1010,7 +1020,7 @@ export function createPopMode({
           c.ending = true;
           root.classList.add('pop-game--ending');
           const pause = (still() ? END_PAUSE_REDUCED : END_PAUSE) * 1000;
-          c.endTimer = setTimeout(() => finishRound(c, null), pause);
+          c.endTimer = timers.later(() => finishRound(c, null), pause);
           return;
         }
         foot.hidden = true;
@@ -1179,6 +1189,10 @@ export function createPopMode({
     },
     /** Stop popping on the face in play (presses do nothing any more; a special mode's scripted end). @returns {void} */
     halt() { current?.scene?.halt(); },
+    /** Let popping go on after halt() (the torchlight stir is a pause, B28). @returns {void} */
+    resume() { current?.scene?.resume(); },
+    /** Take all goo off the face in play at once (the torchlight catch, B28). @returns {void} */
+    clearGoo() { current?.scene?.clearGoo(); },
     /**
      * Freeze the round while the Field guide is open over it (B48), or let it go on: the scene's time, the irritation
      * meter, the Evil Horn growth, the twists, the combo clock and the round clock all stand still, the same way as
@@ -1230,6 +1244,13 @@ export function createPopMode({
     /** Wake the popping sounds up (call from inside a tap). @returns {void} */
     unlock: () => sound.unlock(),
     /**
+     * Play a sound through the scene's own sound switch and volume (a special mode's own sounds, B28).
+     * @param {string} name a sound table name
+     * @param {object} [opts] the voice's options
+     * @returns {void}
+     */
+    play: (name, opts) => { sound.play(name, opts); },
+    /**
      * Whether a finished customer is in the short pause before the game takes over (leaving now would lose them).
      * @returns {boolean} true = do not leave yet
      */
@@ -1249,9 +1270,10 @@ export function createPopMode({
       clearTimeout(back.timer);
       clearTimeout(resizeTimer);
       watcher?.disconnect();
-      clearTimeout(current?.winceTimer);
-      clearTimeout(current?.failTimer);
-      clearTimeout(current?.endTimer);
+      timers.cancel(current?.winceTimer);
+      timers.cancel(current?.failTimer);
+      timers.cancel(current?.endTimer);
+      timers.clear();
       clearInterval(current?.reqTimer);
       current?.scene?.dispose();
       current = null;

@@ -168,7 +168,7 @@ export const STRIP = {
         layers: [
           // The plant has been highlighted too (plantHighlight: the stripes follow whichever plant she has, SPEC D32j).
           // leakX 0.9125 = 1460, right over the bucket (story audit 2026-10-29: the drip fell beside it).
-          studio(1600, 900, { floorY: 600, door: false, windowX: 0.5, leakX: 0.9125, bulbX: 0.35, signX: 0.58, signTilt: 10, plantX: 0.14, plantEyes: 'sad', plantHighlight: true, lamp: false }),
+          studio(1600, 900, { floorY: 600, door: false, windowX: 0.5, leakX: 0.9125, bulbX: 0.35, signX: 0.58, signTilt: 10, plantX: 0.14, plantEyes: 'sad', plantHighlight: true, lamp: false, ringX: 0.84 }), // B109: the ring light (once bought) between the books and the bucket
           night(1600, 900),
           { art: 'bucket', x: 1460, y: 830, scale: 0.5 },
           ...bookTower(1180, 880, 8, 0.8),

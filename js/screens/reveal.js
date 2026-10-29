@@ -66,6 +66,24 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
 }
 
 /**
+ * The customer intro's portrait WITH the round's bumps (B59: an event or boss face shows its own bumps on the intro, so
+ * the player sees what the event is about). The same face drawing as the reveal's BEFORE picture, with the intro's
+ * grim, a bit red look; every face part and bump comes from the saved recipe (album-logic.js faceSetup).
+ * @param {ReturnType<typeof import('./album-logic.js').faceSetup>} setup the face recipe of this round
+ * @param {string} label what screen readers say
+ * @param {number} [w] picture width in CSS px
+ * @param {number} [h] picture height in CSS px
+ * @returns {HTMLCanvasElement} the picture (class app-intro__face, as the plain intro portrait)
+ */
+export function bumpPortrait(setup, label, w = 220, h = 240) {
+  const canvas = faceCanvas({ ...revealFaces(setup).before, mood: 'grim', redness: 0.6 }, w, h);
+  canvas.className = 'app-intro__face';
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', label);
+  return canvas;
+}
+
+/**
  * Whether the reveal should stay still: the game's Reduced motion switch or the phone's own setting.
  * @param {boolean} reducedMotion the game's switch
  * @returns {boolean} true = no automatic slide

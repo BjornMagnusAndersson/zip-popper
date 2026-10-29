@@ -69,7 +69,7 @@ export const STRIP = {
       layout: 'square',
       scene: {
         layers: [
-          studio(1000, 1000, { floorY: 640, windowX: 0.5, door: false, leak: false, sign: false, bulbX: 0.2, plantX: 0.92, plantEyes: 'happy', lampX: 0.72 }),
+          studio(1000, 1000, { floorY: 640, windowX: 0.5, door: false, leak: false, sign: false, bulbX: 0.2, plantX: 0.45, plantEyes: 'happy', lampX: 0.72 }), // B105(6): the plant between them, not behind her raised arm
           { id: 'insp', art: 'inspector', x: 220, y: 1000, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'neutral', look: 1 },
           // "Gloves on!": her hands are in the blue gloves now (SPEC D32e), the box held up in one of them.
           { id: 'her', art: 'heroine', x: 700, y: 1000, scale: 0.85, pose: 'wave', hold: 'gloves', gloves: true, expr: 'bliss', look: -1 },

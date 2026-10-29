@@ -1159,6 +1159,7 @@ export const ROOMS = {
   // stains and peeling bits, grimy tiles, an old pipe with a leaking joint, a bare flickering bulb, a door, the "Clean!"
   // sign (the painted word CLEAN!, a small tick, sparkles and a stain) and a cheap lamp. Options: leakX, bulbX, signX, signTilt,
   // signY (its nail's height as a share of the floor line, default 0.12), doorX, doorOpen, leak/bulb/sign/door false to hide one.
+  // ringX (0..1 across): with lamp: false, where the ring light stands once she has bought it (B109; no ring light without it).
   studio: {
     wall: ['#8e9b83', '#7b8872'], stripes: '#86937c', skirting: '#5f6a56', floor: '#4f5648', boards: '#3c4237',
     sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: true, lamp: true,
@@ -1286,10 +1287,12 @@ function shabbyFront(g, r, w, F) {
     const sg = el('g', { transform: `rotate(${r.signTilt ?? -7} ${sx} ${sy})` });
     sg.appendChild(line(`M${sx} ${sy} L${sx - sw * 0.4} ${top} M${sx} ${sy} L${sx + sw * 0.4} ${top}`, 3.5));
     sg.appendChild(el('rect', { x: sx - sw / 2, y: top, width: sw, height: sh, rx: 10 * k, fill: '#f6f1de', ...ink(5) }));
-    const word = signWord(sx - sw * 0.1, top + sh * 0.7, sw * 0.68, sh * 0.5, k);
+    // B106(3): the word a little narrower and the tick further right, so the "!" has a clear gap before the tick
+    // (in the smallest panels the two ran together).
+    const word = signWord(sx - sw * 0.12, top + sh * 0.7, sw * 0.64, sh * 0.5, k);
     if (word) {
       sg.appendChild(word);
-      sg.appendChild(line(`M${sx + sw * 0.3} ${top + sh * 0.5} l${sw * 0.05} ${sh * 0.16} l${sw * 0.1} ${-sh * 0.34}`, 9 * k, { stroke: '#3fae8c' }));
+      sg.appendChild(line(`M${sx + sw * 0.31} ${top + sh * 0.5} l${sw * 0.05} ${sh * 0.16} l${sw * 0.1} ${-sh * 0.34}`, 8 * k, { stroke: '#3fae8c' }));
       // The stain that says otherwise, low over the middle of the word (the word still reads).
       sg.appendChild(el('ellipse', { cx: sx - sw * 0.02, cy: top + sh * 0.76, rx: 26 * k, ry: 17 * k, fill: '#786834', opacity: 0.38 }));
       sg.appendChild(el('path', { d: `M${sx - sw * 0.03} ${top + sh * 0.86} q${4 * k} ${10 * k} ${-2 * k} ${sh * 0.12}`, fill: 'none', stroke: '#786834', 'stroke-width': 6 * k, 'stroke-linecap': 'round', opacity: 0.38 }));
@@ -1535,9 +1538,11 @@ function room(l) {
   }
   if (r.shabby) shabbyFront(g, r, w, F);
   if (r.washers || r.sink || r.cobwebs || r.socks) laundry(g, r, w, F);
-  if (r.lamp && l.ringLight) {
+  // B109: a room without the cheap lamp can still name a free spot (ringX) where the ring light stands once bought.
+  const ringSpot = r.lamp ? (l.lampX ?? 0.94) : r.ringX;
+  if (l.ringLight && ringSpot !== undefined) {
     // Q14: she bought the ring light, so it stands where the cheap lamp stood (the game's lamp upgrade).
-    const lx = w * (l.lampX ?? 0.94);
+    const lx = w * ringSpot;
     const k = F / 600;
     const R = 58 * k;
     const cy = F * 0.52; // about head height, below the speech bubbles at the top
@@ -1616,8 +1621,12 @@ function wingChair(l) {
   const pink = '#ef86a8';
   const dark = '#dc6b92';
   const g = el('g');
+  g.appendChild(el('ellipse', { cx: 0, cy: 4, rx: 150, ry: 16, fill: '#28141e', opacity: 0.2 })); // B109: a shadow on the floor, as in the game
   for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx * 92 - 10, y: -70, width: 20, height: 70, rx: 5, fill: '#8a5a3a', ...ink(4) }));
   g.appendChild(el('path', { d: 'M-120 -120 L-120 -450 Q-120 -560 0 -560 Q120 -560 120 -450 L120 -120Z', fill: pink, ...ink(5) }));
+  // B109: soft shading like the game's chair: the right side of the back a shade darker, the bottom of the back in shadow.
+  g.appendChild(el('path', { d: 'M60 -548 Q120 -530 120 -450 L120 -120 L60 -120Z', fill: dark, opacity: 0.55 }));
+  g.appendChild(el('rect', { x: -118, y: -190, width: 236, height: 60, fill: '#b94a72', opacity: 0.18 }));
   for (let r = 0; r < 5; r += 1) { // buttoned tufting
     const y = -500 + r * 66;
     for (let x = -78 + (r % 2) * 26; x <= 80; x += 52) {
@@ -1627,9 +1636,16 @@ function wingChair(l) {
     }
   }
   g.appendChild(el('ellipse', { cx: -48, cy: -520, rx: 34, ry: 10, fill: '#ffffff', opacity: 0.35, transform: 'rotate(-20 -48 -520)' }));
-  for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx > 0 ? 92 : -152, y: -460, width: 60, height: 320, rx: 28, fill: dark, ...ink(5) }));
+  for (const sx of [-1, 1]) {
+    g.appendChild(el('rect', { x: sx > 0 ? 92 : -152, y: -460, width: 60, height: 320, rx: 28, fill: dark, ...ink(5) }));
+    g.appendChild(el('rect', { x: (sx > 0 ? 92 : -152) + 14, y: -436, width: 11, height: 150, rx: 5, fill: '#ffffff', opacity: 0.22 })); // shine on the wing
+  }
   g.appendChild(el('rect', { x: -128, y: -158, width: 256, height: 60, rx: 18, fill: pink, ...ink(5) }));
-  for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx > 0 ? 104 : -168, y: -210, width: 64, height: 120, rx: 28, fill: pink, ...ink(5) }));
+  g.appendChild(el('rect', { x: -120, y: -122, width: 240, height: 20, rx: 10, fill: dark, opacity: 0.6 })); // the seat's front edge in shade
+  for (const sx of [-1, 1]) {
+    g.appendChild(el('rect', { x: sx > 0 ? 104 : -168, y: -210, width: 64, height: 120, rx: 28, fill: pink, ...ink(5) }));
+    g.appendChild(el('rect', { x: sx > 0 ? 112 : -160, y: -132, width: 48, height: 34, rx: 16, fill: dark, opacity: 0.55 })); // the arm's underside
+  }
   return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${(l.flip ? -1 : 1) * s} ${s})` }, [g]) };
 }
 
@@ -2148,7 +2164,8 @@ export function dressHeroine(arts, outfit) {
  *   small crate at its spot, and a plant on its own droops (she has not bought the living plant yet); true = the strips draw the
  *   big plant as they are.
  * - leakFixed: true = she bought "Fix the leak" (story audit R2): studio rooms lose the old pipe with its stained,
- *   dripping joint, drop layers draw nothing, and the bucket stays as a plain mop bucket (still water, no ripples).
+ *   dripping joint, drop layers draw nothing, and bucket layers draw nothing either (owner 2026-10-29: "goodbye
+ *   bucket", as the shop item says).
  * - ringLight: true = she bought the ring light (Q14): a studio room's cheap floor lamp is the ring light instead
  *   (same spot; a room with lamp: false stays without one).
  * - pinkChair: true = she bought the pink chair (Q14): every chair layer is the pink wingback (a layer with
@@ -2172,7 +2189,7 @@ export function studioKit(arts, o = null) {
     // Chained on top of the plant change above (kit.room may already be wrapped): a studio room has no leak any more.
     const room = kit.room;
     if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' ? { ...l, leak: false } : l, k);
-    if (typeof arts.bucket === 'function') kit.bucket = (l, k) => arts.bucket({ ...l, ripple: false }, k);
+    if (typeof arts.bucket === 'function') kit.bucket = () => null; // the bucket is gone too (owner 2026-10-29)
     if (typeof arts.drip === 'function') kit.drip = () => null; // no drop falls any more: the layer draws nothing
   }
   if (o.ringLight) {

@@ -2,7 +2,10 @@
 // scene's backdrop (pop/backdrop.js drawStudio, in its 'view' places), with every studio upgrade she has bought and
 // scrubbed; she stands in it (game/comic-art.js heroine, in her best outfit) next to her chair. Under the picture (beside
 // it when the phone is held sideways): a short line about the tier and one caption per upgrade. A Back button.
-// The picture is painted again when the screen changes size (turning the phone). The room does not move.
+// The picture is painted again when the screen changes size (turning the phone). The room itself stands still; only
+// its moving parts live on their own see-through layer on top (B33d, B97(2)): the spa's sparkles twinkle and the
+// leak's drop swells, falls and plinks into the bucket (the plink follows the sound switch, as in the pop scene, and
+// also plays with reduced motion, when the drop just hangs still). It all stops when the screen closes.
 // In scrubs (T5.2b) she starts with her scrub cap on and a hint line says so: tapping her (or Enter/Space, she is a
 // button) takes the cap off with a little hop, the cap floats over onto the chair, and her bun shows; again puts it
 // back. With reduced motion the cap just swaps, no hop and no flight.
@@ -12,7 +15,10 @@
 // reduced motion), a line says so, and Continue goes on with the game.
 
 import { el, svg, icon, header, screenShell, button } from './dom.js';
-import { drawStudio, layerSpots, fameSpots, fameFrame } from '../pop/backdrop.js';
+import {
+  drawStudio, drawStudioMotion, nextStudioChange, layerSpots, fameSpots, fameFrame, roomLeaks, backdropKind, dripLands,
+  nextDripLanding,
+} from '../pop/backdrop.js';
 import { BUMP_IDS } from '../data/bumps.js';
 import { drawCharacter, drawScrubCap, headSpot, OUTFITS } from '../game/comic-art.js';
 import { studioCaptions, capFlight, studioCapStart, CAP_FLIGHT_MS } from '../game/studio.js';
@@ -23,16 +29,18 @@ const FIGURE_HEIGHT = 640; // comic-art.js: a standing figure at scale 1 is abou
  * Build the studio view screen.
  * @param {{t: (key: string, vars?: object) => string, tier?: number, layers?: string[], outfit?: string,
  *   masters?: string[], hang?: string|null, pins?: number, onDiploma?: (type: string) => void, onContinue?: () => void,
- *   onBack?: () => void, reducedMotion?: boolean}} opts
+ *   onBack?: () => void, reducedMotion?: boolean, sound?: {play: (name: string) => void}}} opts
  *   t = string function; tier = studio tier 0..2; layers = owned studio upgrades (draw order); outfit = what she wears
  *   (comic-art.js OUTFITS name); masters = the mastered bump ids (their frames hang on the wall of fame); hang = a bump id
  *   whose frame was just earned (hang mode: it drops onto the wall, and a Continue button shows); onDiploma = a frame
  *   was tapped; onContinue = Continue in hang mode; onBack = Back; pins = home-popping pins in the jar on the shelf
- *   (game/pin-jar.js; a caption line once there is one)
+ *   (game/pin-jar.js; a caption line once there is one); sound = the game's sound player, for the leak's plink
+ *   (left out = no plink)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createStudioScreen({
   t, tier = 0, layers = [], outfit = 'everyday', masters = [], hang = null, pins = 0, onDiploma, onContinue, onBack, reducedMotion = false,
+  sound = null,
 }) {
   const shell = screenShell('studio', { label: t('ui.studio.title'), reducedMotion });
   const head = header(t, t('ui.studio.title'), onBack, shell.signal);
@@ -45,9 +53,11 @@ export function createStudioScreen({
   const canvas = el('canvas', 'app-studio__room');
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', `${t('ui.studio.picture')} ${t(caps.tierKey)}`);
+  const fx = el('canvas', 'app-studio__fx'); // the moving parts: the spa's sparkles and the drip (B33d, B97(2))
+  fx.setAttribute('aria-hidden', 'true');
   const her = svg('svg', { class: 'app-studio__her', 'aria-hidden': 'true' });
   const wall = el('div', 'app-studio__wall'); // the frame buttons and the frame that is dropping in
-  stage.append(canvas, her, wall);
+  stage.append(canvas, fx, her, wall);
   const capState = studioCapStart(outfit, OUTFITS);
   let capOn = capState.capOn;
   // The cap toggle (scrubs only): a see-through button over her, so it works by tap, mouse and keyboard.
@@ -97,13 +107,52 @@ export function createStudioScreen({
     canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawStudio(ctx, w, h, tier, layers, { view: true, masters: dropping ? masters.filter((m) => m !== hang) : masters, pins });
+    drawStudio(ctx, w, h, tier, layers, { view: true, masters: dropping ? masters.filter((m) => m !== hang) : masters, pins, moving: true });
+    fx.width = canvas.width;
+    fx.height = canvas.height;
     const spots = layerSpots(w, h, true);
-    geo = { w, h, hero: spots.hero, chair: spots.chair };
+    geo = { w, h, dpr, hero: spots.hero, chair: spots.chair };
     her.setAttribute('viewBox', `0 0 ${w} ${h}`);
     stopFlight();
     drawHer();
     placeFrames(w, h, dpr);
+    drawMotion();
+  }
+
+  const leaks = roomLeaks(backdropKind('studio', tier), layers); // the drip shows (and plinks) until "Fix the leak"
+  const opened = performance.now(); // the moving parts' clock starts when the screen opens
+  let motionTimer = 0; // the wait before the next moving-parts frame (0 = none)
+  let motionFrame = 0; // the animation frame asked for after that wait (0 = none)
+  let lastTime = null; // the moving parts' time at the last frame, to hear each drop land once
+
+  /** Stop the moving parts' next frame (the screen closes, or a frame is drawn now). @returns {void} */
+  function stopMotion() {
+    clearTimeout(motionTimer);
+    if (motionFrame) cancelAnimationFrame(motionFrame);
+    motionTimer = 0;
+    motionFrame = 0;
+  }
+
+  /**
+   * Draw the moving parts for this moment on their own layer (the sparkles, the drop), plink when a drop landed since
+   * the last frame, and plan the next frame: only while something moves; with reduced motion only the plinks go on.
+   * @returns {void}
+   */
+  function drawMotion() {
+    stopMotion();
+    if (!geo || shell.signal.aborted) return;
+    const time = (performance.now() - opened) / 1000;
+    const fc = fx.getContext('2d');
+    fc.setTransform(1, 0, 0, 1, 0, 0);
+    fc.clearRect(0, 0, fx.width, fx.height);
+    fc.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0);
+    drawStudioMotion(fc, geo.w, geo.h, tier, layers, time, reducedMotion);
+    // the plink follows the sound switch (the sound player), never while the page is hidden
+    if (leaks && sound && !globalThis.document?.hidden && dripLands(lastTime ?? time, time)) sound.play('drip');
+    lastTime = time;
+    const plinks = leaks && sound && reducedMotion ? nextDripLanding(time) + 0.01 : Infinity;
+    const next = Math.min(nextStudioChange(time, tier, layers, reducedMotion), plinks);
+    if (Number.isFinite(next)) motionTimer = setTimeout(() => { motionTimer = 0; motionFrame = requestAnimationFrame(drawMotion); }, next * 1000);
   }
 
   /**
@@ -258,11 +307,12 @@ export function createStudioScreen({
 
   return {
     node: shell.node,
-    /** Stop watching the size and take the screen away. @returns {void} */
+    /** Stop watching the size and the moving parts, and take the screen away. @returns {void} */
     dispose() {
       watch?.disconnect();
       if (frame) cancelAnimationFrame(frame);
       stopFlight();
+      stopMotion();
       shell.dispose();
     },
   };

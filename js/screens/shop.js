@@ -6,7 +6,8 @@
 
 import { el, svg, button, icon, itemIcon, coinPill, header, screenShell } from './dom.js';
 import { SHOP_TABS, shopEntries, tierInfo, wornOutfit, canScrollMore } from './screen-logic.js';
-import { drawCharacter, OUTFITS } from '../game/comic-art.js';
+import { drawCharacter, drawScrubCap, headSpot, OUTFITS } from '../game/comic-art.js';
+import { studioCapStart } from '../game/studio.js';
 
 /**
  * Build the shop screen.
@@ -21,6 +22,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
   const shell = screenShell('shop', { label: t('ui.shop.title'), reducedMotion });
   let current = state;
   let activeTab = SHOP_TABS.some((x) => x.id === tab) ? tab : 'tools';
+  let capOn = true; // the scrub cap on her picture in the Outfit tab (a tap takes it off); only kept while this screen is open
 
   const head = header(t, t('ui.shop.title'), onBack, shell.signal);
   const coinsSlot = el('span', 'app-shopcoins'); // the coins pill, in the top row next to the title (T5.3b)
@@ -70,19 +72,46 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
   }
 
   /**
-   * The "wearing now" strip of the Outfit tab: a small picture of her in the outfit she has on, and its name.
+   * The "wearing now" strip of the Outfit tab: a bigger picture of her in the outfit she has on, and its name. In the
+   * scrubs the picture is a button: a tap takes her cap off (it floats beside her) and again puts it back, like the studio view.
    * @returns {HTMLElement} the strip
    */
   function wearingStrip() {
     const worn = wornOutfit(current);
     const name = t(worn.nameKey);
+    const canCap = studioCapStart(worn.outfit, OUTFITS).toggle;
     const box = el('div', 'app-wearing');
-    const pic = svg('svg', { class: 'app-wearing__pic', viewBox: '-170 -680 340 700', role: 'img', 'aria-label': t('ui.shop.preview', { outfit: name }) });
-    pic.append(drawCharacter('heroine', { x: 0, y: 0, scale: 1, pose: 'hips', expr: 'happy', outfit: worn.outfit, look: -1, cap: Boolean(OUTFITS[worn.outfit]?.cap) }).node);
+    const pic = svg('svg', { class: 'app-wearing__pic', viewBox: '-170 -680 340 700', role: canCap ? null : 'img', 'aria-label': canCap ? null : t('ui.shop.preview', { outfit: name }), 'aria-hidden': canCap ? 'true' : null });
+    const layer = { x: 0, y: 0, scale: 1, pose: 'hips', expr: 'happy', outfit: worn.outfit, look: -1, cap: canCap && capOn };
+    pic.append(drawCharacter('heroine', layer).node);
+    if (canCap && !capOn) {
+      // the cap she took off rests beside her, at the lower right
+      const spot = headSpot('heroine', layer);
+      const cap = svg('g', { transform: `translate(104 -40) rotate(-12) scale(${spot.scale * 0.5})` });
+      cap.append(drawScrubCap());
+      pic.append(cap);
+    }
     const text = el('div', 'app-wearing__text');
     text.append(el('p', 'app-wearing__label', t('ui.shop.wearingNow')), el('p', 'app-wearing__name', name));
-    box.append(pic, text);
+    if (canCap) {
+      text.append(el('p', 'app-wearing__hint', t(capOn ? 'ui.shop.capHint' : 'ui.shop.capHintOn')));
+      const tap = el('button', 'app-wearing__tap');
+      tap.type = 'button';
+      tap.setAttribute('aria-label', `${t('ui.shop.preview', { outfit: name })}. ${t(capOn ? 'ui.studio.capOff' : 'ui.studio.capOn')}`);
+      tap.append(pic);
+      tap.addEventListener('click', toggleCap, { signal: shell.signal });
+      box.append(tap, text);
+    } else box.append(pic, text);
     return box;
+  }
+
+  /** Take her scrub cap off, or put it back on (the picture is drawn again; she gives a little hop unless motion is off). @returns {void} */
+  function toggleCap() {
+    capOn = !capOn;
+    render();
+    const tap = extras.querySelector('.app-wearing__tap'); // the picture was drawn again: keep the keyboard focus on it
+    tap?.focus();
+    if (!reducedMotion) tap?.classList.add('app-wearing__tap--hop');
   }
 
   /** Draw one item card. @param {ReturnType<typeof shopEntries>[number]} item the entry @param {string} kindIcon the tab's icon name (for an item without its own icon) @returns {HTMLElement} the card */

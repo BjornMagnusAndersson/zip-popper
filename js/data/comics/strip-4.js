@@ -238,7 +238,7 @@ const PANELS = [
       scene: {
         layers: [
           night(1600, 900, { floorY: 640, windowX: 0.5, pictureX: 0.08, plant: false }),
-          ...lampOff(1525, 640), // still off: it clicks on in the next panel
+          ...lampOff(1488, 640), // still off: it clicks on in the next panel (B107(6): in from the edge, whole on a sideways phone)
           { art: 'sofa', x: 420, y: 870, w: 700, color: SOFA },
           { id: 'her', art: 'heroine', x: 420, y: 900, pose: 'sit', expr: 'shocked', hold: 'phone', outfit: 'pajamas', look: 1 },
           ...idea(),

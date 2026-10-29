@@ -207,7 +207,7 @@ export function comicOutfit(strip, save) {
  * - livingPlant: in strips marked `studio: 'owned'` (set in her studio after the shop opens) the plant follows the
  *   shop: the sad little plant on the sill until the living plant is bought and scrubbed.
  * - leakFixed: once "Fix the leak" is bought and scrubbed (story audit R2), every strip drops the drip and the leak
- *   stain (the bucket stays, as a mop bucket), except the strips whose story IS the leak (LEAK_STORY_STRIPS).
+ *   stain and the bucket under it, except the strips whose story IS the leak (LEAK_STORY_STRIPS).
  * - ringLight, pinkChair: in `studio: 'owned'` strips the ring light and the pink chair follow the shop too (owner's
  *   pick Q14 c, 2026-10-29); the paint and the new sign do not. Nothing bought = the strip exactly as written.
  * @param {object|null} strip the strip data
@@ -757,16 +757,23 @@ export function applyRound(save, payload, step) {
 }
 
 /**
- * The skill lines of the result screen (D34) from applyRound's skills: up to two "Level up!" lines (new Masters first,
- * then the highest new levels), or else one line
- * saying how many clean pops the closest kind still needs (with its bar). Text keys only; the screen fills in the
- * kind's name (kindKey) and the level's name (levelKey).
+ * The skill lines of the result screen (D34) from applyRound's skills: a "Level up!" line for every kind that went up
+ * (new Masters first, then the highest new levels; B93 5), folded into ONE line naming all the kinds (kindKeys) when
+ * three or more went up at once, or else one line saying how many clean pops the closest kind still needs (with its
+ * bar). Text keys only; the screen fills in the kind's name (kindKey, or the list kindKeys) and the level's name (levelKey).
  * @param {ReturnType<typeof roundSkills>|null|undefined} skills applyRound's skills
- * @returns {{up: boolean, key: string, kindKey: string, levelKey: string, vars: object, share?: number}[]} the lines
+ * @returns {{up: boolean, key: string, kindKey: string, kindKeys?: string[], levelKey: string, vars: object, share?: number}[]} the lines
  */
 export function skillNews(skills) {
   if (!skills) return [];
-  const ups = [...skills.ups].sort((a, b) => b.to - a.to).slice(0, 2).map((u) => ({
+  const sorted = [...skills.ups].sort((a, b) => b.to - a.to);
+  if (sorted.length > 2) { // many at once: one line with every kind (a new Master still gets its diploma screen)
+    return [{
+      up: true, key: 'ui.skill.newsMany', kindKey: `ui.guide.${sorted[0].type}.name`, kindKeys: sorted.map((u) => `ui.skill.kinds.${u.type}`),
+      levelKey: `ui.skill.level${sorted[0].to}`, vars: { n: sorted.length },
+    }];
+  }
+  const ups = sorted.map((u) => ({
     up: true, key: u.to >= MASTER_LEVEL ? 'ui.skill.newsMaster' : 'ui.skill.newsUp', kindKey: `ui.guide.${u.type}.name`,
     levelKey: `ui.skill.level${u.to}`, vars: { n: u.to, pct: u.speedPercent },
   }));
@@ -781,9 +788,10 @@ export function skillNews(skills) {
 
 /**
  * The extra {placeholders} a strip's texts need. Only the Tool mastery strip has any: {kind} = the kind of bump she got
- * Skilled at (the most trained kind; on a replay, the most trained kind now), {level} and {max} = the Skilled level
- * and the Master level, {pct} = how much faster the Skilled level pops. Kind names come as string keys (`keys`, app.js
- * translates them); numbers come as `values`.
+ * Skilled at (the most trained kind; on a replay, the most trained kind now), {level} and {max} = that kind's level now
+ * and the Master level, {pct} = how much faster that level pops, {levelName} and {levelCaps} = the level's name ("Skilled",
+ * "Master"; B93 8: a replay names the level the kind has by then, not always Skilled) and {more} = what comes next.
+ * Kind, level names and the next-step line come as string keys (`keys`, app.js translates them); numbers come as `values`.
  * @param {string} id strip id @param {object} save the save
  * @returns {{keys: Record<string, string>, values: Record<string, number>}} placeholders to translate, and plain ones
  */
@@ -796,9 +804,13 @@ export function stripVars(id, save) {
     const level = masteryLevel(state, type);
     if (level > bestLevel) { best = type; bestLevel = level; }
   }
+  const level = Math.min(MASTER_LEVEL, Math.max(MASTERY_STRIP_LEVEL, bestLevel)); // the level the text names (never below Skilled)
   return {
-    keys: { kind: best ? `ui.skill.kinds.${best}` : 'ui.skill.anyKind' },
-    values: { level: MASTERY_STRIP_LEVEL, max: MASTER_LEVEL, pct: Math.round((1 - MASTERY_LEVELS[MASTERY_STRIP_LEVEL].holdFactor) * 100) },
+    keys: {
+      kind: best ? `ui.skill.kinds.${best}` : 'ui.skill.anyKind', levelName: `ui.skill.levelIs${level}`,
+      levelCaps: `ui.skill.levelCaps${level}`, more: `ui.skill.stripMore${level}`,
+    },
+    values: { level, max: MASTER_LEVEL, pct: Math.round((1 - MASTERY_LEVELS[level].holdFactor) * 100) },
   };
 }
 

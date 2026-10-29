@@ -247,8 +247,12 @@ export const STRIP = {
           ...bubbleWrap(386, 756, 5, 2, 6, 1.1),
           ...fist(412, 814, 1.2),
           ...fist(628, 814, 1.2),
-          { shape: 'path', d: 'M876 172 L880 420', stroke: true, sw: 4 },
-          { art: 'torch', x: 860, y: 440, rotate: 262, scale: 1.4 },
+          // B107(5): a thick yellow strap (it showed as a thin line on the blue shirt) and the torch hangs straight
+          // down on it, so its beam lights the wrap roll below and no longer crosses her forearm.
+          { shape: 'path', d: 'M860 166 L860 414', stroke: true, sw: 15 },
+          { shape: 'path', d: 'M860 166 L860 414', stroke: '#ffd25a', sw: 7 },
+          { shape: 'ellipse', x: 860, y: 172, rx: 16, ry: 10, fill: 'none', stroke: true, sw: 6 },
+          { art: 'torch', x: 860, y: 440, rotate: 215, scale: 1.4 },
           { art: 'sparkles', x: 200, y: 330, r: 90 },
           { art: 'sparkles', x: 820, y: 660, r: 80 },
         ],

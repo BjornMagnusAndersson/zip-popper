@@ -168,6 +168,52 @@ export const VOICES = {
       d += 0.05 + Math.random() * 0.13;
     }
   },
+  // ---- the sleeping husband in the torchlight mode (chapter 1, B28). All quiet, low and soft on purpose: a sleepy
+  // man, never a chipmunk (no high voices), never "evil" (no low falling groan), and no evenly repeated short bursts
+  // (those read as a rattle; owner's lessons from the sizzle and giggle, v78 to v80). ----
+
+  /**
+   * His twitch: a tiny sleepy "hnf" through the nose, a soft puff of air and a very short low hum. About 0.2 s.
+   * @param {object} k kit @param {number} t start
+   */
+  sleepTwitch(k, t) {
+    k.hiss(t, 0.14, { type: 'lowpass', freq: 650, vol: 0.035 }); // the puff through the nose
+    const f = 112 + Math.random() * 10;
+    k.vowel(f, t + 0.02, 0.16, { slideTo: f * 1.04, formants: [280, 950], vol: 0.06 }); // the little "n"
+  },
+  /**
+   * His mumble: a lazy, closed-mouth "mmh". A low hum (about 115 to 135 Hz, a man's sleepy voice) that rises a little,
+   * then a second, softer hum overlaps and settles back half way (so it never sinks into a groan), and a slow breath
+   * out at the end. About 0.9 s, slightly different every time. @param {object} k kit @param {number} t start
+   */
+  sleepMumble(k, t) {
+    const f = 114 + Math.random() * 8; // this mumble's own voice height
+    k.vowel(f, t, 0.5, { slideTo: f * 1.14, formants: [260, 1000], vib: 4.5, vol: 0.085 }); // "mm", rising a little
+    k.vowel(f * 1.1, t + 0.22, 0.55, { slideTo: f * 1.05, formants: [270, 900], vol: 0.065 }); // "-mh", settling
+    k.hiss(t + 0.5, 0.4, { type: 'lowpass', freq: 520, vol: 0.022 }); // the breath out through the nose
+  },
+  /**
+   * His shift on the sofa: a soft rustle of the blanket and sofa cushion. Three long, wide layers of low-mid noise
+   * at uneven times, each sweeping a little (fabric moving), no rhythm and nothing high. About 0.8 s.
+   * @param {object} k kit @param {number} t start @param {{vol?: number}} [o] loudness factor (the stir is a bit louder)
+   */
+  sleepShift(k, t, o) {
+    const v = o?.vol ?? 1;
+    k.hiss(t, 0.55, { freq: 900, to: 1400, q: 0.7, vol: 0.04 * v });
+    k.hiss(t + 0.16 + Math.random() * 0.08, 0.5, { freq: 1300, to: 800, q: 0.8, vol: 0.032 * v });
+    k.hiss(t + 0.38 + Math.random() * 0.1, 0.42, { freq: 700, to: 1100, q: 0.7, vol: 0.026 * v });
+    k.hiss(t + 0.05, 0.6, { type: 'lowpass', freq: 380, vol: 0.03 * v }); // the cushion's soft thump underneath
+  },
+  /**
+   * He stirs: a bigger rustle (he turns over), then a drowsy, rising "hm?", as if half asking "Honey?". The rise stays
+   * low (about 120 to 165 Hz), so it sounds puzzled, not squeaky. About 1.1 s. @param {object} k kit @param {number} t start
+   */
+  sleepStir(k, t) {
+    VOICES.sleepShift(k, t, { vol: 1.25 });
+    const f = 118 + Math.random() * 8;
+    k.vowel(f, t + 0.5, 0.5, { slideTo: f * 1.38, formants: [300, 1150], vol: 0.085 }); // "hm?"
+    k.hiss(t + 0.46, 0.1, { type: 'lowpass', freq: 800, vol: 0.02 }); // the "h"
+  },
   /** Money in: a bright two-note ka-ching. @param {object} k kit @param {number} t start */
   cash(k, t) {
     k.tone(1318.5, t, 0.12, { type: 'triangle', vol: 0.14 });

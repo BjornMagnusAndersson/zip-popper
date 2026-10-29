@@ -1,7 +1,7 @@
 // Milestone strip "First 3-star day" (T4.3c): played the first time the player ends a day with 3 stars. 4 panels.
 // Closing time: {name} reads a 3-star review and cheers; the studio dog sleeps on. Greta pulls out a huge party
 // cannon she has saved for years. BOOM: confetti everywhere, the dog barks and bolts. Button: the confetti has settled
-// on the plant and the "Clean!" sign, the dog hides behind the bucket (the visual surprise) and Greta holds up two
+// on the plant and the "Clean!" sign, the dog hides behind a cardboard box (the visual surprise) and Greta holds up two
 // more cannons. Running gag: the plant, silent, watching with eyes on its pot. Format: docs/COMIC-FORMAT.md.
 
 /** The dingy studio filling a panel (tier 0; the plant wears Greta's scarf). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
@@ -56,6 +56,23 @@ function cannon(x, y, k, a, fired = false) {
   out.push({ shape: 'path', d: `M${p(-62, -220)} Q${p(0, -244)} ${p(62, -220)} Q${p(0, -196)} ${p(-62, -220)}Z`, fill: fired ? '#2a211d' : '#e8505b', stroke: true, sw: 6 });
   if (fired) for (const [dx, dy, rr] of [[-40, -270, 30], [10, -290, 38], [52, -262, 26]]) out.push({ shape: 'circle', x: x + (dx * c - dy * sn) * k, y: y + (dx * sn + dy * c) * k, r: rr * k, fill: '#f4f1ea', stroke: true, sw: 4, opacity: 0.9 });
   return out;
+}
+
+/**
+ * An open cardboard box standing on the floor, flaps up, with a strip of tape (the dog's hiding place in panel 4).
+ * @param {number} x middle @param {number} y bottom (on the floor) @param {number} k size (1 = 190 units wide)
+ * @returns {object[]} shape layers
+ */
+function cardboardBox(x, y, k) {
+  const w = 95 * k;
+  const h = 118 * k;
+  return [
+    { shape: 'path', d: `M${x - w} ${y - h} L${x - w - 56 * k} ${y - h - 26 * k} L${x - w - 10 * k} ${y - h - 30 * k} L${x - w + 50 * k} ${y - h}Z`, fill: '#b98a55', stroke: true, sw: 5 },
+    { shape: 'path', d: `M${x + w} ${y - h} L${x + w + 56 * k} ${y - h - 26 * k} L${x + w + 10 * k} ${y - h - 30 * k} L${x + w - 50 * k} ${y - h}Z`, fill: '#b98a55', stroke: true, sw: 5 },
+    { shape: 'rect', x: x - w, y: y - h, w: 2 * w, h, rx: 6 * k, fill: '#d4a66a', stroke: true, sw: 6 },
+    { shape: 'rect', x: x - 22 * k, y: y - h, w: 44 * k, h: 50 * k, fill: '#e9cf9c', opacity: 0.9 },
+    { shape: 'path', d: `M${x - w + 20 * k} ${y - 30 * k} L${x - w + 70 * k} ${y - 30 * k}`, stroke: true, sw: 4, opacity: 0.4 },
+  ];
 }
 
 export const STRIP = {
@@ -125,7 +142,7 @@ export const STRIP = {
       ],
     },
     {
-      // 4. Button: the confetti has settled on the plant and the "Clean!" sign. The dog hides behind the bucket.
+      // 4. Button: the confetti has settled on the plant and the "Clean!" sign. The dog hides behind a cardboard box.
       // Greta holds up two more cannons.
       layout: 'square',
       scene: {
@@ -136,7 +153,8 @@ export const STRIP = {
           ...confetti(90, 590, 220, 260, 18, 7),
           ...confetti(120, 110, 250, 130, 14, 9),
           { art: 'dog', x: 840, y: 955, scale: 0.8, stance: 'peek', face: 'scared', flip: true, id: 'dog' },
-          { art: 'bucket', x: 840, y: 1000, scale: 0.9 },
+          // A cardboard box (it used to be the bucket, which is gone once the leak is fixed: owner 2026-10-29).
+          ...cardboardBox(840, 1000, 0.9),
           { id: 'greta', art: 'greta', x: 520, y: 1010, scale: 0.72, pose: 'cheer', expr: 'happy' },
           ...cannon(383, 625, 0.7, -15),
           ...cannon(657, 625, 0.7, 15),

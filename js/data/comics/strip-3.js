@@ -290,7 +290,7 @@ export const STRIP = {
         // still ends above his knitted hat instead of covering it.
         { kind: 'say', key: 'comic.s3.p10.her', at: [670, 100], to: 'her', w: 380 },
         { kind: 'say', key: 'comic.s3.p10.him', at: [190, 120], to: 'him', w: 330 },
-        { kind: 'caption', key: 'comic.s3.p10.end', at: [450, 1150], w: 780, sound: 'pop_small' },
+        { kind: 'caption', key: 'comic.s3.p10.end', at: [610, 1150], w: 560, sound: 'pop_small' }, // B107(6): right of him, so his belt shows
       ],
     },
   ],

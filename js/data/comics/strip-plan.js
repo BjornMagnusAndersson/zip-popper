@@ -263,7 +263,7 @@ function wateringCan(x, y, land, tilt = 14) {
 const P2_HIM = helmeted(1060, 900, 0.85, { pose: 'hips', expr: 'happy', look: -1 });
 const P3_HIM = helmeted(1310, 880, 0.86, { pose: 'stand', expr: 'shocked', look: -1 });
 const P5_HIM = helmeted(440, 740, 0.85, { pose: 'bust', expr: 'shocked', look: 1 });
-const P7_HIM = helmeted(470, 880, 0.85, { pose: 'stand', expr: 'happy', look: 1 });
+const P7_HIM = helmeted(494, 880, 0.85, { pose: 'stand', expr: 'happy', look: 1 });
 // Panel 7 (B50): the window (0..1 across), the plant on its sill (sill top y 384), the one chair she stands on (seat
 // top 138 units up at scale 1, so her raised hand is level with the sill) and where the spray lands (on the leaves).
 const P7_WINDOW_X = 0.68;
@@ -419,13 +419,14 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          { art: 'room', kind: 'studio', w: 1600, h: 900, floorY: 600, doorX: 0.08, windowX: P7_WINDOW_X, leakX: 0.36, bulb: false, sign: false, plant: false, lampX: 0.92 },
+          { art: 'room', kind: 'studio', w: 1600, h: 900, floorY: 600, doorX: 0.08, windowX: P7_WINDOW_X, leakX: 0.375, bulb: false, sign: false, plant: false, lampX: 0.92 },
           { shape: 'rect', x: 0, y: 0, w: 1600, h: 900, fill: '#ffb86b', opacity: 0.14 },
           { shape: 'path', d: 'M1400 140 l-30 -30 M1472 140 l30 -30 M1436 120 l0 -40 M1360 220 l-40 0 M1512 220 l40 0', stroke: '#ffd25a', sw: 8 },
-          { art: 'drip', x: 576, y: 600, r: 16 },
+          { art: 'drip', x: 600, y: 600, r: 16 },
+          // B107(4): he, his bucket and the leak above it 24 units right of where they were, so his bubble clears his helmet
           P7_HIM,
           ...spoon(P7_HIM),
-          { art: 'bucket', x: 571, y: 830, scale: 0.45 },
+          { art: 'bucket', x: 595, y: 830, scale: 0.45 },
           P7_PLANT,
           P7_CHAIR,
           P7_HER,
@@ -436,10 +437,10 @@ export const STRIP = {
       bubbles: [
         // B44(4): caption and her bubble a little to the left, so the shout fits on one line above the lamp shade.
         { kind: 'caption', key: 'comic.plan.p7.cap', at: [240, 52], w: 430 },
-        { kind: 'say', key: 'comic.plan.p7.her', at: [700, 110], to: 'her', w: 400 },
+        { kind: 'say', key: 'comic.plan.p7.her', at: [680, 104], to: 'her', w: 420 }, // B105(6): a bit wider, so on a small phone it clears her hair
         // R9: his loophole, a callback to the ban's "Rule 3: Not in the house!" (strip 0); over the door, left of his face
         { kind: 'say', key: 'comic.plan.p7.him', at: [160, 400], to: 'him', w: 250 },
-        { kind: 'shout', key: 'comic.plan.p7.click', at: [1330, 64], w: 560, sound: 'creak' },
+        { kind: 'shout', key: 'comic.plan.p7.click', at: [1352, 64], w: 560, sound: 'creak' },
       ],
     },
     {

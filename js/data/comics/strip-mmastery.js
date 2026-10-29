@@ -102,7 +102,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.5, leakX: 0.36, bulbX: 0.5, signX: 0.9, plantX: 0.64, plantEyes: 'wide' }), // B9: in from the edge so CLEAN! shows; sign right of Greta so her bubble tail never crosses the C (story audit 2026-10-29)
+          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.5, leakX: 0.36, bulbX: 0.5, signX: 0.885, plantX: 0.64, plantEyes: 'wide' }), // B9 + B107(7): in from the edge so the whole CLEAN! and tick show; sign right of Greta so her bubble tail never crosses the C (story audit 2026-10-29)
           { art: 'chair', x: 300, y: 870, scale: 0.75, color: '#9a8f6a' },
           // The stopwatch first, then Nils, so his raised fist grips it (story audit 2026-10-29: it used to float).
           ...stopwatch(452, 486, 62, 0),
@@ -151,8 +151,9 @@ export const STRIP = {
           { id: 'her', art: 'heroine', x: 500, y: 1010, scale: 0.85, pose: 'pop', expr: 'bliss' },
           zips(500, 560, 330, -50, 50, 7, 60),
           // B10: Nils bigger, his bubble up and out of the way.
-          { id: 'nils', art: 'nils', x: 150, y: 1080, scale: 0.85, pose: 'bust', expr: 'shocked', look: 1 },
-          ...stopwatch(300, 930, 80, 60),
+          // B107(7): the stopwatch first, then Nils with his right fist raised, so he grips it (it stood on its own)
+          ...stopwatch(337, 776, 66, 60),
+          { id: 'nils', art: 'nils', x: 150, y: 1100, scale: 0.85, pose: 'bustLift', expr: 'shocked', look: 1 },
           // The plant draws its own sweatband, so it sits right on a drooping plant too (story audit 2026-10-29).
           { art: 'plant', x: 860, y: 1000, scale: 0.9, eyes: 'happy', sweat: true, sweatband: true },
           zips(860, 740, 200, -40, 40, 3, 40),
@@ -162,7 +163,7 @@ export const STRIP = {
       sound: 'pop_gold',
       bubbles: [
         { kind: 'shout', key: 'comic.mmastery.p3.zip', at: [500, 90], w: 420 },
-        { kind: 'say', key: 'comic.mmastery.p3.nils', at: [170, 590], to: 'nils', w: 330, sound: 'cheer' },
+        { kind: 'say', key: 'comic.mmastery.p3.nils', at: [170, 570], to: 'nils', w: 330, sound: 'cheer' },
       ],
     },
     {
@@ -175,8 +176,9 @@ export const STRIP = {
           { id: 'her', art: 'heroine', x: 170, y: 740, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
           ...mug(300, 550, 0.9),
           // Nils mirrored so his raised right fist, on her side, grips the stopwatch (it used to float, story audit 2026-10-29).
-          ...stopwatch(443, 432, 48, 350),
-          { id: 'nils', art: 'nils', x: 630, y: 740, scale: 0.85, pose: 'bustLift', flip: true, expr: 'shocked', look: 1 },
+          // B107(7)/B105(6): he and his watch 28 units higher, so his mouth is not at the bottom edge
+          ...stopwatch(443, 404, 48, 350),
+          { id: 'nils', art: 'nils', x: 630, y: 712, scale: 0.85, pose: 'bustLift', flip: true, expr: 'shocked', look: 1 },
         ],
       },
       sound: 'pop_small',

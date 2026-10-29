@@ -137,11 +137,13 @@ export function lampLevel(time, tier = 0, reduced = false) {
  * @param {number|string} [tier] studio tier 0..2, or 'home' (see backdropKind)
  * @param {boolean} [reduced] reduced motion is on
  * @param {boolean} [leak] the room drips (roomLeaks): the drop moves too
+ * @param {boolean} [twinkle] false = the spa's sparkles stand still (the lighter graphics switch), so they need no repaint
  * @returns {number} seconds (Infinity = it never changes)
  */
-export function nextBackdropChange(time, tier = 0, reduced = false, leak = false) {
+export function nextBackdropChange(time, tier = 0, reduced = false, leak = false, twinkle = true) {
   if (reduced) return Infinity;
-  if (leak) return Math.min(nextDripChange(time), nextBackdropChange(time, tier, false, false));
+  if (leak) return Math.min(nextDripChange(time), nextBackdropChange(time, tier, false, false, twinkle));
+  if (paletteFor(tier).spa) return twinkle ? TWINKLE_STEP : Infinity; // the sparkles twinkle (B33d)
   if (paletteFor(tier).pulse) return PULSE_STEP;
   if (!paletteFor(tier).flicker) return Infinity;
   const k = Math.floor(time / BURST_EVERY);
@@ -863,6 +865,63 @@ export function sparkle(ctx, x, y, z, colour, alpha = 1) {
   ctx.globalAlpha = 1;
 }
 
+/** How many sparkles tier 2 (the spa) has on its walls. */
+const TWINKLE_COUNT = 14;
+/** Seconds between repaints while the spa's sparkles twinkle (small steps, so it looks smooth; B33d, B99(3)). */
+export const TWINKLE_STEP = 0.12;
+
+/**
+ * Where tier 2's sparkles sit for a room size: always the same places (the room's own random numbers), all over the
+ * wall above the floor. Each also gets its own twinkle (twinkleAt).
+ * @param {number} w width
+ * @param {number} h height
+ * @returns {{x: number, y: number, z: number, colour: string}[]} centre, half size and colour of each sparkle
+ */
+export function twinkleSpots(w, h) {
+  const u = Math.min(w, h) / 100;
+  const floorY = h * (w > h ? 0.86 : 0.9);
+  const sp = rng(4242);
+  const out = [];
+  for (let i = 0; i < TWINKLE_COUNT; i += 1) {
+    out.push({ x: sp() * w, y: sp() * floorY, z: u * (1 + sp() * 1.8), colour: i % 3 ? '#ffffff' : '#f3d27a' });
+  }
+  return out;
+}
+
+/**
+ * How one sparkle looks at a moment: it slowly swells and fades, each at its own pace (2.6 to 4.8 s) and its own
+ * start, so the spa shimmers gently. With reduced motion (or the lighter graphics) it stays still at full size.
+ * @param {number} time seconds since the scene started
+ * @param {number} i which sparkle
+ * @param {boolean} [still] true = no twinkle (reduced motion, lighter graphics)
+ * @returns {{scale: number, alpha: number}} size factor (0.55..1) and see-through (0.3..0.95)
+ */
+export function twinkleAt(time, i, still = false) {
+  if (still || !Number.isFinite(time)) return { scale: 1, alpha: 0.9 };
+  const period = 2.6 + hash(i * 5 + 3) * 2.2;
+  const wave = 0.5 + 0.5 * Math.sin((time / period + hash(i * 11 + 7)) * Math.PI * 2);
+  const k = wave * wave; // mostly soft, with a short bright peak now and then
+  return { scale: 0.55 + 0.45 * k, alpha: 0.3 + 0.65 * k };
+}
+
+/**
+ * Draw tier 2's sparkles for a moment (nothing in the other tiers or at home).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number|string} kind backdrop kind (0..2 or 'home')
+ * @param {number} time seconds since the scene started
+ * @param {boolean} [still] true = still sparkles (reduced motion, lighter graphics)
+ * @returns {void}
+ */
+export function drawTwinkles(ctx, w, h, kind, time, still = false) {
+  if (!paletteFor(kind).spa) return;
+  twinkleSpots(w, h).forEach((p, i) => {
+    const tw = twinkleAt(time, i, still);
+    sparkle(ctx, p.x, p.y, p.z * tw.scale, p.colour, tw.alpha);
+  });
+}
+
 /**
  * A smoothed-over filler patch on the wall (tier 1's repairs): a paler blob with trowel swooshes.
  * @param {CanvasRenderingContext2D} ctx the context
@@ -1042,11 +1101,13 @@ export function layerSpots(w, h, view = false) {
   const floorY = h * (land ? 0.86 : 0.9);
   if (view) return viewSpots(w, h, u, land, floorY);
   if (land) {
+    const sign = { x: w * 0.83, y: h * 0.06, s: Math.max(70, Math.min(150, w * 0.14)) };
+    const ps = Math.max(18, u * 8);
     return {
-      u, floorY,
-      sign: { x: w * 0.83, y: h * 0.06, s: Math.max(70, Math.min(150, w * 0.14)) },
+      u, floorY, sign,
       chair: { x: w * 0.5, top: h * 0.12, wide: Math.min(w * 0.5, h * 1.1), seat: h * 0.72 },
-      plant: { x: w * 0.68, y: h * 0.2, s: Math.max(18, u * 8) },
+      // B106(3): on squarer screens the plant moves left, so its leaves keep a gap to the sign's first letter
+      plant: { x: Math.min(w * 0.68, sign.x - sign.s * 0.52 - ps * 1.6), y: h * 0.2, s: ps },
       lamp: { x: w * 0.31, y: h * 0.52, r: Math.max(14, u * 7) },
     };
   }
@@ -1073,17 +1134,20 @@ function viewSpots(w, h, u, land, floorY) {
   const ground = floorY + (h - floorY) * 0.45;
   const heroH = land ? Math.min(h * 0.68, w * 0.5) : Math.min(h * 0.46, w * 0.9);
   const cw = heroH * 0.43; // the chair's width: its top reaches about two thirds of her height
-  const chairX = land ? w * 0.43 : w * 0.38;
+  // B34d/e: upright she and the chair stand a little to the left, so her elbow keeps clear of the ring light's stand;
+  // sideways the ring light stands a little to the right, out from under the ceiling lamp.
+  const chairX = land ? w * 0.43 : w * 0.35;
   const chair = { x: chairX, wide: cw, top: ground - cw * 1.55, seat: ground - cw * 0.5, floor: ground };
   const lampR = Math.max(9, heroH * 0.075);
   return {
     u, floorY, ground,
-    hero: { x: land ? w * 0.63 : w * 0.72, floor: ground, h: heroH },
+    hero: { x: land ? w * 0.63 : w * 0.69, floor: ground, h: heroH },
     sign: land ? { x: w * 0.83, y: h * 0.06, s: Math.max(70, Math.min(150, w * 0.14)) }
       : { x: w * 0.72, y: h * 0.035, s: Math.max(64, Math.min(130, w * 0.22)) },
     chair,
-    plant: land ? { x: w * 0.07, y: h * 0.16, s: Math.max(16, u * 7) } : { x: w * 0.075, y: h * 0.2, s: Math.max(18, u * 8) },
-    lamp: { x: land ? w * 0.27 : w * 0.925, y: ground - heroH * 0.86, r: lampR, floor: ground },
+    // upright the vines are a quarter shorter, so they end above the sink's tap (B34e)
+    plant: land ? { x: w * 0.07, y: h * 0.16, s: Math.max(16, u * 7) } : { x: w * 0.075, y: h * 0.2, s: Math.max(18, u * 8), vine: 0.72 },
+    lamp: { x: land ? w * 0.295 : w * 0.925, y: ground - heroH * 0.86, r: lampR, floor: ground },
   };
 }
 
@@ -1247,7 +1311,8 @@ function wingChair(ctx, c, floorY, u) {
  * The plant upgrade: a plant hanging from the ceiling in a coral pot on three cords, with trailing vines, and two
  * little eyes on the pot (the plant from the comics, judging quietly).
  * @param {CanvasRenderingContext2D} ctx the context
- * @param {{x: number, y: number, s: number}} p middle of the pot rim and the pot's size
+ * @param {{x: number, y: number, s: number, vine?: number}} p middle of the pot rim and the pot's size; vine = how long
+ *   the trailing vines are (1 = full length)
  * @param {number} u size unit
  * @returns {void}
  */
@@ -1257,7 +1322,8 @@ function hangingPlant(ctx, p, u) {
   ctx.strokeStyle = '#c9a26b';
   ctx.lineWidth = Math.max(1, u * 0.3);
   for (const dx of [-0.55, 0, 0.55]) { ctx.beginPath(); ctx.moveTo(p.x, 0); ctx.lineTo(p.x + dx * s, p.y - s * 0.3); ctx.stroke(); }
-  for (const [dx, len, sway] of [[-0.45, 2.6, -1], [0.05, 3.4, 1], [0.45, 2.1, 1]]) { // vines with leaves
+  for (const [dx, full, sway] of [[-0.45, 2.6, -1], [0.05, 3.4, 1], [0.45, 2.1, 1]]) { // vines with leaves
+    const len = full * (p.vine ?? 1);
     const x1 = p.x + dx * s;
     const cx = x1 + sway * s * 0.5;
     const y2 = p.y + len * s;
@@ -1470,18 +1536,21 @@ export function shelfSpot(w, h, kind) {
  * @param {number} h height
  * @param {number|string} kind backdrop kind 0..2
  * @param {number} count pins to draw (game/pin-jar.js pinsDrawn)
+ * @param {'pop'|'view'} [where] 'view' = the studio view (no face in front): a third bigger again (B107(1)), standing
+ *   a little further in so it stays on the plank
  * @returns {void}
  */
-export function drawPinJar(ctx, w, h, kind, count) {
+export function drawPinJar(ctx, w, h, kind, count, where = 'pop') {
   if (!(count > 0)) return;
   const { x, y, len, rot } = shelfSpot(w, h, kind);
   const plank = len / 120; // the shelf's own unit
-  const k = plank * 1.5; // the jar's unit: half as big again as the first version
+  const view = where === 'view';
+  const k = plank * (view ? 2 : 1.5); // the jar's unit: half as big again as the first version (twice in the view)
   const lw = Math.max(1, 1.3 * plank);
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rot);
-  ctx.translate(108 * plank, 0);
+  ctx.translate((view ? 103 : 108) * plank, 0);
   jarPicture(ctx, k, lw, count);
   ctx.restore();
 }
@@ -1504,28 +1573,61 @@ function jarPicture(ctx, k, lw, count, drop = 1) {
   ctx.fillStyle = 'rgba(215,238,245,0.45)';
   ctx.fill();
   const cols = ['#e2524f', '#4f8fe2', '#f2c14e', '#5fbf8e', '#c46fe0'];
+  const L = 6.4 * k; // a pin's silver shaft, from the head to the point (B98(1): long enough to read as a pin)
   /**
-   * One safety pin, lying a little tilted.
-   * @param {number} i which pin (its colour, slot and tilt)
-   * @param {number} px x
-   * @param {number} py y
+   * Whether pin i stands on its point in the pile, head up: a few in the heap, and once the jar has a pile one near
+   * the top, so pins stick up out of it.
+   * @param {number} i which pin
+   * @returns {boolean} true = standing up
+   */
+  const upright = (i) => (i % 5 === 2 && Math.floor(i / 3) < 5) || (count >= 7 && i === count - 2);
+  /**
+   * Which way pin i points, from its head to its point: most lie tilted down to the left or right, a few stand up.
+   * @param {number} i which pin
+   * @returns {number} angle in radians (0 = to the right)
+   */
+  const angle = (i) => {
+    const jitter = ((i * 37) % 7 - 3) * 0.12;
+    if (upright(i)) return Math.PI / 2 + jitter * 1.5;
+    return (i % 2 ? 0.32 : Math.PI - 0.32) + jitter;
+  };
+  /**
+   * One pin: a round coloured head with a shine and a dark rim, and a silver shaft with a dark edge so it shows on
+   * the pale glass, ending in a point.
+   * @param {number} i which pin (its colour and tilt)
+   * @param {number} px the head's x
+   * @param {number} py the head's y
    * @returns {void}
    */
   const pin = (i, px, py) => {
     ctx.save();
     ctx.translate(px, py);
-    ctx.rotate(((i * 37) % 7 - 3) * 0.25);
-    ctx.strokeStyle = '#9aa4ab';
-    ctx.lineWidth = Math.max(0.8, 0.8 * k);
-    ctx.beginPath(); ctx.moveTo(-2.2 * k, 0); ctx.lineTo(2.2 * k, 0); ctx.stroke();
+    ctx.rotate(angle(i));
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#535e66';
+    ctx.lineWidth = Math.max(1, 0.9 * k);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L, 0); ctx.stroke();
+    ctx.strokeStyle = '#eef2f4';
+    ctx.lineWidth = Math.max(0.5, 0.4 * k);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L - 0.9 * k, 0); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.arc(0, 0, 1.3 * k, 0, Math.PI * 2);
     ctx.fillStyle = cols[i % cols.length];
-    ctx.beginPath(); ctx.arc(-2.4 * k, 0, 0.95 * k, 0, Math.PI * 2); ctx.fill();
+    ctx.fill();
+    ctx.strokeStyle = INK.ink;
+    ctx.lineWidth = Math.max(0.6, 0.28 * k);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(-0.4 * k, -0.45 * k, 0.4 * k, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   };
-  /** Where pin i lies in the jar. @param {number} i which pin @returns {number[]} x and y */
+  /** Where pin i's head lies in the jar (rows of three from the bottom up; a standing pin's head sits higher). @param {number} i which pin @returns {number[]} x and y */
   const slot = (i) => {
-    const row = Math.floor(i / 4);
-    return [(-4.5 + (i % 4) * 3 + (row % 2) * 1.2) * k, -2.5 * k - row * 2.6 * k];
+    const row = Math.floor(i / 3);
+    const x = (-4.3 + (i % 3) * 4.3 + (row % 2 ? 1 : -0.6)) * k;
+    const y = -2.4 * k - row * 2.3 * k;
+    const lift = Math.min(L * 0.75, jh - 1.6 * k + y); // a standing pin's head stays under the lid
+    return upright(i) ? [x, y - lift] : [x - Math.cos(angle(i)) * L * 0.35, y];
   };
   ctx.save();
   box(ctx, -jw / 2, -jh, jw, jh, 3 * k);
@@ -2003,12 +2105,7 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
   if (!shown.includes('chair')) oldChair(ctx, spots.chair, spots.floorY, spots.u);
   if (!shown.includes('sign')) oldSign(ctx, spots.sign, spots.u);
   for (const id of shown) drawLayer(ctx, id, spots);
-  if (pal.spa) { // sparkles all over: everything is clean
-    const sp = rng(4242);
-    for (let i = 0; i < 14; i += 1) {
-      sparkle(ctx, sp() * w, sp() * floorY, u * (1 + sp() * 1.8), i % 3 ? '#ffffff' : '#f3d27a', 0.9);
-    }
-  }
+  // (tier 2's sparkles twinkle, so they are drawn on top each time: drawTwinkles, B33d)
   // The corners: a vignette (dark and dank in tier 0, soft in the better tiers).
   const v = ctx.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.35, w / 2, h * 0.45, Math.hypot(w, h) * 0.62);
   v.addColorStop(0, 'rgba(0,0,0,0)');
@@ -2082,17 +2179,54 @@ function drawLight(ctx, w, h, tier, level) {
  * @param {number} h height in CSS px
  * @param {number} tier studio tier 0..2 (unknown tiers fall back to 0)
  * @param {string[]} [layers] owned studio layer ids (save.studioLayers)
- * @param {{view?: boolean, masters?: string[], pins?: number}} [o] pins = pins in the jar (game/pin-jar.js); view: true (default) = the studio view's places and sizes for the
+ * @param {{view?: boolean, masters?: string[], pins?: number, moving?: boolean}} [o] pins = pins in the jar
+ *   (game/pin-jar.js); view: true (default) = the studio view's places and sizes for the
  *   layers (no face in front, so the chair is chair-sized and stands on the floor); false = the pop scene's places;
- *   masters = the wall of fame's framed diplomas (bump ids; left out = no wall of fame, R8j)
+ *   masters = the wall of fame's framed diplomas (bump ids; left out = no wall of fame, R8j); moving: true = leave out
+ *   the parts that move (the spa's sparkles and the drip), because the caller draws them on top with drawStudioMotion
  * @returns {void}
  */
 export function drawStudio(ctx, w, h, tier, layers = [], o = {}) {
   const kind = backdropKind('studio', tier);
-  drawRoom(ctx, w, h, kind, layers, o.view !== false, o.masters ?? null);
+  const view = o.view !== false;
+  drawRoom(ctx, w, h, kind, layers, view, o.masters ?? null);
+  if (!o.moving) drawTwinkles(ctx, w, h, kind, 0, true); // still sparkles
   drawLight(ctx, w, h, kind, 1);
-  if (roomLeaks(kind, layers)) drawDrip(ctx, w, h, 0, true); // a still drop hanging from the joint
-  drawPinJar(ctx, w, h, kind, pinsDrawn(o.pins)); // the pin jar on the shelf (game/pin-jar.js)
+  if (!o.moving && roomLeaks(kind, layers)) drawDrip(ctx, w, h, 0, true); // a still drop hanging from the joint
+  drawPinJar(ctx, w, h, kind, pinsDrawn(o.pins), view ? 'view' : 'pop'); // the pin jar on the shelf (game/pin-jar.js)
+}
+
+/**
+ * The studio view's moving parts for a moment (B33d, B97(2)): the spa's twinkling sparkles and the leak's drip, drawn
+ * on their own see-through layer over the still room (drawStudio with moving true), so only they are redrawn.
+ * @param {CanvasRenderingContext2D} ctx where to draw (cleared by the caller)
+ * @param {number} w width in CSS px
+ * @param {number} h height in CSS px
+ * @param {number} tier studio tier 0..2
+ * @param {string[]} [layers] owned studio layer ids
+ * @param {number} [time] seconds since the view opened
+ * @param {boolean} [still] reduced motion: still sparkles and a still drop
+ * @returns {void}
+ */
+export function drawStudioMotion(ctx, w, h, tier, layers = [], time = 0, still = false) {
+  const kind = backdropKind('studio', tier);
+  drawTwinkles(ctx, w, h, kind, time, still);
+  if (roomLeaks(kind, layers)) drawDrip(ctx, w, h, time, still);
+}
+
+/**
+ * How long until the studio view's moving parts look different (its lamp never flickers, unlike the pop scene's).
+ * @param {number} time seconds since the view opened
+ * @param {number} tier studio tier 0..2
+ * @param {string[]} [layers] owned studio layer ids
+ * @param {boolean} [still] reduced motion (then nothing moves)
+ * @returns {number} seconds (Infinity = never)
+ */
+export function nextStudioChange(time, tier, layers = [], still = false) {
+  if (still) return Infinity;
+  const kind = backdropKind('studio', tier);
+  const drip = roomLeaks(kind, layers) ? nextDripChange(time) : Infinity;
+  return Math.min(drip, paletteFor(kind).spa ? TWINKLE_STEP : Infinity);
 }
 
 /**
@@ -2220,7 +2354,8 @@ function roomCanvas(w, h, tier, dpr, layers = []) {
  * @param {CanvasRenderingContext2D} ctx where to draw (already scaled so 1 unit = 1 CSS px)
  * @param {number} w width in CSS px
  * @param {number} h height in CSS px
- * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number, pins?: number}} [o] pins =
+ * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number, pins?: number,
+ *   twinkle?: boolean}} [o] twinkle = false keeps the spa's sparkles still (lighter graphics); pins =
  *   the pins in the jar on the shelf (game/pin-jar.js); room
  *   'studio' (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), the owned studio layers (save.studioLayers,
  *   T5.1a; the home room ignores them), seconds since the scene started (for the flicker or the home lamp's
@@ -2231,6 +2366,7 @@ export function drawBackdrop(ctx, w, h, o = {}) {
   const tier = backdropKind(o.room, o.tier);
   const dpr = o.dpr ?? (ctx.getTransform?.().a || 1);
   ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []), 0, 0, w, h);
+  drawTwinkles(ctx, w, h, tier, o.time ?? 0, Boolean(o.reduced) || o.twinkle === false); // the spa's sparkles (B33d)
   drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));
   if (roomLeaks(tier, o.layers)) drawDrip(ctx, w, h, o.time ?? 0, Boolean(o.reduced)); // drip... drip...
   if (tier !== 'home') drawPinJar(ctx, w, h, tier, pinsDrawn(o.pins)); // the pin jar on the shelf (game/pin-jar.js)

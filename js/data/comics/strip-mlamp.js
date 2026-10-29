@@ -170,7 +170,7 @@ export const STRIP = {
       layout: 'small',
       scene: {
         layers: [
-          studio(800, 600, { floorY: 470, windowX: 0.5, door: false, leak: false, bulb: false, signX: 0.5, plantX: 0.94, plantEyes: 'smug', lamp: false }),
+          studio(800, 600, { floorY: 470, windowX: 0.5, door: false, leak: false, bulb: false, signX: 0.47, signY: 0.22, plantX: 0.94, plantEyes: 'smug', lamp: false }), // B105(6): the sign hangs lower, under the caption
           // B9: the two busts sit lower and the end caption is in the top band, so it no longer covers their faces.
           { id: 'her', art: 'heroine', x: 170, y: 740, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
           { id: 'nils', art: 'nils', x: 560, y: 740, scale: 0.85, pose: 'bust', expr: 'squint', look: -1 },

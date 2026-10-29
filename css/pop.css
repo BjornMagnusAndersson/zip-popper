@@ -17,7 +17,7 @@
    "Popping M..." on a phone; the text is a little smaller on narrow phones. */
 .pop-title {
   margin: 0; font-weight: 800; font-size: clamp(0.9rem, 0.6rem + 1.6vw, 1.05rem); line-height: 1.2; overflow: hidden; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
 .pop-count { margin: 2px 0 0; font-size: 0.85rem; color: #f3d9cf; min-height: 1.3em; white-space: nowrap; }
 
@@ -192,7 +192,8 @@
     flex: 0 1 auto; max-width: max(100px, min(28%, calc(50vw - 25vh - 124px))); margin-right: auto; padding: 5px 12px 6px; border-radius: 14px;
     background: rgba(16, 42, 40, 0.82);
   }
-  .pop-title { font-size: 0.95rem; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /* B86: no line limit in the narrow card, so a long name ('Popping Marta the Mailperson') shows in full instead of 'Popping Marta the...' */
+  .pop-title { font-size: 0.85rem; white-space: normal; display: block; -webkit-line-clamp: none; }
   .pop-count { font-size: 0.8rem; min-height: 1.2em; }
   .pop-head .pop-btn { background: rgba(16, 42, 40, 0.82); }
   .pop-head .pop-btn:hover { background: rgba(40, 72, 68, 0.9); }

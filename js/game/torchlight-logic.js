@@ -2,8 +2,10 @@
 // sleeps on the sofa in the dark, and only a small torch circle lights his face. A hidden wake-up meter (0 = fast
 // asleep, 1 = awake) rises while the torch shines on his face (much faster on his eyes), with every pop (louder pops
 // more), with an "Ow" (a rough press) and when she takes too long; it slowly falls again while he is left in peace.
-// On the way up he twitches, mumbles and shifts (each once per climb), then calms. A full meter means he stirs: the
-// round starts again softly (no penalty). After the last bump the scripted catch plays (his phone light, CAUGHT).
+// On the way up he twitches, mumbles and shifts (each once per climb), then calms. A full meter means he stirs: popping
+// stops for a moment, the bumps she already popped STAY popped, but a half-squeezed bump loses its squeeze and he only
+// settles into a light sleep (stirWake: the meter falls to STIR_SETTLE, not to 0), so he is quicker to stir again.
+// After the last bump the scripted catch plays (his phone light, CAUGHT).
 // No DOM here: screens/torchlight.js shows it, tests/torchlight.test.mjs checks it in Node.
 
 /** The round itself: his 3 bumps (whiteheads, as in chapter 0), a normal irritation scale (the round cannot fail). */
@@ -33,8 +35,11 @@ export const REACTIONS = [
 /** How far the meter must fall below a reaction's level before that reaction can fire again. */
 export const REARM_GAP = 0.12;
 
-/** The meter level at which he stirs and the round restarts. */
+/** The meter level at which he stirs (popping pauses, see stirWake). */
 export const WAKE_FULL = 1;
+
+/** Where the meter falls after a stir (B28): a light sleep, past the twitch, so the next mumble comes sooner. */
+export const STIR_SETTLE = 0.4;
 
 /**
  * Keep a number between two limits.
@@ -165,7 +170,19 @@ export function takeReactions(s) {
 }
 
 /**
- * Whether he is awake now (the meter is full): he stirs and the round restarts softly.
+ * After a stir he settles again, but only into a light sleep (B28): the meter falls to STIR_SETTLE (not to 0), the
+ * reactions below that level count as used (so the twitch does not fire again at once), and the slowness and calm-down
+ * clocks start again (so a slow player is not woken straight away a second time).
+ * @param {object} s the wake state (only kept for its shape; every field is set)
+ * @returns {object} the new state
+ */
+export function stirWake(s) {
+  const fired = REACTIONS.filter((r) => r.at <= STIR_SETTLE).map((r) => r.id);
+  return { ...s, level: STIR_SETTLE, sincePop: 0, quiet: 0, fired };
+}
+
+/**
+ * Whether he is awake now (the meter is full): he stirs, popping pauses and he settles again (stirWake).
  * @param {object} s the wake state
  * @returns {boolean} true = he wakes
  */

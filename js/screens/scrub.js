@@ -11,7 +11,7 @@
 // Cartoon only: grey dust, brown and olive stains, white suds. Nothing gross.
 
 import { el, button, screenShell, INK } from './dom.js';
-import { drawCloseup, cobweb, stain, sparkle } from '../pop/backdrop.js';
+import { drawCloseup, backdropPalette, cobweb, stain, sparkle } from '../pop/backdrop.js';
 import {
   grimeRecipe, grimeMap, rubMap, scrubProgress, scrubDoneNow, progressStep, keyScrub, moveSponge, firstSpongeCell,
   cellCenter, strokePoints, scrubTextKeys, KEY_REACH, KEY_AMOUNT,
@@ -348,6 +348,94 @@ function bubble(ctx, x, y, r, a) {
   ctx.globalAlpha = 1;
 }
 
+const SIDE_ITEMS = ['lamp', 'chair', 'plant']; // the close-ups with a narrow item in the middle (they get side panels; the sign fills the width)
+const SIDE_W = 0.15; // each side panel's width, as a share of the picture (the grime and the items stay inside the middle)
+
+/**
+ * Wrap a drawing context so the close-up's warm tier-1 wall and floor colours come out in another tier's colours
+ * (drawCloseup in pop/backdrop.js always paints tier 1; this maps those exact colours while it paints). A tier-1 job
+ * is not wrapped. When backdrop.js can take a tier itself, this can go.
+ * @param {CanvasRenderingContext2D} ctx the real context
+ * @param {number} tier studio tier 0..2
+ * @returns {CanvasRenderingContext2D} the context to hand to drawCloseup
+ */
+function tierColours(ctx, tier) {
+  const from = backdropPalette(1);
+  const to = backdropPalette(tier);
+  if (to === from) return ctx;
+  const swap = new Map([[from.wallTop, to.wallTop], [from.wallBottom, to.wallBottom], [from.floor, to.floor]]);
+  /** Give a colour its tier version when it is one of the tier-1 wall or floor colours. @param {unknown} c a fill colour @returns {unknown} the colour to use */
+  const mapped = (c) => (typeof c === 'string' && swap.has(c) ? swap.get(c) : c);
+  /** Make a gradient map its colour stops (it stays a real gradient, so the canvas still accepts it). @param {CanvasGradient} g the gradient @returns {CanvasGradient} the same gradient */
+  const gradient = (g) => {
+    const add = g.addColorStop.bind(g);
+    g.addColorStop = (at, c) => add(at, mapped(c));
+    return g;
+  };
+  return new Proxy(ctx, {
+    get: (o, k) => {
+      if (k === 'createLinearGradient') return (...a) => gradient(o.createLinearGradient(...a));
+      const v = o[k];
+      return typeof v === 'function' ? v.bind(o) : v;
+    },
+    set: (o, k, v) => { o[k] = k === 'fillStyle' ? mapped(v) : v; return true; },
+  });
+}
+
+/**
+ * Fill the empty wall on both sides of a close-up a little: a short tiled wall panel (wainscot) with a rail on top and a
+ * skirting board at the bottom, in the studio tier's tile colours, and a soft shade above it so the middle stands out.
+ * Only for the narrow items; the grime never reaches the side panels.
+ * @param {CanvasRenderingContext2D} ctx the base layer
+ * @param {string} itemId the studio item
+ * @param {number} tier studio tier 0..2
+ * @returns {void}
+ */
+function drawSides(ctx, itemId, tier) {
+  if (!SIDE_ITEMS.includes(itemId)) return;
+  const pal = backdropPalette(tier);
+  const floorY = H * 0.86;
+  const top = H * 0.44; // the panel's top rail
+  const pw = W * SIDE_W;
+  const rows = 6;
+  const tile = (floorY - top) / rows;
+  for (const left of [true, false]) {
+    const x0 = left ? 0 : W - pw;
+    const shade = ctx.createLinearGradient(left ? 0 : W, 0, left ? pw * 1.6 : W - pw * 1.6, 0);
+    shade.addColorStop(0, 'rgba(70,46,22,0.22)');
+    shade.addColorStop(1, 'rgba(70,46,22,0)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(left ? 0 : W - pw * 1.6, 0, pw * 1.6, top);
+    ctx.fillStyle = pal.tile;
+    ctx.fillRect(x0, top, pw, floorY - top);
+    ctx.strokeStyle = pal.grout;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let r = 1; r < rows; r += 1) { ctx.moveTo(x0, top + r * tile); ctx.lineTo(x0 + pw, top + r * tile); }
+    for (let r = 0; r < rows; r += 1) {
+      const shift = r % 2 ? tile * 0.5 : 0; // bricklaid rows
+      for (let c = 0; c * tile + shift < pw + tile; c += 1) {
+        const lx = (left ? x0 : x0 + pw) + (left ? 1 : -1) * (shift + c * tile);
+        if (lx > x0 && lx < x0 + pw) { ctx.moveTo(lx, top + r * tile); ctx.lineTo(lx, top + (r + 1) * tile); }
+      }
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)'; // a soft shine down the tiles
+    ctx.fillRect(left ? x0 + pw * 0.12 : x0 + pw * 0.6, top, pw * 0.14, floorY - top);
+    ctx.fillStyle = pal.tile; // the rail on top and the skirting board at the bottom
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.fillRect(x0, top - 6, pw, 7);
+    ctx.strokeRect(x0, top - 6, pw, 7);
+    ctx.fillRect(x0, floorY - 8, pw, 9);
+    ctx.strokeRect(x0, floorY - 8, pw, 9);
+    ctx.beginPath(); // the panel's inner edge
+    ctx.moveTo(left ? pw : W - pw, top - 6);
+    ctx.lineTo(left ? pw : W - pw, floorY + 1);
+    ctx.stroke();
+  }
+}
+
 /**
  * Make a canvas for the close-up, sharp on high-density screens.
  * @param {string} cls class name
@@ -366,12 +454,13 @@ function layer(cls, dpr) {
 /**
  * Build the scrub job screen.
  * @param {{t: (key: string, vars?: object) => string, itemId?: string, itemNameKey: string, onDone?: () => void,
- *   reducedMotion?: boolean, sound?: {play: (name: string, o?: object) => void}}} opts
+ *   reducedMotion?: boolean, sound?: {play: (name: string, o?: object) => void}, tier?: number}} opts
  *   t = string function; itemId = the bought studio item (lamp, plant, chair, wallPaint, sign); itemNameKey = its
- *   name key; onDone = it is clean and Continue was tapped; sound = the game's sound player (optional)
+ *   name key; onDone = it is clean and Continue was tapped; sound = the game's sound player (optional); tier = the
+ *   studio's tier 0..2 (the wall and tiles take its colours; 1 = the warm wall when left out)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
-export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reducedMotion = false, sound }) {
+export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reducedMotion = false, sound, tier = 1 }) {
   const item = t(itemNameKey);
   const keys = scrubTextKeys(itemId);
   const recipe = grimeRecipe(itemId);
@@ -392,7 +481,8 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
   pad.setAttribute('role', 'button');
   pad.setAttribute('aria-label', t('ui.scrub.area', { item }));
   frame.append(base.canvas, grime.canvas, pad);
-  drawCloseup(base.ctx, W, H, itemId);
+  drawCloseup(tierColours(base.ctx, tier), W, H, itemId);
+  drawSides(base.ctx, itemId, tier);
   paintGrime(grime.ctx, recipe);
 
   const bar = el('div', 'app-scrub__bar');

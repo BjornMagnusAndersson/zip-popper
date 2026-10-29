@@ -13,7 +13,7 @@ import { el, svg, button, icon, screenShell, INK } from './dom.js';
 import { drawCharacter, SKIN, HAIR, tint } from '../game/comic-art.js';
 import {
   PHONE, makeFeed, createScroll, currentCard, isIdea, popBump, isPopped, allPopped, advanceDue, canFlick, nextCard,
-  watchedCount, clockAt, likesAt, likeText, teaWarmth, teaLine, herMood, moveFocus,
+  watchedCount, clockAt, likesAt, likeText, teaWarmth, teaLine, herMood, moveFocus, nearestBump,
 } from '../game/phonescroll-logic.js';
 
 /** How often the screen checks the clock (likes, auto scroll), in ms. */
@@ -22,6 +22,8 @@ const TICK_MS = 250;
 const TEA_MS = 3800;
 /** How far a finger must flick up (px) to go to the next video. */
 const FLICK_PX = 40;
+/** The least size of a bump's tap area (px): a fingertip (B86). */
+const TAP_PX = 44;
 const K = 'special.phoneScroll.';
 
 /**
@@ -235,10 +237,10 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
     const face = el('div', 'ps-face');
     face.append(videoFace(card));
     const bumps = card.bumps.map((b, n) => {
-      const btn = button('ps-bump', '', () => pop(i, n, btn), signal);
+      const btn = button('ps-bump', '', (e) => tapBump(i, n, e, face), signal);
       btn.style.left = `${b.x * 100}%`;
       btn.style.top = `${b.y * 100}%`;
-      btn.style.setProperty('--ps-r', `${(b.r * 2 / 0.17) * 100}%`); // the dot's size inside a hit area 17% of the face wide
+      btn.style.setProperty('--ps-d', String(b.r * 2 * 100)); // the dot's width in % of the face (the tap area is at least 44 px)
       btn.setAttribute('aria-label', t(`${K}bump`, { n: n + 1 }));
       btn.append(el('span', 'ps-bump__dot'));
       face.append(btn);
@@ -257,6 +259,28 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
     return { node: c, bumps, likes, go: null };
   });
   for (const c of cards) track.append(c.node);
+
+  /**
+   * A tap or key press on a bump's button. A tap with a finger or mouse goes to the nearest open bump centre within
+   * reach, because on a small phone the 44 px tap areas of close bumps overlap (B86); a key press pops its own bump.
+   * @param {number} cardIndex the card the button is on
+   * @param {number} n the bump the button belongs to
+   * @param {MouseEvent} e the click
+   * @param {HTMLElement} face the face the bumps sit on (to turn the tap spot into 0..1 of the face)
+   * @returns {void}
+   */
+  function tapBump(cardIndex, n, e, face) {
+    if (cardIndex !== s.index) return;
+    let target = n;
+    if (e.detail > 0 && (e.clientX || e.clientY)) { // a real tap, not Enter or Space
+      const r = face.getBoundingClientRect();
+      if (r.width > 0) {
+        target = nearestBump(feed[cardIndex].bumps, s.popped[cardIndex], (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.width,
+          Math.max(0.085, TAP_PX / 2 / r.width));
+      }
+    }
+    if (target >= 0) pop(cardIndex, target, cards[cardIndex].bumps[target]);
+  }
 
   /**
    * Pop one tiny bump on the card on show: a soft pop, the bump goes flat, a little puff.

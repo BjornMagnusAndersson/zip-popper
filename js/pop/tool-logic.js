@@ -387,6 +387,42 @@ export function wipeStripPress({ strip, onStrip, toolUse = null }) {
   return toolUse === 'strip' ? 'stick' : null;
 }
 
+/** Seconds a wipe with no goo at all waits for the nose strip (B61(1)); a finger held still this long on a peel lets the cream go on (B61(4)). */
+export const STRIP_WAIT = { noGoo: 4, stillPeel: 1.5 };
+
+/**
+ * How long the wipe step waits when there is no goo to wipe (a face with only tweezer plugs and hairs, or all the goo
+ * flew off): while the nose strip is still on the face she gets the same chance to stick and peel it as on other
+ * faces (B61(1); B55 for the wipe), so the step waits STRIP_WAIT.noGoo seconds (less once it is peeled). No strip, or
+ * it is already off: 0, the cream comes at once as before.
+ * @param {{off?: boolean}|null} strip the nose strip (engine state), or null
+ * @returns {number} seconds, 0 or more
+ */
+export function noGooWait(strip) {
+  return strip && !strip.off ? STRIP_WAIT.noGoo : 0;
+}
+
+/**
+ * What Enter or Space does in the wipe step (B61(2)): a stuck-on strip is peeled first, a bit per press (as in the
+ * pop step), then the keys wipe for her. A strip not stuck on, flying off or gone does not hold the wipe up.
+ * @param {{off?: boolean, flying?: boolean, stuck?: boolean}|null} strip the nose strip (engine state), or null
+ * @returns {'peel'|'wipe'} what the key does
+ */
+export function wipeKeyAction(strip) {
+  return strip && !strip.off && strip.stuck && !strip.flying ? 'peel' : 'wipe';
+}
+
+/**
+ * Whether a finger on the strip has kept still so long that the cream should not wait for it any more (B61(4)): once
+ * the wipe is done, a peel that has not moved for STRIP_WAIT.stillPeel seconds lets go by itself (past 0.6 it then
+ * finishes and pays, as on lifting the finger; else the strip comes away with the cream).
+ * @param {number} stillSeconds seconds since the peel last moved the strip
+ * @returns {boolean} true = let go of the peel
+ */
+export function peelStalled(stillSeconds) {
+  return Number.isFinite(stillSeconds) && stillSeconds >= STRIP_WAIT.stillPeel;
+}
+
 /**
  * Whether a point is on the nose strip's spot (with some room around it for fingers).
  * @param {{x: number, y: number, w: number, h: number}|null} strip the strip (logic.js noseStrip)

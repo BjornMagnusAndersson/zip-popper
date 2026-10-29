@@ -53,7 +53,7 @@ import {
   guideCards, metKinds, addSeenKinds, twistCards, addSeenTwists, bossCards, addSeenBosses, skillCards,
 } from '../screens/guide-logic.js';
 import { createDiplomaScreen } from '../screens/diploma.js';
-import { createReveal } from '../screens/reveal.js';
+import { createReveal, bumpPortrait } from '../screens/reveal.js';
 import { createAlbumScreen } from '../screens/album.js';
 import { faceSetup, recordFace, revealOn, stripFriendsMet } from '../screens/album-logic.js';
 import { describeTwist } from '../data/twists.js';
@@ -620,7 +620,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function showStudio(back, hang = null) {
     const again = () => showStudio(back); // after reading a diploma again, back to the studio (no longer in hang mode)
     show(createStudioScreen({
-      t, reducedMotion: still(), ...L.studioViewArgs(save), hang, onBack: back, onContinue: back,
+      t, reducedMotion: still(), ...L.studioViewArgs(save), hang, onBack: back, onContinue: back, sound, // sound: the leak's plink (B97(2))
       onDiploma: (type) => show(createDiplomaScreen({
         t, reducedMotion: still(), type, playerName: playerName(), buttonKey: 'ui.diploma.back', onContinue: again,
       }), { back: again }),
@@ -715,7 +715,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       boss: describeBoss(args.boss?.id ?? null), // a boss or event customer's gold pill (T8.4)
       step: goal ? { key: 'ui.daily.pill', vars: { goal: t(goal.nameKey) } }
         : step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
-      portrait: facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
+      // A boss or event face shows its own bumps on the intro (B59); everyone else the plain, bump-free portrait.
+      portrait: args.boss ? bumpPortrait(faceSetup(args), t(args.customer.nameKey)) : facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
       hintKey: L.introHintKey(save, step), onStart: () => playRound(step, args), onMenu: showMenu,
     }), { back: showMenu });
   }
@@ -741,8 +742,9 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     pop.unlock();
     /** The request was done or missed: back to the calm music (B14). @returns {void} */
     const onRequestEnd = () => setMusic({ screen: 'round', request: args.request, requestOpen: false });
+    let startStage = null; // the stage size when the face was laid out (B51: the reveal needs it, not the size at the end)
     /** Start (or start again) the round. @returns {void} */
-    const start = () => { roundMusic(args.request); paintGoal?.(false); pop.startRound({ ...args, ...goalHooks, onRequestEnd, customerName:args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args) }); };
+    const start = () => { roundMusic(args.request); paintGoal?.(false); pop.startRound({ ...args, ...goalHooks, onRequestEnd, customerName:args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args, startStage) }); startStage = popStageSize(); };
     start();
   }
 
@@ -752,9 +754,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @param {object} payload the onFinish payload
    * @param {() => void} again starts the same round again
    * @param {object} [args] the round's startRound arguments (for the before and after reveal and the album, T8.2)
+   * @param {{w: number, h: number}|null} [startStage] the stage size the face was laid out at (turning the phone later does not change it)
    * @returns {void}
    */
-  function finishRound(step, payload, again, args) {
+  function finishRound(step, payload, again, args, startStage = null) {
     // A boss pays its bonus (T8.4); the visit's lines go along so the line memory counts the visit (R6-lines).
     // A pin visit puts the pin into the jar (owner 2026-10-28, game/pin-jar.js).
     const out = L.applyRound(save, payload, { ...step, ...(args?.boss ? { boss: args.boss.id } : {}), ...(args?.lines ? { lines: args.lines } : {}), ...(args?.pin ? { pin: true } : {}) });
@@ -764,7 +767,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       ? settleDaily(out.save, { date: step.daily, reached: judgeDaily(args?.daily?.goal, dailyResult(payload)) }) : null;
     const stamp = out.boss ?? daily?.milestone?.stamp ?? null; // a boss stamp (T8.4) or a streak milestone stamp (T8.5)
     // T8.2: a finished career or Keep working customer gets the before and after reveal and goes into the album.
-    const face = args && !out.failed && revealOn(step) ? faceSetup(args, popStageSize(), payload) : null; // payload: nose strip peeled?
+    const face = args && !out.failed && revealOn(step) ? faceSetup(args, startStage ?? popStageSize(), payload) : null; // payload: nose strip peeled?
     // The save also lists the milestone strips still to play (B4), so closing the app now loses none.
     persist(recordFace(daily ? daily.save : out.save, { step, customer: args?.customer, setup: face, stars: out.stars, failed: out.failed, stamp }));
     /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */
@@ -851,7 +854,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function runScrub(itemId, then) {
     sound.unlock();
     show(createScrubScreen({
-      t, sound, reducedMotion: still(), itemId, itemNameKey: `ui.item.${itemId}.name`,
+      t, sound, reducedMotion: still(), itemId, itemNameKey: `ui.item.${itemId}.name`, tier: L.backdropTier(save),
       onDone: () => {
         const out = L.scrubDone(save, itemId);
         persist(out.save);

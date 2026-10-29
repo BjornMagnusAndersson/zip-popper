@@ -180,7 +180,7 @@
 .app-intro__start { margin-top: 4px; }
 
 /* ---------- Result ---------- */
-.app-result { justify-content: center; gap: 12px; }
+.app-result { justify-content: center; gap: 10px; }
 .app-result__left, .app-result__right { display: contents; }
 .app-result__top { display: flex; flex-direction: column; align-items: center; gap: 6px; order: 0; }
 .app-result__title {
@@ -190,8 +190,8 @@
 .app-result__tag { padding: 2px 14px; border-radius: 999px; border: 3px solid var(--ink); background: var(--yellow); text-align: center; font-weight: 800; font-size: 0.9rem; } /* Keep working pay (T5.4) */
 .app-star svg { width: 72px; height: 72px; filter: drop-shadow(0 4px 0 rgba(42, 33, 29, 0.3)); }
 .app-star--on { animation: app-star-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both; animation-delay: calc(var(--i) * 0.2s + 0.15s); }
-.app-coins { order: 1; display: grid; gap: 2px; padding: 10px 14px; }
-.app-coins__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; font-weight: 700; }
+.app-coins { order: 1; display: grid; gap: 1px; padding: 8px 14px; } /* B51: 8 lines fit upright at 390x800 */
+.app-coins__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 33px; font-weight: 700; }
 .app-coins__row--total { margin-top: 4px; padding-top: 6px; border-top: 3px dashed var(--ink); font-size: 1.15rem; font-weight: 900; }
 .app-result__quote { order: 2; text-align: center; font-style: italic; font-weight: 700; color: var(--ink); background: rgba(255, 255, 255, 0.55); padding: 8px 12px; border-radius: 14px; }
 /* A finished boss or event (T8.4): "New stamp!" in a gold pill under the coins. */
@@ -282,7 +282,14 @@
 .app-item--scrub .app-item__note { color: #7a4a00; }
 .app-wearing-tag { padding: 2px 10px; border-radius: 999px; border: 2px solid var(--ink); background: var(--mint); font-size: 0.8rem; font-weight: 900; }
 .app-wearing { display: flex; align-items: center; gap: 12px; padding: 5px 12px; border-radius: 16px; border: 3px solid var(--ink); background: var(--cream); box-shadow: 3px 4px 0 var(--shadow); }
-.app-wearing__pic { flex: none; width: 52px; height: 108px; border-radius: 12px; background: var(--pink-soft); border: 3px solid var(--ink); }
+.app-wearing__pic { flex: none; display: block; height: clamp(108px, 27vh, 230px); width: auto; aspect-ratio: 340 / 700; border-radius: 14px; background: var(--pink-soft); border: 3px solid var(--ink); }
+/* B40c: in the scrubs the picture is a button (cap off and on, as in the studio view); a clear ring with keyboard focus */
+.app-wearing__tap { flex: none; display: block; margin: 0; padding: 0; border: 0; background: transparent; border-radius: 14px; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.app-wearing__tap:focus-visible { outline: 4px dashed var(--ink); outline-offset: 2px; }
+.app-wearing__tap--hop { animation: app-wearing-hop 0.45s ease-out; }
+.app-wearing__hint { font-size: 0.85rem; font-style: italic; }
+@keyframes app-wearing-hop { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-8px) rotate(-2deg); } 70% { transform: translateY(0) rotate(1deg); } }
+.app-still .app-wearing__tap--hop { animation: none; }
 .app-wearing__text { display: grid; gap: 2px; }
 .app-wearing__label { font-size: 0.85rem; font-weight: 800; color: #5f4a41; }
 .app-wearing__name { font-size: 1.2rem; font-weight: 900; }
@@ -366,7 +373,8 @@
   position: relative; flex: 1; min-height: 180px; overflow: hidden; border: 3px solid var(--ink); border-radius: 20px;
   background: #3a3f37; box-shadow: 0 5px 0 var(--ink);
 }
-.app-studio__room, .app-studio__her { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.app-studio__room, .app-studio__fx, .app-studio__her { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.app-studio__fx { pointer-events: none; } /* the twinkling sparkles and the drip, over the still room (B33d, B97(2)) */
 .app-studio__notes {
   flex: none; max-height: 34%; overflow-y: auto; padding: 10px 14px; border: 3px solid var(--ink); border-radius: 16px;
   background: var(--cream); box-shadow: 0 4px 0 var(--ink);
@@ -597,6 +605,14 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
   border: 2px solid var(--ink); background: radial-gradient(circle at 35% 30%, #fff4b8, #ffd23f 60%, #e9a812); box-shadow: 0 2px 0 rgba(42, 33, 29, 0.35);
 }
 .app-albumtile__stamp svg { width: 18px; height: 18px; }
+/* B57: on the gold stamped tile the yellow stars looked hollow (same yellow as the tile): a deeper orange body and a
+   warm inner glow make the filled ones read as filled; the empty ones stay pale grey with their dark outline. */
+.app-albumtile--stamp .app-album__stars svg polygon:first-of-type[fill="#ffd23f"],
+.app-albumtile__stamp svg polygon:first-of-type, .app-albumdetail__stamp svg polygon:first-of-type,
+.app-skillnews--up svg polygon:first-of-type, .app-result__stamp svg polygon:first-of-type { fill: #f59a14; }
+.app-albumtile--stamp .app-album__stars svg polygon:nth-of-type(2),
+.app-albumtile__stamp svg polygon:nth-of-type(2), .app-albumdetail__stamp svg polygon:nth-of-type(2),
+.app-skillnews--up svg polygon:nth-of-type(2), .app-result__stamp svg polygon:nth-of-type(2) { fill: #ffc94a; }
 .app-albumdetail__stamp { display: flex; align-items: center; gap: 6px; padding: 2px 12px 2px 6px; border-radius: 999px; border: 2px solid var(--ink); background: #ffd23f; font-weight: 900; }
 .app-albumdetail__stamp svg { width: 22px; height: 22px; }
 .app-albumdetail__card > .app-btn { width: 100%; }
@@ -645,7 +661,7 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
   .app-screen--shop .app-shoplist { max-width: none; margin: 0; display: flex; flex-direction: column; flex: 1; padding: 8px max(12px, env(safe-area-inset-right)) max(36px, calc(env(safe-area-inset-bottom) + 24px)) 4px; gap: 8px; }
   .app-screen--shop .app-item { flex: none; padding-block: 5px; }
   .app-screen--shop .app-item__side { grid-auto-flow: column; align-items: center; justify-items: end; gap: 8px; }
-  .app-wearing__pic { width: 46px; height: 94px; }
+  .app-wearing__pic { height: min(36vh, 150px); }
   .app-wearing { padding-block: 4px; }
   .app-title__tap { flex-direction: row; gap: 32px; }
   .app-title__start { margin-top: 6px; }
@@ -664,10 +680,12 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
   .app-intro { flex-direction: row; align-items: center; align-items: safe center; gap: 24px; } /* safe: a tall column scrolls, never cut at the top (T8.3) */
   .app-intro__who, .app-intro__what { flex: 1; justify-content: center; }
   .app-intro__portrait { width: min(30vh, 140px); }
-  /* A boss or event pill (T8.4) is a line taller than a twist: its tip waits for the pop scene's hint line here. */
+  /* A boss or event pill (T8.4) is a line taller than a twist: smaller text here so its tip fits (B59). */
   .app-intro__what:has(.app-twist--boss) { gap: 8px; }
   .app-twist--boss { padding: 6px 12px; }
-  .app-twist--boss .app-twist__tip { display: none; }
+  .app-twist--boss .app-twist__tip { font-size: 0.78rem; line-height: 1.15; } /* B59: the tip stays, in small text */
+  .app-intro__what:has(.app-twist--boss) .app-bubble { padding: 8px 12px; }
+  .app-intro__what:has(.app-twist--boss) .app-bubble__text { font-size: 1rem; }
   .app-result { flex-direction: row; align-items: center; gap: 24px; }
   .app-result__left, .app-result__right { display: flex; flex-direction: column; flex: 1; justify-content: center; gap: 10px; min-width: 0; }
   .app-result__title { font-size: 1.6rem; }

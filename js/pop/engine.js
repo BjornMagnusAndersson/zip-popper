@@ -28,7 +28,7 @@ import { bumpInfo, isImplemented } from '../data/bumps.js';
 import {
   START_TOOL, pressOutcome, bestToolFor, effectiveHold, warmStep, heatStep, underCloth, inStripArea, onFace, findPatchSpot,
   roughChance, coldPopIrritation, irritationStart, irritationRise, irritationStep, irritationSoothe,
-  wipeReach, autoWipeSeconds, padStartSpot, popStepOver, stripBusy, wipeStripPress,
+  wipeReach, autoWipeSeconds, padStartSpot, popStepOver, stripBusy, wipeStripPress, noGooWait, wipeKeyAction, peelStalled,
 } from './tool-logic.js';
 import { toolInfo, IRRITATION } from '../data/tools.js';
 import { slowStep } from './perf-logic.js';
@@ -42,7 +42,7 @@ import {
   gooLook, capList,
 } from './art.js';
 import { SWAY, TICKLE, SENSITIVE } from '../data/twists.js';
-import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset, ticklishZone } from './twist-logic.js';
+import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset, ticklishZone, swayView } from './twist-logic.js';
 
 const GRID = 8; // mesh cells across the squeezed area
 const WIPE_CELL = 10; // px; goo coverage is counted in cells this size
@@ -134,6 +134,7 @@ function affine(s, d) {
  *   onView?: (view: {z: number, x: number, y: number}) => void (the zoom view changed, T1.4),
  *   irritation?: {rise: number, drain: number} (how touchy the customer is, T3.1b; 1 and 1 = normal),
  *   squeeze?: boolean (two fingers round a bump squeeze it, T1.7; off = two fingers always zoom),
+ *   zoom?: boolean (false = no zooming at all, only the whole face: the torchlight dark, B28),
  *   twist?: string|null (the customer's twist, T8.3: 'fidgety', 'ticklish' or 'sensitive'; anything else = none),
  *   onGiggle?: (at: {x: number, y: number}) => void (the ticklish customer giggled at this bump, scene px),
  *   refuse?: (p: object) => void (the husband in armor, ch 2: the first pop is NOT done, popping stops and this is told which bump),
@@ -142,14 +143,14 @@ function affine(s, d) {
  *   start, face = the skin oval (the warm cloth goes on there), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warmest bump's warmth changed, onPatch = a patch went on, onNote = a press did nothing
  *   useful ('patchFirst' = a patch on a bump that is not popped yet)
- * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), size(), keyPress(),
+ * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), setRatio(r, tex), size(), keyPress(),
  *   setTool(id), tool(), setTools(ids), warmth(), irritation(), halt(), setPaused(on), paused(), dispose(). A bump may carry hold (seconds) and
  *   roughMul (part of the rough-press chance left after mastery, round-logic.js applyMastery).
  */
 export function createPopScene(canvas, o) {
   let w = o.width; // changed only by resize()
   let h = o.height;
-  const dpr = o.dpr ?? Math.min(2, globalThis.devicePixelRatio || 1);
+  let dpr = o.dpr ?? Math.min(2, globalThis.devicePixelRatio || 1); // changed only by setRatio() (lighter graphics, B99(2))
   const reduced = Boolean(o.reduced);
   /** Size factor for goo, pad and tools at a scene size. @param {number} sw width @param {number} sh height @returns {number} factor */
   const sizeFactor = (sw, sh) => Math.max(0.6, Math.min(1.6, Math.min(sw, sh) / 260));
@@ -397,12 +398,12 @@ export function createPopScene(canvas, o) {
 
   /**
    * The view as it is drawn and touched: the zoom view moved by the twist offset (the fidgety sway and a ticklish
-   * jerk, T8.3; screen px, so the face moves the same few px at any zoom). Without a twist it is the zoom view itself.
+   * jerk, T8.3; screen px, so the face moves the same few px at any zoom). Zoomed in, it keeps inside the zoom's own
+   * pan limits (twist-logic.js swayView, B52(4)). Without a twist it is the zoom view itself.
    * @returns {{z: number, x: number, y: number}} the view
    */
   function shown() {
-    if (!off.x && !off.y) return view;
-    return { z: view.z, x: view.x - off.x / view.z, y: view.y - off.y / view.z };
+    return swayView(view, off, w, h, face);
   }
 
   /** The drawing transform for the view: scene px to device px. @returns {number[]} [a, b, c, d, e, f] for setTransform */
@@ -419,6 +420,7 @@ export function createPopScene(canvas, o) {
    */
   function setView(next) {
     if (next.z === view.z && next.x === view.x && next.y === view.y) return;
+    if (o.zoom === false && next.z > 1 + 1e-6) return; // zoom switched off (the torchlight dark, B28): the whole face only
     view = next;
     try { o.onView?.({ ...view }); } catch { /* the page's own problem */ }
     kick();
@@ -740,7 +742,7 @@ export function createPopScene(canvas, o) {
     if (!popStepOver(pimples, strip, Boolean(peel))) return;
     // Wait until the goo has landed (and a peel in progress is done), then start the wipe.
     const start = () => {
-      if (disposed || step !== 'pop') return;
+      if (disposed || step !== 'pop' || halted) return; // halted (a special mode's scripted end, B28): no wipe step
       if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || !popStepOver(pimples, strip, Boolean(peel))) { setTimeout(start, 120); return; }
       beginWipe();
     };
@@ -758,9 +760,15 @@ export function createPopScene(canvas, o) {
     kick();
   }
 
-  /** Put all the goo on its own layer so the pad can wipe it off; count how much there is. @returns {void} */
+  /**
+   * Put all the goo on its own layer so the pad can wipe it off; count how much there is. No goo at all: straight to
+   * the cream, unless the nose strip is still on the face (B61(1)): then a wipe with nothing to wipe waits a few
+   * seconds (tool-logic.js noGooWait) so she can still stick and peel it, as on other faces.
+   * @returns {void}
+   */
   function beginWipe() {
-    if (!strands.length && !blobs.length) { beginCream(); return; }
+    const wait = noGooWait(strip);
+    if (!strands.length && !blobs.length && !wait) { beginCream(); return; }
     const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
     for (const s of strands) drawStrand(dc, s);
     for (const b of blobs) drawDrop(dc, b);
@@ -786,8 +794,10 @@ export function createPopScene(canvas, o) {
     try { covered = o.covered?.() ?? []; } catch (e) { console.warn('covered failed:', e); }
     // ...but never behind the tool bar or other buttons (B13 round 2c); the boxes are screen px, so it is found in screen px (B43a).
     const pad = padStartSpot(shown(), w, h, 26 * scale * wipeReach(tool), corner, covered);
-    // No goo cell on the scene at all (it all flew off): nothing to wipe, the wipe fades out by itself (B71).
-    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: count === 0 ? 0.0001 : 0 };
+    // No goo cell on the scene at all (it all flew off): nothing to wipe, the wipe fades out by itself (B71), after
+    // the strip's wait when it is still on (B61(1), see update).
+    const empty = count === 0;
+    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: empty && !wait ? 0.0001 : 0, wait: empty ? wait : 0 };
     setStep('wipe');
   }
 
@@ -876,22 +886,52 @@ export function createPopScene(canvas, o) {
     if (cream) for (const d of cream.dollops) mv(d);
     measureRoom(); // the sway's room on the new size (T8.3)
     if (wipe) {
-      // Redraw the goo layer at the new size and count again what is left; keep the share already wiped.
-      const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
-      dc.save();
-      dc.translate(tx, ty);
-      dc.scale(s, s);
-      dc.drawImage(wipe.dirt, 0, 0, oldW, oldH);
-      dc.restore();
-      const done = Math.min(0.99, wipe.clean / wipe.dirty);
-      const found = scanGoo(dirt, dc) ?? { cells: new Uint8Array(Math.ceil(w / WIPE_CELL) * Math.ceil(h / WIPE_CELL)), cols: Math.ceil(w / WIPE_CELL), rows: Math.ceil(h / WIPE_CELL), count: 0 };
-      const dirty = Math.max(1, Math.round(found.count / (1 - done)));
-      Object.assign(wipe, { dirt, dc, cells: found.cells, cols: found.cols, rows: found.rows, dirty, clean: dirty - found.count, last: null });
+      redrawGoo(oldW, oldH, m);
       mv(wipe.pad, []);
-      if (found.count === 0 && !wipe.fade) wipe.fade = 0.0001;
     }
     render();
     kick();
+  }
+
+  /**
+   * Redraw the wipe's goo layer at the scene size and pixel ratio now (moved by m from the old size) and count again
+   * what is left; the share already wiped is kept. Used by resize() and setRatio().
+   * @param {number} oldW the old scene width @param {number} oldH the old scene height
+   * @param {{s: number, tx: number, ty: number}} m the move (see resize)
+   * @returns {void}
+   */
+  function redrawGoo(oldW, oldH, m) {
+    const { s, tx, ty } = m;
+    const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
+    dc.save();
+    dc.translate(tx, ty);
+    dc.scale(s, s);
+    dc.drawImage(wipe.dirt, 0, 0, oldW, oldH);
+    dc.restore();
+    const done = Math.min(0.99, wipe.clean / wipe.dirty);
+    const found = scanGoo(dirt, dc) ?? { cells: new Uint8Array(Math.ceil(w / WIPE_CELL) * Math.ceil(h / WIPE_CELL)), cols: Math.ceil(w / WIPE_CELL), rows: Math.ceil(h / WIPE_CELL), count: 0 };
+    const dirty = Math.max(1, Math.round(found.count / (1 - done)));
+    Object.assign(wipe, { dirt, dc, cells: found.cells, cols: found.cols, rows: found.rows, dirty, clean: dirty - found.count, last: null });
+    if (found.count === 0 && !wipe.fade && !wipe.wait) wipe.fade = 0.0001; // a no-goo wipe still waits for the strip (B61(1))
+  }
+
+  /**
+   * Draw the scene at another pixel ratio from now on (lighter graphics switched on by itself in the middle of a face,
+   * B99(2): before, only the next face got them). The canvas, the face picture (painted again by the caller at the
+   * new ratio) and a wipe's goo layer change; nothing else does, so a squeeze, pinch or peel going on carries on.
+   * @param {number} ratio the new pixel ratio (1 = lighter graphics)
+   * @param {HTMLCanvasElement} [tex] the face picture at that ratio
+   * @returns {void}
+   */
+  function setRatio(ratio, tex) {
+    if (!(ratio > 0) || ratio === dpr || disposed) return;
+    dpr = ratio;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    if (tex) texture = tex;
+    if (wipe) redrawGoo(w, h, { s: 1, tx: 0, ty: 0 });
+    kick();
+    if (!raf) render();
   }
 
   /**
@@ -1105,6 +1145,11 @@ export function createPopScene(canvas, o) {
     if (hold || peel || squeeze || memory) busy = true;
     if (pimples.some((p) => time - (p.ringTo ?? -9) < 0.3)) busy = true; // a squeeze ring fading out
     if (wipe) {
+      if (wipe.wait && !wipe.fade && !wipe.auto) { // no goo to wipe: wait a moment for the nose strip (B61(1))
+        busy = true;
+        wipe.wait = Math.max(0, wipe.wait - dt);
+        if (!wipe.wait || !strip || strip.off) { wipe.wait = 0; wipe.fade = 0.0001; }
+      }
       if (wipe.auto) {
         busy = true;
         wipe.auto.t += dt;
@@ -1119,6 +1164,8 @@ export function createPopScene(canvas, o) {
       if (wipe.fade) {
         busy = true;
         wipe.fade = Math.min(1, wipe.fade + dt * 3);
+        // A finger kept still on the strip lets go after a moment, so it never keeps the cream waiting (B61(4)).
+        if (wipe.fade >= 1 && peel && peelStalled(time - (peel.at ?? time))) peel = null;
         if (wipe.fade >= 1 && !stripBusy(strip, Boolean(peel))) beginCream(); // a peel going on finishes first (B55)
       }
     }
@@ -1439,7 +1486,7 @@ export function createPopScene(canvas, o) {
   function pressPop(e, pt) {
     const use = toolInfo(tool)?.use;
     const onStrip = strip && !strip.off && !strip.flying && inStripArea(strip, pt.x, pt.y);
-    if (onStrip && strip.stuck) { peel = { id: e.pointerId, x0: pt.x, q0: strip.q }; return true; } // any tool peels
+    if (onStrip && strip.stuck) { peel = { id: e.pointerId, x0: pt.x, q0: strip.q, at: time }; return true; } // any tool peels
     if (use === 'warm') {
       if (!onFace(face, pt.x, pt.y)) return false;
       warmHold = { id: e.pointerId, x: pt.x, y: pt.y };
@@ -1491,7 +1538,7 @@ export function createPopScene(canvas, o) {
     if (step === 'pop') {
       if (!pressPop(e, pt)) return false;
     } else if (stripDo === 'peel') {
-      peel = { id: e.pointerId, x0: pt.x, q0: strip.q };
+      peel = { id: e.pointerId, x0: pt.x, q0: strip.q, at: time }; // at = when it last moved the strip (B61(4))
     } else if (stripDo === 'stick') {
       strip.stuck = true;
       play('peel');
@@ -1898,7 +1945,9 @@ export function createPopScene(canvas, o) {
       kick();
     } else if (peel && e.pointerId === peel.id) {
       const pt = local(e);
-      strip.q = Math.max(strip.q, Math.min(1, peel.q0 + (pt.x - peel.x0) / strip.w));
+      const q = Math.max(strip.q, Math.min(1, peel.q0 + (pt.x - peel.x0) / strip.w));
+      if (q > strip.q) peel.at = time; // still peeling: the cream keeps waiting for it (B61(4))
+      strip.q = q;
       if (Math.floor(strip.q * 5) !== Math.floor((strip.q - 0.02) * 5)) buzz(4);
       kick();
     } else if (wipe && wipe.id === e.pointerId) {
@@ -1944,7 +1993,11 @@ export function createPopScene(canvas, o) {
         return true;
       }
     }
-    if (step === 'wipe') { autoWipe(); return true; }
+    if (step === 'wipe') { // a stuck-on strip is peeled first, as in the pop step (B61(2)); then the keys wipe
+      if (wipeKeyAction(strip) === 'peel') { strip.q = Math.min(1, strip.q + 0.34); kick(); return true; }
+      autoWipe();
+      return true;
+    }
     return false;
   }
 
@@ -1998,6 +2051,7 @@ export function createPopScene(canvas, o) {
      */
     setTexture(tex) { texture = tex; kick(); if (!raf) render(); },
     resize,
+    setRatio,
     /** The scene size now. @returns {{w: number, h: number}} CSS px */
     size: () => ({ w, h }),
     keyPress,
@@ -2030,6 +2084,18 @@ export function createPopScene(canvas, o) {
     irritation: () => irr.level,
     /** Stop all popping (the customer stormed off): let go of every press, ignore new ones. @returns {void} */
     halt() { haltAll(); },
+    /** Let presses work again after halt() (the torchlight stir is only a pause, B28). @returns {void} */
+    resume() { if (!disposed) { halted = false; kick(); } },
+    /** Take every bit of goo off the face and the lens at once, no wipe (the torchlight catch, B28). @returns {void} */
+    clearGoo() {
+      strands.length = 0;
+      drops.length = 0;
+      blobs.length = 0;
+      splats.length = 0;
+      wipe = null;
+      kick();
+      if (!raf) render();
+    },
     /**
      * Freeze the scene (the Field guide is open over it, B48) or let it go on. Frozen = the drawing loop stops, so the
      * scene's time, the irritation meter, the Evil Horn growth, the warm cloth, the twists (sway, giggle) and the blinks

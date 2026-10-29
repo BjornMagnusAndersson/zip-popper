@@ -53,6 +53,18 @@ function pinJarPicture(count, still) {
 }
 
 /**
+ * The kinds' names as one phrase: "whiteheads", "whiteheads and red bumps", "whiteheads, red bumps and blackheads".
+ * @param {string[]} keys the string keys of the kinds' names
+ * @param {(key: string, vars?: object) => string} t string function
+ * @returns {string} the phrase ('' for none)
+ */
+function kindList(keys, t) {
+  const names = keys.map((k) => t(k));
+  if (names.length < 2) return names.join('');
+  return t('ui.skill.kindList', { list: names.slice(0, -1).join(', '), last: names[names.length - 1] });
+}
+
+/**
  * Build the result screen.
  * @param {{t: (key: string, vars?: object) => string, stars?: number, failed?: boolean,
  *   payout?: {popCoins?: number, tip?: number, combo?: number, requestBonus?: number, total?: number},
@@ -126,7 +138,9 @@ export function createResultScreen({
     if (reactionKey) main.append(el('p', 'app-result__quote', t(reactionKey, { name: playerName })));
     for (const line of skills) { // D34: "Level up! Whitehead: level 3" or "Red bump: 4 more clean pops to level 2"
       const news = el('div', `app-skillnews${line.up ? ' app-skillnews--up' : ''}`);
-      const words = el('p', 'app-skillnews__text', t(line.key, { ...line.vars, kind: t(line.kindKey), levelName: t(line.levelKey) }));
+      const words = el('p', 'app-skillnews__text', t(line.key, {
+        ...line.vars, kind: t(line.kindKey), levelName: t(line.levelKey), kinds: kindList(line.kindKeys ?? [], t),
+      }));
       news.append(line.up ? starIcon(true, 24) : icon('bulb'), words);
       if (!line.up && typeof line.share === 'number') {
         const bar = el('span', 'app-skillcard__bar app-skillnews__bar');

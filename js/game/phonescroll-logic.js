@@ -268,3 +268,24 @@ export function moveFocus(at, count, key) {
   if (key === 'ArrowLeft' || key === 'ArrowUp') return at < 0 ? count - 1 : (at - 1 + count) % count;
   return null;
 }
+
+/**
+ * Which tiny bump a tap on the face means (B86): on a small phone the 44 px tap areas of close bumps overlap, so the
+ * tap goes to the nearest bump centre that is not popped yet and is within reach (not just the top button).
+ * @param {{x: number, y: number}[]} bumps the bumps of the card (centres, 0..1 of the face)
+ * @param {number[]} popped the bumps already popped (indexes)
+ * @param {number} x the tap, 0..1 across the face
+ * @param {number} y the tap, 0..1 down the face
+ * @param {number} reach how far a tap may be from a centre (0..1 of the face width; half the tap area)
+ * @returns {number} the bump index, or -1 when no open bump is within reach
+ */
+export function nearestBump(bumps, popped, x, y, reach) {
+  let best = -1;
+  let bestD = Infinity;
+  bumps.forEach((b, i) => {
+    if (popped.includes(i)) return;
+    const d = Math.hypot(b.x - x, b.y - y);
+    if (d <= reach && d < bestD) { best = i; bestD = d; }
+  });
+  return best;
+}
