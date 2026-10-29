@@ -6,8 +6,9 @@ import { gooOf, throb, outDir, drawDome, drawCrater, drawGooBall, gooShadow, dra
 /**
  * H: bubble and ooze, softer and less cartoon than D. While held the head swells in throbs, the skin over it opens
  * like a little mouth, the goo wells up in it as a glossy dome, overflows the rim and runs a little way down the
- * cheek. At full pressure a final release: the dome of goo surges and lets go, a few thick drops are flung and land
- * with weight, the run slides on a bit further, and the bump sinks into a soft pink crater that heals back to smooth
+ * cheek. At full pressure a final release: the dome of goo bulges and bursts, a squirt of goo shoots out sideways in
+ * a line, a splash of thick drops goes all round and lands with weight, a soft pale ring and a jolt of the view, the
+ * run slides on a bit further, and the bump sinks into a soft pink crater that heals back to smooth
  * skin about two seconds later.
  * @returns {object} the variant
  */
@@ -106,8 +107,15 @@ function makeH() {
       }
       stepFlyers(flying, landed, sdt);
     },
-    /** Lean in on the bump. @returns {object|null} camera */
-    cam: () => leanIn(popAt, big ? 0.22 : 0.3),
+    /** Lean in on the bump, with a short springy jolt at the release. @returns {object|null} camera */
+    cam() {
+      const base = leanIn(popAt, big ? 0.22 : 0.3);
+      if (CALM || popAt < 0) return base;
+      const t = T - popAt;
+      const kick = (big ? 0.07 : 0.05) * Math.exp(-t * 9) * Math.cos(t * 34);
+      const z = (base?.sx ?? 1) * (1 + kick);
+      return Math.abs(z - 1) < 0.001 ? null : { ax: bp.x, ay: bp.y, sx: z, sy: z };
+    },
     /** The bump with its mouth, the welling goo and the run; after the release the crater, the run and the goo left. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */
     afterBump(c, p) {
       if (!bp.popped) {
@@ -136,7 +144,7 @@ function makeH() {
         c.restore();
       }
       // The goo in the mouth: one last surge as it lets go, then it drains down the run to a small dollop in the crater.
-      const surge = CALM ? 0 : 0.5 * Math.sin(Math.PI * Math.min(1, t / 0.14));
+      const surge = CALM ? 0.3 * Math.sin(Math.PI * Math.min(1, t / 0.2)) : 1.6 * Math.sin(Math.PI * Math.min(1, t / 0.12)); // a big bulge as it lets go
       const drain = smooth(t / 0.6);
       const m0 = Math.max(pop0.m, pop0.hr * 0.5);
       const m = m0 * (1 + 0.3 * surge) * (1 - 0.55 * drain);
@@ -147,26 +155,53 @@ function makeH() {
     mid(c) {
       for (const s of landed) drawLanded(c, s, g);
     },
-    /** The final release: a few thick drops flung out (mostly the way the goo runs), a soft pop, a plop and a buzz. @returns {void} */
+    /**
+     * The final release: the goo bulges and bursts, a squirt of goo shoots out in a line (out and a little up, away
+     * from the run), a splash of thick drops goes all round, a soft pale ring, a pop, a plop, a squelch and a buzz.
+     * @returns {void}
+     */
     pop() {
       const d = domeNow();
       pop0 = { s: d.s, hr: d.hr, m: wellR(d), run: runLen() }; // runLen() before popAt is set: the run so far
       popAt = T;
-      const n = CALM ? 3 : big ? 4 : 3; // only a few, well apart: the release is mostly the swell down the run
+      const k = big ? 1.2 : 1;
+      /** Where a drop leaves the mouth going way a. @param {number} a angle @param {number} rr how far out (of the goo's radius) @returns {{x: number, y: number}} point */
+      const at = (a, rr) => ({ x: bp.x + Math.cos(a) * pop0.m * rr, y: bp.y - d.hr * 0.1 + Math.sin(a) * pop0.m * rr });
+      // The squirt: drops leaving the same way at rising speeds, so they string out into a line of goo in the air.
+      const sq = Math.cos(dir) > 0 ? Math.PI - 0.1 : 0.1; // sideways, the other way from the run, a touch downwards (it arcs up a little, below the eyes)
+      const ns = CALM ? 3 : big ? 7 : 5;
+      for (let i = 0; i < ns; i += 1) {
+        const v = (240 + i * (CALM ? 50 : 75)) * sc * k;
+        flying.push({ ...at(sq, 0.6), z: 4, vx: Math.cos(sq) * v, vy: Math.sin(sq) * v, vz: 75 + i * 6, r: (5.2 - i * 0.45) * sc * k });
+      }
+      // The splash: thick drops all round, flatter upwards so they keep clear of the eyes, more of them down the run's way.
+      const n = CALM ? 6 : big ? 16 : 12;
       for (let i = 0; i < n; i += 1) {
-        const a = dir - 0.9 + (2.1 * i) / (n - 1) + (rand() - 0.5) * 0.3; // out and down, away from the eyes
-        const v = (220 + rand() * 140) * sc * (big ? 1.1 : 1);
-        const r = (3 + rand() * 1.3) * sc * (big ? 1.25 : 1);
-        flying.push({ x: bp.x + Math.cos(a) * pop0.m * 0.8, y: bp.y - d.hr * 0.1 + Math.sin(a) * pop0.m * 0.8, z: 3, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 70 + rand() * 60, r });
+        const a0 = i % 3 === 0 ? dir + (rand() - 0.5) * 1.4 : (i / n) * Math.PI * 2 + rand() * 0.4;
+        const a = Math.sin(a0) < 0 ? Math.atan2(Math.sin(a0) * 0.5, Math.cos(a0)) : a0;
+        const v = (200 + rand() * 260) * sc * k;
+        const r = (i % 4 === 0 ? 4.4 + rand() * 1.4 : 2.4 + rand() * 1.6) * sc * k;
+        flying.push({ ...at(a, 0.8), z: 3, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 60 + rand() * 70, r });
       }
       play(big ? 'pop_big' : 'pop_small');
       tone(big ? 300 : 420, big ? 90 : 130, 0, 0.16, 0.2);
-      hiss(0, 0.12, { type: 'lowpass', f0: 900, f1: 280, vol: 0.09 });
-      later(0.1, 'squelch');
-      buzz(big ? [40, 30, 60] : 35);
+      hiss(0, big ? 0.4 : 0.3, { type: 'bandpass', f0: 1500, f1: 400, q: 0.7, vol: 0.1, attack: 0.02 });
+      later(0.08, 'squelch');
+      buzz(big ? [55, 30, 90] : [35, 20, 50]);
     },
-    /** The flung drops in the air, over everything. @param {CanvasRenderingContext2D} c context @returns {void} */
+    /** The soft pale ring at the release and the flung drops in the air, over everything. @param {CanvasRenderingContext2D} c context @returns {void} */
     over(c) {
+      if (popAt >= 0) {
+        const u = (T - popAt) / 0.4;
+        if (u >= 0 && u <= 1) {
+          c.save();
+          c.globalAlpha = (1 - u * u) * 0.5;
+          c.strokeStyle = '#fffdf2';
+          c.lineWidth = Math.max(1.5, 7 * sc * (1 - u));
+          c.beginPath(); c.arc(bp.x, bp.y, bp.r * (1.2 + (big ? 4 : 3.4) * (1 - (1 - u) ** 3)), 0, Math.PI * 2); c.stroke();
+          c.restore();
+        }
+      }
       for (const d of flying) drawFlyer(c, d, g);
     },
   };

@@ -15,7 +15,8 @@ const PEARL_HUES = ['#ffb0da', '#ffd9a6', '#b3f0cb', '#a9d6ff', '#cbb5ff', '#ffb
 const PEARL = { body: '#fbf3ff', shade: '#dac6f2', edge: '#7e64a3', hi: '#ffffff' };
 
 /**
- * The pearly rainbow sheen and the little glints on the bump while it is held (and a softer version at rest).
+ * The unicorn look on a plain pink zit: a pearly head with a faint mother-of-pearl shimmer and glitter specks inside,
+ * a soft lilac glow and little glints round it (all brighter while it is squeezed).
  * @param {CanvasRenderingContext2D} c context
  * @param {object} p the bump (held position)
  * @param {number} amt how swollen it is drawn
@@ -26,36 +27,47 @@ function drawSheen(c, p, amt, glints) {
   const s = p.r * (1 + 0.45 * amt);
   const k = 0.35 + 0.65 * bp.pressure; // sparkly already at rest, more so when squeezed
   c.save();
-  const halo = c.createRadialGradient(p.x, p.y, s * 0.8, p.x, p.y, s * 2.2); // a soft pearly glow round it
-  halo.addColorStop(0, `rgba(236,220,255,${0.45 * k})`);
+  const halo = c.createRadialGradient(p.x, p.y, s * 0.6, p.x, p.y, s * 2); // a faint lilac magic glow round the zit
+  halo.addColorStop(0, `rgba(236,220,255,${0.3 * k})`);
   halo.addColorStop(1, 'rgba(236,220,255,0)');
   c.fillStyle = halo;
-  c.beginPath(); c.arc(p.x, p.y, s * 2.2, 0, Math.PI * 2); c.fill();
-  c.beginPath(); c.arc(p.x, p.y, s * 0.98, 0, Math.PI * 2); c.clip();
-  const ang = CALM ? -0.7 : realT * 0.9; // the rainbow slowly turns round
-  const gx = Math.cos(ang) * s;
-  const gy = Math.sin(ang) * s;
-  const rb = c.createLinearGradient(p.x - gx, p.y - gy, p.x + gx, p.y + gy);
+  c.beginPath(); c.arc(p.x, p.y, s * 2, 0, Math.PI * 2); c.fill();
+  // The head: the game's creamy head is painted over as a pearly one (the pink dome round it stays a plain zit).
+  const hr = (p.type === 'big' ? s * (0.42 + 0.2 * amt) : s * (0.55 + 0.15 * amt)) * 1.02;
+  const hx = p.x;
+  const hy = p.y - s * 0.05;
+  const pearl = c.createRadialGradient(hx - hr * 0.3, hy - hr * 0.35, 0, hx, hy, hr);
+  pearl.addColorStop(0, '#ffffff');
+  pearl.addColorStop(0.55, '#f6eefc');
+  pearl.addColorStop(1, '#d9c8ee');
+  c.fillStyle = pearl;
+  c.beginPath(); c.arc(hx, hy, hr, 0, Math.PI * 2); c.fill();
+  c.clip();
+  const ang = CALM ? -0.7 : realT * 0.9; // a faint mother-of-pearl shimmer that slowly turns, only inside the head
+  const rb = c.createLinearGradient(hx - Math.cos(ang) * hr, hy - Math.sin(ang) * hr, hx + Math.cos(ang) * hr, hy + Math.sin(ang) * hr);
   PEARL_HUES.forEach((h, i) => rb.addColorStop(i / (PEARL_HUES.length - 1), h));
-  c.globalAlpha = 0.38 + 0.37 * k;
+  c.globalAlpha = 0.22 + 0.18 * k;
   c.fillStyle = rb;
-  c.fillRect(p.x - s, p.y - s, s * 2, s * 2);
-  if (!CALM) { // a pearly shine band that sweeps across now and then
-    const u = (realT * 0.55) % 1.6;
-    const bx = p.x - s * 1.6 + u * s * 2.4;
-    const band = c.createLinearGradient(bx - s * 0.4, p.y - s * 0.4, bx + s * 0.4, p.y + s * 0.4);
-    band.addColorStop(0, 'rgba(255,255,255,0)');
-    band.addColorStop(0.5, 'rgba(255,255,255,0.75)');
-    band.addColorStop(1, 'rgba(255,255,255,0)');
-    c.globalAlpha = 0.6 + 0.4 * k;
-    c.fillStyle = band;
-    c.fillRect(p.x - s, p.y - s, s * 2, s * 2);
+  c.fillRect(hx - hr, hy - hr, hr * 2, hr * 2);
+  c.globalAlpha = 1;
+  for (let i = 0; i < 7; i += 1) { // glitter specks inside the head, twinkling
+    const a = i * 2.39 + 0.4;
+    const d = hr * (0.25 + 0.5 * ((i * 0.37) % 1));
+    const tw = CALM ? 0.7 : 0.4 + 0.6 * Math.max(0, Math.sin(realT * (3 + i * 0.7) + i)) ** 2;
+    c.fillStyle = SAND[(i * 5) % SAND.length];
+    c.globalAlpha = tw;
+    const z = Math.max(0.8, hr * 0.07) * (0.7 + 0.5 * tw);
+    c.save();
+    c.translate(hx + Math.cos(a) * d, hy + Math.sin(a) * d);
+    c.rotate(Math.PI / 4);
+    c.fillRect(-z, -z, z * 2, z * 2);
+    c.restore();
   }
+  c.globalAlpha = 0.85; // the head's own shine
+  c.fillStyle = '#ffffff';
+  c.beginPath(); c.ellipse(hx - hr * 0.35, hy - hr * 0.4, hr * 0.3, hr * 0.15, -0.6, 0, Math.PI * 2); c.fill();
   c.restore();
   c.save();
-  c.lineWidth = Math.max(1.2, s * 0.1); // a pearly rim
-  c.strokeStyle = `rgba(250,240,255,${0.55 + 0.3 * k})`;
-  c.beginPath(); c.arc(p.x, p.y, s * 0.98, 0, Math.PI * 2); c.stroke();
   for (const g of glints) { // tiny glints that come and go at their own speeds
     const tw = CALM ? 0.7 : Math.max(0, Math.sin(realT * g.w + g.ph)) ** 3;
     if (tw < 0.05) continue;
@@ -236,15 +248,16 @@ function makeI() {
       const np = big ? 8 : 7;
       puff = { ps, parts: Array.from({ length: np }, (_, i) => ({ a: (i / np) * Math.PI * 2 + rand() * 0.5, d: bp.r * ps * (0.7 + rand() * 0.45), r: bp.r * ps * (0.38 + rand() * 0.25) })) };
       const calmK = CALM ? 0.6 : 1;
-      const nSand = Math.round((big ? 300 : 210) * calmK);
-      for (let i = 0; i < nSand; i += 1) { // the gem sand: thrown up and out, it pours down and dusts the cheek below
-        const a = -Math.PI / 2 + (rand() - 0.5) * Math.PI * 1.15;
-        const v = (CALM ? 60 + rand() * 130 : 80 + rand() * 230) * sc * (big ? 1.1 : 1);
+      const nSand = Math.round((big ? 340 : 240) * calmK);
+      for (let i = 0; i < nSand; i += 1) { // the gem sand: flung up and out all round, it pours down and dusts the face
+        const a = i % 3 ? -Math.PI / 2 + (rand() - 0.5) * Math.PI * 1.4 : rand() * Math.PI * 2;
+        const v = (CALM ? 80 + rand() * 170 : 120 + rand() * 360) * sc * (big ? 1.1 : 1);
         bits.push({
           kind: 'sand', col: SAND[i % SAND.length], x: bp.x + (rand() - 0.5) * bp.r * 0.8, y: bp.y + (rand() - 0.5) * bp.r * 0.5,
           vx: Math.cos(a) * v, vy: Math.sin(a) * v, age: -rand() * (CALM ? 0.25 : 0.12), life: 3 + rand() * 1.2,
           size: (0.55 + rand() * 0.75) * Math.sqrt(sc) * (big ? 1.1 : 1), rot: rand() * Math.PI, spin: CALM ? 0 : (rand() - 0.5) * 8,
-          fall: 320 + rand() * 140, floor: bp.y + bp.r * (0.5 + rand() * 2.8), tf: 4 + rand() * 6, ph: rand() * 6, star: i % 4 === 0, settled: false,
+          fall: 320 + rand() * 140, floor: bp.y + bp.r * (0.3 + rand() * 4.5), tf: 4 + rand() * 6, ph: rand() * 6, star: i % 4 === 0, settled: false,
+          stays: i % 3 === 0, // a third of what lands stays on the skin as a fine twinkly dusting
         });
       }
       const nGlit = Math.round((big ? 60 : 40) * calmK);
@@ -285,7 +298,7 @@ function makeI() {
           q.y += q.vy * sdt;
           q.rot += q.spin * sdt;
           if (q.vy > 0 && q.y >= q.floor) {
-            if (onFace(q.x, q.y)) { q.y = q.floor; q.settled = true; } else { q.floor = Infinity; q.life = Math.min(q.life, q.age + 0.35); } // off the face it falls on and fades fast
+            if (onFace(q.x, q.y)) { q.y = q.floor; q.settled = true; if (q.stays) q.life = Infinity; } else { q.floor = Infinity; q.life = Math.min(q.life, q.age + 0.35); } // off the face it falls on and fades fast
           } else if (q.age > 0.25 && !onFace(q.x, q.y)) q.life = Math.min(q.life, q.age + 0.35); // flown past the face's edge: fades fast
           continue;
         }

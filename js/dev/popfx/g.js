@@ -2,7 +2,7 @@
 // This file also holds the bump, crater and goo drawing that H (popfx/h.js) uses too: the bump is drawn here, not by
 // the game's drawPimple, so it can dome up, thin, bubble, split open and leave a soft pink crater.
 // Cartoon only: the goo is creamy white or yellow-cream, the crater is soft pink skin, never red, no wounds.
-import { INK, KIND, CALM, smooth, clamp, play, buzz, tone, hiss, W, H, sc, bp, T, holdId, rand, face } from './shared.js';
+import { KIND, CALM, smooth, clamp, play, buzz, tone, hiss, W, H, sc, bp, T, holdId, rand, face } from './shared.js';
 
 // The goo colours G and H use: body (lit top), shade, deep (the underside), hi (shine), rim (a soft see-through edge).
 export const GOO = {
@@ -355,7 +355,7 @@ export function leanIn(popAt, zoom) {
  * G: crater burst. While held the bump domes up tight and shiny, a pale ring of stretched skin forms round it, the
  * creamy head shows through more and more and it throbs, a bead of goo forming at the tip. The pop splits the top
  * open (a small opening with a soft rim), a glossy mound of goo pushes out of it and F's explosion goes off from it
- * (a shockwave ring and a spray of round glossy drops that land with weight); the dome sinks into a soft pink crater
+ * (a soft pale shockwave ring, no dark outline, and a spray of round glossy drops that land with weight); the dome sinks into a soft pink crater
  * with a raised rim, which heals back to smooth skin about two seconds after the pop.
  * @returns {object} the variant
  */
@@ -475,13 +475,10 @@ function makeG() {
         const rr = bp.r + (far * k - bp.r) * (1 - (1 - u) ** 3);
         const lw = Math.max(1.5, 8 * sc * k * (1 - u));
         c.save();
-        c.globalAlpha = (1 - u * u) * 0.9;
-        c.strokeStyle = INK;
-        c.lineWidth = lw + 2;
-        c.beginPath(); c.arc(bp.x, bp.y, rr, 0, Math.PI * 2); c.stroke();
+        c.globalAlpha = (1 - u * u) * 0.55; // a soft pale ring, no dark outline (the owner found the black circles distracting)
         c.strokeStyle = '#fffdf2';
         c.lineWidth = lw;
-        c.stroke();
+        c.beginPath(); c.arc(bp.x, bp.y, rr, 0, Math.PI * 2); c.stroke();
         c.restore();
       }
       for (const d of flying) drawFlyer(c, d, g);
