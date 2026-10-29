@@ -163,6 +163,9 @@ function open(strip) {
       gloves: params.has('gloves') && !!(strip.dressed || strip.gloves) && !strip.bareHands, // mapron has its own gloves flag (R8 2026-10-29)
       livingPlant: strip.studio === 'owned' && params.get('studio') === 'bare' ? false : undefined,
       leakFixed: params.get('leak') === 'fixed' && !LEAK_STORY_STRIPS.includes(strip.id),
+      // &ring = the ring light bought, &pinkchair = the pink chair bought (Q14 c, only in studio strips, as the game does)
+      ringLight: strip.studio === 'owned' && params.has('ring'),
+      pinkChair: strip.studio === 'owned' && params.has('pinkchair'),
     }),
     onSeen: (id, info) => { log.textContent += `seen: ${id}${info.skipped ? ' (skipped)' : ''}\n`; },
   });

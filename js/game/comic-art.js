@@ -1535,7 +1535,20 @@ function room(l) {
   }
   if (r.shabby) shabbyFront(g, r, w, F);
   if (r.washers || r.sink || r.cobwebs || r.socks) laundry(g, r, w, F);
-  if (r.lamp) {
+  if (r.lamp && l.ringLight) {
+    // Q14: she bought the ring light, so it stands where the cheap lamp stood (the game's lamp upgrade).
+    const lx = w * (l.lampX ?? 0.94);
+    const k = F / 600;
+    const R = 58 * k;
+    const cy = F * 0.32;
+    const gl = `cl${gid += 1}`;
+    g.appendChild(el('defs', {}, [el('radialGradient', { id: gl }, [el('stop', { offset: 0, 'stop-color': '#fffbe6', 'stop-opacity': 0.75 }), el('stop', { offset: 1, 'stop-color': '#fffbe6', 'stop-opacity': 0 })])]));
+    g.appendChild(el('circle', { cx: lx, cy, r: R * 3.4, fill: `url(#${gl})` }));
+    g.appendChild(line(`M${lx} ${F + 8 * k} L${lx - 44 * k} ${F + 34 * k} M${lx} ${F + 8 * k} L${lx + 44 * k} ${F + 34 * k} M${lx} ${F + 8 * k} L${lx + 8 * k} ${F + 40 * k}`, 7 * k, { stroke: '#4a5160' }));
+    g.appendChild(el('rect', { x: lx - 8 * k, y: cy + R * 1.1, width: 16 * k, height: F + 10 * k - cy - R * 1.1, rx: 5 * k, fill: '#8a96a6', ...ink(4) }));
+    g.appendChild(el('circle', { cx: lx, cy, r: R, fill: 'none', stroke: INK, 'stroke-width': R * 0.5 }));
+    g.appendChild(el('circle', { cx: lx, cy, r: R, fill: 'none', stroke: '#fffbe6', 'stroke-width': R * 0.32 }));
+  } else if (r.lamp) {
     const lx = w * (l.lampX ?? 0.94);
     const gl = `cl${gid += 1}`;
     g.appendChild(el('defs', {}, [el('radialGradient', { id: gl }, [el('stop', { offset: 0, 'stop-color': '#fff3a8', 'stop-opacity': 0.7 }), el('stop', { offset: 1, 'stop-color': '#fff3a8', 'stop-opacity': 0 })])]));
@@ -1572,10 +1585,12 @@ function rays(l) {
 /**
  * A folding chair seen from the front (metal frame, coloured seat and back). The seat is 125 units above the floor
  * at scale 1, as figures sit; put it before a sitter (same x, y, scale) so the sitter covers the seat.
- * @param {object} l layer: x, y (floor, middle), scale, color (seat and back)
+ * @param {object} l layer: x, y (floor, middle), scale, color (seat and back), wingback (true = the shop's pink
+ *   wingback chair instead, Q14; studioKit sets it once she owns the chair)
  * @returns {{node: SVGElement}} the chair
  */
 function chair(l) {
+  if (l.wingback) return wingChair(l);
   const s = l.scale ?? 1;
   const col = l.color ?? '#f0a43a';
   const metal = '#8fa3b8';
@@ -1586,6 +1601,35 @@ function chair(l) {
   g.appendChild(line('M-80 -110 L80 0 M80 -110 L-80 0', 14, { stroke: INK }));
   g.appendChild(line('M-80 -110 L80 0 M80 -110 L-80 0', 7, { stroke: metal }));
   g.appendChild(el('rect', { x: -118, y: -138, width: 236, height: 30, rx: 12, fill: col, ...ink(5) }));
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${(l.flip ? -1 : 1) * s} ${s})` }, [g]) };
+}
+
+/**
+ * The shop's pink wingback chair (the game's chair upgrade, pop/backdrop.js wingChair): a tall round back with
+ * buttoned tufting, wings, rolled arms, a padded seat and short wooden legs. The seat is 125 units above the floor at
+ * scale 1, like the folding chair, so a sitter fits it the same way and covers the middle.
+ * @param {object} l layer: x, y (floor, middle), scale, flip
+ * @returns {{node: SVGElement}} the chair
+ */
+function wingChair(l) {
+  const s = l.scale ?? 1;
+  const pink = '#ef86a8';
+  const dark = '#dc6b92';
+  const g = el('g');
+  for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx * 92 - 10, y: -70, width: 20, height: 70, rx: 5, fill: '#8a5a3a', ...ink(4) }));
+  g.appendChild(el('path', { d: 'M-120 -120 L-120 -450 Q-120 -560 0 -560 Q120 -560 120 -450 L120 -120Z', fill: pink, ...ink(5) }));
+  for (let r = 0; r < 5; r += 1) { // buttoned tufting
+    const y = -500 + r * 66;
+    for (let x = -78 + (r % 2) * 26; x <= 80; x += 52) {
+      if (r === 0 && Math.abs(x) > 60) continue; // inside the round top
+      g.appendChild(line(`M${x - 18} ${y - 22} L${x} ${y} L${x + 18} ${y - 22} M${x - 18} ${y + 22} L${x} ${y} L${x + 18} ${y + 22}`, 3, { stroke: '#b94a72', opacity: 0.45 }));
+      g.appendChild(el('circle', { cx: x, cy: y, r: 6, fill: '#b94a72' }));
+    }
+  }
+  g.appendChild(el('ellipse', { cx: -48, cy: -520, rx: 34, ry: 10, fill: '#ffffff', opacity: 0.35, transform: 'rotate(-20 -48 -520)' }));
+  for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx > 0 ? 92 : -152, y: -460, width: 60, height: 320, rx: 28, fill: dark, ...ink(5) }));
+  g.appendChild(el('rect', { x: -128, y: -158, width: 256, height: 60, rx: 18, fill: pink, ...ink(5) }));
+  for (const sx of [-1, 1]) g.appendChild(el('rect', { x: sx > 0 ? 104 : -168, y: -210, width: 64, height: 120, rx: 28, fill: pink, ...ink(5) }));
   return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) scale(${(l.flip ? -1 : 1) * s} ${s})` }, [g]) };
 }
 
@@ -2105,8 +2149,14 @@ export function dressHeroine(arts, outfit) {
  *   big plant as they are.
  * - leakFixed: true = she bought "Fix the leak" (story audit R2): studio rooms lose the old pipe with its stained,
  *   dripping joint, drop layers draw nothing, and the bucket stays as a plain mop bucket (still water, no ripples).
+ * - ringLight: true = she bought the ring light (Q14): a studio room's cheap floor lamp is the ring light instead
+ *   (same spot; a room with lamp: false stays without one).
+ * - pinkChair: true = she bought the pink chair (Q14): every chair layer is the pink wingback (a layer with
+ *   wingback: false keeps the folding chair).
+ * Without any of these the strips are drawn exactly as written (a player who bought nothing sees no change).
  * @param {Record<string, Function>} arts an art kit (usually ARTS, maybe already dressed)
- * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean}|null} [o] what she has (null or nothing = the kit unchanged)
+ * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean}|null} [o]
+ *   what she has (null or nothing = the kit unchanged)
  * @returns {Record<string, Function>} the art kit to hand the comic player
  */
 export function studioKit(arts, o = null) {
@@ -2125,6 +2175,11 @@ export function studioKit(arts, o = null) {
     if (typeof arts.bucket === 'function') kit.bucket = (l, k) => arts.bucket({ ...l, ripple: false }, k);
     if (typeof arts.drip === 'function') kit.drip = () => null; // no drop falls any more: the layer draws nothing
   }
+  if (o.ringLight) {
+    const room = kit.room; // chained on top of the changes above
+    if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.ringLight === undefined ? { ...l, ringLight: true } : l, k);
+  }
+  if (o.pinkChair && typeof arts.chair === 'function') kit.chair = (l, k) => arts.chair(l.wingback === undefined ? { ...l, wingback: true } : l, k);
   return kit;
 }
 

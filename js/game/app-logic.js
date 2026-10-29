@@ -208,16 +208,20 @@ export function comicOutfit(strip, save) {
  *   shop: the sad little plant on the sill until the living plant is bought and scrubbed.
  * - leakFixed: once "Fix the leak" is bought and scrubbed (story audit R2), every strip drops the drip and the leak
  *   stain (the bucket stays, as a mop bucket), except the strips whose story IS the leak (LEAK_STORY_STRIPS).
+ * - ringLight, pinkChair: in `studio: 'owned'` strips the ring light and the pink chair follow the shop too (owner's
+ *   pick Q14 c, 2026-10-29); the paint and the new sign do not. Nothing bought = the strip exactly as written.
  * @param {object|null} strip the strip data
  * @param {object} save the save
- * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean}|null} what to draw, or null = draw the strip as it is
+ * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean}|null}
+ *   what to draw, or null = draw the strip as it is
  */
 export function comicStudio(strip, save) {
   if (!strip) return null;
   const gloves = Boolean((strip.dressed || strip.gloves) && !strip.bareHands && Object.hasOwn(economyFromSave(save).items, 'gloves'));
-  const leak = !LEAK_STORY_STRIPS.includes(strip.id) && backdropLayers(save).includes('leakFix') ? { leakFixed: true } : {};
+  const layers = backdropLayers(save);
+  const leak = !LEAK_STORY_STRIPS.includes(strip.id) && layers.includes('leakFix') ? { leakFixed: true } : {};
   if (strip.studio !== 'owned') return gloves || leak.leakFixed ? { gloves, ...leak } : null;
-  return { gloves, livingPlant: backdropLayers(save).includes('plant'), ...leak };
+  return { gloves, livingPlant: layers.includes('plant'), ringLight: layers.includes('lamp'), pinkChair: layers.includes('chair'), ...leak };
 }
 
 /** Strips that always draw the leak, even after "Fix the leak": opening day (strip 5) and the fix itself (mleak). */
