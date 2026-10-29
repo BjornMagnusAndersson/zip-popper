@@ -91,8 +91,9 @@ export const STRIP = {
       scene: {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.78, door: false, leak: false, sign: false, bulb: false, plant: false }),
-          { id: 'greta', art: 'greta', x: 280, y: 650, scale: 0.85, pose: 'bust', expr: 'scheming', look: 1 },
-          ...cannon(330, 590, 0.95, 35),
+          // B10: her raised fist grips the cannon (drawn after it), and she sits higher so her shoulders show.
+          ...cannon(401, 428, 0.95, 35),
+          { id: 'greta', art: 'greta', x: 280, y: 600, scale: 0.85, pose: 'bustLift', expr: 'scheming', look: 1 },
         ],
       },
       camera: { move: 'pushIn', focus: [380, 380], amount: 0.1, ms: 2500 },
