@@ -997,9 +997,10 @@ export function createPopMode({
         if (current !== c) return;
         sound.play('cheer');
         buzz([30, 60, 30, 60, 80]);
-        foot.hidden = true;
-        bar.hidden = true;
         if (round) { // a moment to see the glowing face, then the game takes over
+          // The hint line and tools go invisible but the bars keep their room and colour (pop.css .pop-game--ending):
+          // hiding them outright made the scene grow and the face jump in size just before the result screen
+          // (owner 2026-10-29: "a weird flicker").
           // During this pause leaving would lose the finished customer (no pay, no stars): the game's Menu button
           // hides (app.css .pop-game--ending) and ending() says so.
           c.ending = true;
@@ -1008,6 +1009,8 @@ export function createPopMode({
           c.endTimer = setTimeout(() => finishRound(c, null), pause);
           return;
         }
+        foot.hidden = true;
+        bar.hidden = true;
         done.hidden = false;
         done.querySelector('button')?.focus({ preventScroll: true });
       },

@@ -84,6 +84,9 @@
 
 .pop-foot { flex: none; position: relative; z-index: 2; padding: 8px 14px calc(8px + env(safe-area-inset-bottom)); background: rgba(16, 42, 40, 0.88); color: #fff; }
 .pop-foot[hidden] { display: none; }
+/* A finished customer's short end pause (pop-mode.js onDone): the hint and the tools go invisible but the bars keep
+   their room and colour, so the scene does not grow and the face does not jump before the result (owner 2026-10-29). */
+.pop-game--ending .pop-foot > *, .pop-game--ending .pop-tools > * { visibility: hidden; }
 /* Room for three lines from the start (owner 2026-10-28): a longer hint later in the round used to make the bar taller,
    so the stage shrank and the face and the room jumped. */
 .pop-hint { margin: 0; font-size: 0.9rem; line-height: 1.3; min-height: 3.9em; }
@@ -203,6 +206,8 @@
     display: grid; grid-template-columns: repeat(3, 54px); gap: 4px; padding: 5px; border-radius: 14px; background: rgba(16, 42, 40, 0.82);
   }
   .pop-tool { max-width: none; min-height: 50px; }
+  /* Sideways the bars float over the room (no room to keep), so in the end pause they go away whole. */
+  .pop-game--ending .pop-foot, .pop-game--ending .pop-tools { visibility: hidden; }
   .pop-done { left: auto; right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); max-width: 26%; padding: 12px; }
   .pop-done__text { font-size: 1.05rem; }
 }
