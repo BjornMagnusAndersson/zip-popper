@@ -7,7 +7,8 @@ import { gooOf, throb, outDir, drawDome, drawCrater, drawGooBall, gooShadow, dra
  * H: bubble and ooze, softer and less cartoon than D. While held the head swells in throbs, the skin over it opens
  * like a little mouth, the goo wells up in it as a glossy dome, overflows the rim and runs a little way down the
  * cheek. At full pressure a final release: the dome of goo surges and lets go, a few thick drops are flung and land
- * with weight, the run slides on a bit further, and the bump sinks into a soft pink crater with goo left in it.
+ * with weight, the run slides on a bit further, and the bump sinks into a soft pink crater that heals back to smooth
+ * skin about two seconds later.
  * @returns {object} the variant
  */
 function makeH() {
@@ -119,8 +120,8 @@ function makeH() {
       }
       const t = T - popAt;
       const sink = smooth((t - 0.08) / 0.45);
-      const settle = smooth((t - 1) / 4);
-      const R = pop0.s * 0.5 * (1 - 0.15 * settle);
+      const settle = smooth((t - 0.8) / 1.3); // the crater heals back to smooth skin about two seconds after the release
+      const R = pop0.s * 0.5 * (1 - 0.25 * settle);
       if (sink < 1) {
         c.save();
         c.globalAlpha = 1 - sink * sink;
@@ -128,10 +129,10 @@ function makeH() {
         drawDome(c, p.x, p.y, s, { pr: 1 - sink, head: 1, hr: pop0.hr * (1 - sink) + R * sink, goo: g, open: 1, openAng, bead: 0, big, fill: 1 - sink * 0.5 });
         c.restore();
       }
-      if (sink > 0) {
+      if (sink > 0 && settle < 1) {
         c.save();
-        c.globalAlpha = sink;
-        drawCrater(c, p.x, p.y, R, 1 - 0.5 * settle, openAng, g, 0);
+        c.globalAlpha = sink * (1 - settle);
+        drawCrater(c, p.x, p.y, R, 1 - 0.6 * settle, openAng, g, 0);
         c.restore();
       }
       // The goo in the mouth: one last surge as it lets go, then it drains down the run to a small dollop in the crater.

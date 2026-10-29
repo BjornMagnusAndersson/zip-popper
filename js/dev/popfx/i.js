@@ -1,129 +1,18 @@
 // Pop effects test page, variant I: Unicorn gem pop. A look-and-feel test only (see popfx/shared.js for the hooks).
-// A preview of the planned rare "Unicorn zit" (BUILD-PLAN P13): a pearly, sparkly bump that bursts into magic dust of
-// little cut gems (diamond, sapphire, emerald, ruby), fine glitter and a soft rainbow ring. Cartoon only: no blood.
-import { INK, KIND, CALM, smooth, play, buzz, bell, hiss, sc, bp, face, T, realT, rand, sparklePath } from './shared.js';
+// A preview of the planned rare "Unicorn zit" (BUILD-PLAN P13): a pearly, sparkly bump that bursts into magic dust:
+// a fountain of fine gem sand (diamond, sapphire, emerald, ruby) that pours down and dusts the cheek, hanging
+// twinkly glitter and a soft rainbow ring. Cartoon only: no blood.
+import { KIND, CALM, smooth, play, buzz, bell, hiss, sc, bp, face, T, realT, rand, sparklePath } from './shared.js';
 
-// The four gem colours: body, light facet, dark facet and rim (the ruby leans pink so it never reads as blood).
-const GEMS = {
-  diamond: { body: '#d9f0ff', light: '#ffffff', dark: '#86b6e0', rim: '#3f6a90' },
-  sapphire: { body: '#3f7ff2', light: '#a9caff', dark: '#1b3c99', rim: '#142a66' },
-  emerald: { body: '#2cc27a', light: '#a4f3c6', dark: '#117443', rim: '#0b4a2c' },
-  ruby: { body: '#ff4f93', light: '#ffb8d4', dark: '#bd1f62', rim: '#72133c' },
-};
-const GEM_NAMES = Object.keys(GEMS);
+// The gem sand's colours: diamond white and ice, sapphire, emerald and ruby, each in a bright, light and deep tone
+// (the ruby leans pink so it never reads as blood).
+const SAND = ['#ffffff', '#3f7ff2', '#2cc27a', '#ff4f93', '#d9f0ff', '#a9caff', '#a4f3c6', '#ffb8d4', '#ffffff', '#1b3c99', '#117443', '#bd1f62'];
 // Glitter colours: the gem colours, their light tones and white.
 const GLITTER = ['#ffffff', '#cfe9ff', '#3f7ff2', '#a9caff', '#2cc27a', '#a4f3c6', '#ff4f93', '#ffb8d4'];
 // The pearly rainbow of the sheen, the ring and the goo puff (soft pastels).
 const PEARL_HUES = ['#ffb0da', '#ffd9a6', '#b3f0cb', '#a9d6ff', '#cbb5ff', '#ffb0da'];
 // The pearly goo puff's colours (a lilac-white pearl instead of plain white).
 const PEARL = { body: '#fbf3ff', shade: '#dac6f2', edge: '#7e64a3', hi: '#ffffff' };
-
-/**
- * One gem cut as an outline and a smaller "table" inside it with the same number of corners (unit size, y down);
- * the facets are the bands between the two.
- * @param {number} n corners
- * @param {number} rx width
- * @param {number} ry height
- * @param {number} k table size (0..1)
- * @param {number} turn start angle
- * @returns {{out: number[][], tab: number[][]}} the cut
- */
-function roundCut(n, rx, ry, k, turn) {
-  const out = [];
-  for (let i = 0; i < n; i += 1) {
-    const a = turn + (i / n) * Math.PI * 2;
-    out.push([Math.cos(a) * rx, Math.sin(a) * ry]);
-  }
-  return { out, tab: out.map(([x, y]) => [x * k - 0.06, y * k - 0.08]) };
-}
-
-// The cut of each gem: a brilliant diamond, an oval sapphire, a step-cut emerald and a round-ish ruby.
-const CUTS = {
-  diamond: {
-    out: [[-1, -0.25], [-0.55, -0.72], [0.55, -0.72], [1, -0.25], [0, 1]],
-    tab: [[-0.42, -0.3], [-0.26, -0.5], [0.26, -0.5], [0.42, -0.3], [0, 0.22]],
-  },
-  sapphire: roundCut(8, 0.74, 1, 0.44, -Math.PI / 2),
-  emerald: {
-    out: [[-0.42, -1], [0.42, -1], [0.72, -0.72], [0.72, 0.72], [0.42, 1], [-0.42, 1], [-0.72, 0.72], [-0.72, -0.72]],
-    tab: [[-0.24, -0.58], [0.24, -0.58], [0.38, -0.44], [0.38, 0.44], [0.24, 0.58], [-0.24, 0.58], [-0.38, 0.44], [-0.38, -0.44]],
-  },
-  ruby: roundCut(6, 0.95, 0.95, 0.46, -Math.PI / 2),
-};
-
-/** Trace a closed polygon scaled by s. @param {CanvasRenderingContext2D} c context @param {number[][]} pts points @param {number} s scale @returns {void} */
-function poly(c, pts, s) {
-  c.beginPath();
-  pts.forEach(([x, y], i) => (i ? c.lineTo(x * s, y * s) : c.moveTo(x * s, y * s)));
-  c.closePath();
-}
-
-/**
- * One cartoon cut gem: the body, each facet band light or dark by how it faces the light (top left), the table, a rim
- * and (when it catches the light) a white glint. Turning and flipping it (a tumble) moves the light over the facets.
- * @param {CanvasRenderingContext2D} c context
- * @param {string} gem diamond | sapphire | emerald | ruby
- * @param {number} x middle x
- * @param {number} y middle y
- * @param {number} s size (half height)
- * @param {number} rot turn in radians
- * @param {number} flip -1..1 sideways squash (a tumble seen from the front)
- * @param {number} glint 0..1 how bright the white glint is
- * @param {boolean} inked an ink outline (bigger gems) instead of a dark gem-coloured rim
- * @returns {void}
- */
-function drawGem(c, gem, x, y, s, rot, flip, glint, inked) {
-  if (s < 0.5) return;
-  const cut = CUTS[gem];
-  const col = GEMS[gem];
-  const fl = Math.abs(flip) < 0.25 ? Math.sign(flip || 1) * 0.25 : flip; // never quite a line
-  const cs = Math.cos(-rot);
-  const sn = Math.sin(-rot);
-  let lx = -0.55 * cs + 0.83 * sn; // the light (from the top left) seen from inside the turned gem
-  const ly = -0.55 * sn - 0.83 * cs;
-  if (fl < 0) lx = -lx;
-  c.save();
-  c.translate(x, y);
-  c.rotate(rot);
-  c.scale(fl, 1);
-  poly(c, cut.out, s);
-  c.fillStyle = col.body;
-  c.fill();
-  const n = cut.out.length;
-  for (let i = 0; i < n; i += 1) {
-    const a = cut.out[i];
-    const b = cut.out[(i + 1) % n];
-    const mx = (a[0] + b[0]) / 2;
-    const my = (a[1] + b[1]) / 2;
-    const len = Math.hypot(mx, my) || 1;
-    const dot = (mx * lx + my * ly) / len;
-    if (dot > -0.3 && dot < 0.4) continue; // a side facet keeps the body colour
-    c.fillStyle = dot >= 0.4 ? col.light : col.dark;
-    poly(c, [a, b, cut.tab[(i + 1) % n], cut.tab[i]], s);
-    c.fill();
-  }
-  if (s > 5) { // thin facet lines on the bigger gems
-    c.strokeStyle = 'rgba(255,255,255,0.45)';
-    c.lineWidth = Math.max(0.6, s * 0.05);
-    poly(c, cut.tab, s);
-    c.stroke();
-  }
-  poly(c, cut.out, s);
-  c.lineJoin = 'round';
-  c.lineWidth = Math.max(1, s * (inked ? 0.13 : 0.16));
-  c.strokeStyle = inked ? INK : col.rim;
-  c.stroke();
-  c.restore();
-  if (glint > 0.05) { // the glint stays upright, a little white star on the top-left facet
-    c.save();
-    c.globalAlpha *= Math.min(1, glint);
-    c.translate(x - s * 0.28 * Math.abs(fl), y - s * 0.34);
-    sparklePath(c, s * (0.35 + 0.45 * glint));
-    c.fillStyle = '#ffffff';
-    c.fill();
-    c.restore();
-  }
-}
 
 /**
  * The pearly rainbow sheen and the little glints on the bump while it is held (and a softer version at rest).
@@ -313,7 +202,10 @@ const fadeOf = (q) => {
 /** The twinkle of a bit now: 0..1, coming and going at its own speed (steady in the calm version). @param {object} q the bit @returns {number} twinkle */
 const twinkleOf = (q) => (CALM ? 0.6 : Math.max(0, Math.sin(realT * q.tf + q.ph)) ** 2);
 
-/** I: Unicorn gem pop. A pearly rainbow bump with glints; it bursts into magic gem dust, glitter, a rainbow ring and a pearl goo puff. @returns {object} the variant */
+/** Is this point on the face (a little inside its edge)? @param {number} x x @param {number} y y @returns {boolean} on the face */
+const onFace = (x, y) => ((x - face.cx) / face.rx) ** 2 + ((y - face.cy) / face.ry) ** 2 <= 0.9;
+
+/** I: Unicorn gem pop. A pearly rainbow bump with glints; it bursts into gem sand, glitter, a rainbow ring and a pearl goo puff. @returns {object} the variant */
 function makeI() {
   const big = KIND === 'big';
   const bits = [];
@@ -325,57 +217,44 @@ function makeI() {
   return {
     /** While held, the bump swells a little more than usual and breathes (still in the calm version). @returns {{amt: number, warp: number, jx: number, jy: number}} look */
     look: () => ({ amt: bp.pressure * 1.15 + (CALM ? 0 : 0.04 * bp.pressure * Math.sin(realT * 5.3)), warp: bp.pressure, jx: 0, jy: 0 }),
-    /** Before the pop: the pearly sheen and glints. After: the glitter that settled on the skin. @param {CanvasRenderingContext2D} c context @param {object} p bump @param {{amt: number}} lk look @returns {void} */
+    /** Before the pop: the pearly sheen and glints. After: the gem sand that settled on the skin. @param {CanvasRenderingContext2D} c context @param {object} p bump @param {{amt: number}} lk look @returns {void} */
     afterBump(c, p, lk) {
       if (!bp.popped) { drawSheen(c, p, lk.amt, glints); return; }
       for (const q of bits) {
-        if (q.kind !== 'glit' || !q.settled) continue;
+        if (!q.settled) continue;
+        const tw = twinkleOf(q);
         c.save();
-        c.globalAlpha = fadeOf(q) * (0.55 + 0.45 * twinkleOf(q));
-        drawSpeck(c, q, twinkleOf(q));
+        c.globalAlpha = fadeOf(q) * (0.7 + 0.3 * tw);
+        drawSpeck(c, q, q.star ? tw : Math.min(tw, 0.7));
         c.restore();
       }
     },
-    /** The burst of magic dust: gems, glitter, a few big gems, the puff, a chime and a buzz. @returns {void} */
+    /** The burst of magic dust: a fountain of gem sand, hanging glitter, the puff, a chime and a buzz. @returns {void} */
     pop() {
       popT = T;
       const ps = big ? 1 : 1.2;
       const np = big ? 8 : 7;
       puff = { ps, parts: Array.from({ length: np }, (_, i) => ({ a: (i / np) * Math.PI * 2 + rand() * 0.5, d: bp.r * ps * (0.7 + rand() * 0.45), r: bp.r * ps * (0.38 + rand() * 0.25) })) };
       const calmK = CALM ? 0.6 : 1;
-      const nGem = Math.round((big ? 34 : 22) * calmK);
-      for (let i = 0; i < nGem; i += 1) { // small cut gems: the magic dust
-        const a = -Math.PI / 2 + (rand() - 0.5) * Math.PI * (i % 3 ? 1.4 : 2);
-        const v = (CALM ? 80 + rand() * 110 : 120 + rand() * 190) * sc;
+      const nSand = Math.round((big ? 300 : 210) * calmK);
+      for (let i = 0; i < nSand; i += 1) { // the gem sand: thrown up and out, it pours down and dusts the cheek below
+        const a = -Math.PI / 2 + (rand() - 0.5) * Math.PI * 1.15;
+        const v = (CALM ? 60 + rand() * 130 : 80 + rand() * 230) * sc * (big ? 1.1 : 1);
         bits.push({
-          kind: 'gem', gem: GEM_NAMES[i % 4], x: bp.x, y: bp.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, age: -rand() * 0.1,
-          life: 1.8 + rand() * 1.1, size: (2.6 + rand() * 2.2) * sc * (big ? 1.2 : 1), rot: (rand() - 0.5) * 0.8,
-          spin: CALM ? 0 : (rand() - 0.5) * 3, fall: 45 + rand() * 40, tf: 3 + rand() * 4, ph: rand() * 6, sway: rand() * 6,
+          kind: 'sand', col: SAND[i % SAND.length], x: bp.x + (rand() - 0.5) * bp.r * 0.8, y: bp.y + (rand() - 0.5) * bp.r * 0.5,
+          vx: Math.cos(a) * v, vy: Math.sin(a) * v, age: -rand() * (CALM ? 0.25 : 0.12), life: 3 + rand() * 1.2,
+          size: (0.55 + rand() * 0.75) * Math.sqrt(sc) * (big ? 1.1 : 1), rot: rand() * Math.PI, spin: CALM ? 0 : (rand() - 0.5) * 8,
+          fall: 320 + rand() * 140, floor: bp.y + bp.r * (0.5 + rand() * 2.8), tf: 4 + rand() * 6, ph: rand() * 6, star: i % 4 === 0, settled: false,
         });
       }
-      const nGlit = Math.round((big ? 70 : 46) * calmK);
-      for (let i = 0; i < nGlit; i += 1) { // fine glitter; the slower part settles on the skin round the spot
+      const nGlit = Math.round((big ? 60 : 40) * calmK);
+      for (let i = 0; i < nGlit; i += 1) { // the finest glitter, that hangs in the air and twinkles a while
         const a = rand() * Math.PI * 2;
-        const lands = i % 5 < 2;
-        const v = (lands ? 25 + rand() * 80 : CALM ? 50 + rand() * 110 : 70 + rand() * 200) * sc;
+        const v = (CALM ? 50 + rand() * 110 : 70 + rand() * 200) * sc;
         bits.push({
-          kind: 'glit', col: GLITTER[i % GLITTER.length], x: bp.x, y: bp.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (lands ? 15 : 40) * sc,
-          age: -rand() * 0.15, life: lands ? 2.7 + rand() * 0.8 : 1.6 + rand() * 1.4, size: (0.9 + rand() * 0.8) * Math.sqrt(sc) * (big ? 1.15 : 1),
-          rot: Math.PI / 4, spin: 0, fall: 25 + rand() * 35, tf: 3.5 + rand() * 5, ph: rand() * 6, sway: rand() * 6,
-          settleAt: lands ? 0.45 + rand() * 0.5 : -1, settled: false,
-        });
-      }
-      const nBig = big ? 6 : 3;
-      for (let i = 0; i < nBig; i += 1) { // a few bigger gems that tumble out, land on the skin and catch the light
-        const side = i % 2 ? 1 : -1;
-        const edge = Math.sign(bp.x - face.cx) === side ? 0.55 : 1; // the side towards the face's edge goes less far, so they land on the skin
-        const out = edge * (0.35 + (Math.floor(i / 2) / Math.max(1, Math.ceil(nBig / 2) - 1)) * 0.65); // spread out so they land apart
-        bits.push({
-          kind: 'big', gem: GEM_NAMES[(i + 1) % 4], x: bp.x, y: bp.y, vx: side * (18 + out * 115 + rand() * 12) * sc * (CALM ? 0.7 : 1),
-          vy: -(230 + rand() * 150) * sc * (CALM ? 0.7 : 1), age: -0.02 - i * 0.03, life: 2.3 + rand() * 0.6,
-          size: (big ? 8.5 + rand() * 3 : 7 + rand() * 2.5) * sc, rot: (rand() - 0.5) * 0.5, spin: CALM ? 0 : side * (2 + rand() * 3),
-          ph: 0, tumble: CALM ? 0 : 7 + rand() * 6, floor: bp.y + bp.r * (1.3 + (i % 3) * 0.7 + rand() * 0.4), bounce: 0, landed: false,
-          tf: 2.5 + rand() * 2, gph: rand() * 6,
+          kind: 'glit', col: GLITTER[i % GLITTER.length], x: bp.x, y: bp.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40 * sc,
+          age: -rand() * 0.15, life: 1.6 + rand() * 1.4, size: (0.7 + rand() * 0.6) * Math.sqrt(sc) * (big ? 1.15 : 1),
+          rot: Math.PI / 4, spin: 0, fall: 25 + rand() * 35, tf: 3.5 + rand() * 5, ph: rand() * 6, sway: rand() * 6, star: true, settled: false,
         });
       }
       if (big) {
@@ -390,31 +269,26 @@ function makeI() {
         buzz([14, 28, 12]);
       }
     },
-    /** The dust bursts out, slows, twinkles down slowly and some glitter settles; the big gems tumble, land and glint. @param {number} sdt scene seconds @returns {void} */
+    /** The sand flies up, pours down and settles on the cheek (or falls off the face and fades); the glitter drifts and twinkles. @param {number} sdt scene seconds @returns {void} */
     step(sdt) {
       for (let i = bits.length - 1; i >= 0; i -= 1) {
         const q = bits[i];
         q.age += sdt;
         if (q.age < 0) continue;
         if (q.age > q.life) { bits.splice(i, 1); continue; }
-        if (q.kind === 'big') {
-          if (q.landed) continue;
-          q.vy += 900 * sc * sdt;
-          q.vx *= Math.exp(-sdt * 0.8);
+        if (q.settled) continue;
+        if (q.kind === 'sand') {
+          const drag = Math.exp(-sdt * 1.8);
+          q.vx *= drag;
+          q.vy = q.vy * drag + q.fall * sc * sdt;
           q.x += q.vx * sdt;
           q.y += q.vy * sdt;
           q.rot += q.spin * sdt;
-          q.ph += q.tumble * sdt;
-          if (q.y >= q.floor && q.vy > 0) {
-            q.y = q.floor;
-            if (!CALM && q.bounce < 1) { q.vy *= -0.3; q.vx *= 0.45; q.spin *= 0.4; q.bounce += 1; } else {
-              q.landed = true;
-              q.ph = Math.round(q.ph / Math.PI) * Math.PI; // lies flat, face up
-            }
-          }
+          if (q.vy > 0 && q.y >= q.floor) {
+            if (onFace(q.x, q.y)) { q.y = q.floor; q.settled = true; } else { q.floor = Infinity; q.life = Math.min(q.life, q.age + 0.35); } // off the face it falls on and fades fast
+          } else if (q.age > 0.25 && !onFace(q.x, q.y)) q.life = Math.min(q.life, q.age + 0.35); // flown past the face's edge: fades fast
           continue;
         }
-        if (q.settled) continue;
         const drag = Math.exp(-sdt * 3.2);
         q.vx *= drag;
         q.vy = q.vy * drag + q.fall * sc * sdt;
@@ -422,10 +296,9 @@ function makeI() {
         q.x += (q.vx + sway) * sdt;
         q.y += q.vy * sdt;
         q.rot += q.spin * sdt;
-        if (q.settleAt > 0 && q.age >= q.settleAt) q.settled = true;
       }
     },
-    /** The glow, the rainbow ring, the pearl puff, the flying dust and the big gems. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */
+    /** The glow, the rainbow ring, the pearl puff, the flying sand and the glitter. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */
     over(c, p) {
       if (popT < 0) return;
       const t = T - popT;
@@ -453,22 +326,11 @@ function makeI() {
         c.restore();
       }
       for (const q of bits) {
-        if (q.age < 0 || (q.kind === 'glit' && q.settled)) continue;
+        if (q.age < 0 || q.settled) continue;
         const tw = twinkleOf(q);
         c.save();
-        c.globalAlpha = fadeOf(q);
-        if (q.kind === 'glit') {
-          c.globalAlpha *= 0.5 + 0.5 * tw;
-          drawSpeck(c, q, tw);
-        } else if (q.kind === 'gem') {
-          const sz = q.size * (CALM ? 1 : 0.9 + 0.2 * tw);
-          drawGem(c, q.gem, q.x, q.y, sz, q.rot, 1, tw ** 2, false);
-        } else {
-          const flip = Math.cos(q.ph);
-          const face = Math.abs(flip);
-          const flash = CALM ? 0.5 : Math.max(face > 0.93 && !q.landed ? 1 : 0, Math.max(0, Math.sin(realT * q.tf + q.gph)) ** 6);
-          drawGem(c, q.gem, q.x, q.y, q.size, q.rot, flip, flash, true);
-        }
+        c.globalAlpha = fadeOf(q) * (q.kind === 'sand' ? 0.75 + 0.25 * tw : 0.5 + 0.5 * tw);
+        drawSpeck(c, q, q.star ? tw : Math.min(tw, 0.7));
         c.restore();
       }
     },

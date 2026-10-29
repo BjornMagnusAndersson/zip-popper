@@ -241,7 +241,7 @@ export function drawOpening(c, x, y, rx, ry, ang, g, fill) {
  * @param {number} x middle
  * @param {number} y middle
  * @param {number} R the dip's radius
- * @param {number} d depth 0..1 (it settles flatter over a few seconds)
+ * @param {number} d depth 0..1 (it flattens as it heals)
  * @param {number} ang the split's long direction (the dip is a little longer that way)
  * @param {object} g goo colours
  * @param {number} left 0..1 how much goo is left in it
@@ -355,8 +355,8 @@ export function leanIn(popAt, zoom) {
  * G: crater burst. While held the bump domes up tight and shiny, a pale ring of stretched skin forms round it, the
  * creamy head shows through more and more and it throbs, a bead of goo forming at the tip. The pop splits the top
  * open (a small opening with a soft rim), a glossy mound of goo pushes out of it and F's explosion goes off from it
- * (a shockwave ring and a spray of round glossy drops that land with weight); the dome sinks and a soft pink crater
- * with a raised rim stays, settling flatter over a few seconds.
+ * (a shockwave ring and a spray of round glossy drops that land with weight); the dome sinks into a soft pink crater
+ * with a raised rim, which heals back to smooth skin about two seconds after the pop.
  * @returns {object} the variant
  */
 function makeG() {
@@ -405,8 +405,8 @@ function makeG() {
       const t = T - popAt;
       const split = smooth(t / 0.05); // the top tears open
       const sink = smooth((t - 0.08) / 0.4); // the emptied dome sinks down
-      const settle = smooth((t - 0.9) / 4);
-      const R = popS * 0.5 * (1 - 0.15 * settle);
+      const settle = smooth((t - 0.7) / 1.3); // the crater heals back to smooth skin about two seconds after the pop
+      const R = popS * 0.5 * (1 - 0.25 * settle);
       if (sink < 1) {
         c.save();
         c.globalAlpha = 1 - sink * sink;
@@ -414,10 +414,10 @@ function makeG() {
         drawDome(c, p.x, p.y, s, { pr: 1 - sink, head: 1, hr: popHr * (1 - sink) + R * sink, goo: g, open: split, openAng, bead: 0, big, fill: 1 - sink * 0.6 });
         c.restore();
       }
-      if (sink > 0) {
+      if (sink > 0 && settle < 1) {
         c.save();
-        c.globalAlpha = sink;
-        drawCrater(c, p.x, p.y, R, 1 - 0.5 * settle, openAng, g, 0.8 - 0.3 * settle);
+        c.globalAlpha = sink * (1 - settle);
+        drawCrater(c, p.x, p.y, R, 1 - 0.6 * settle, openAng, g, 0.8 * (1 - settle));
         c.restore();
       }
       // The goo pushed out of the opening: a thick glossy mound rising out of it just after the split, then slumping
