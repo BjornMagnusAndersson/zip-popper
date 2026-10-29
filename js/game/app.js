@@ -210,7 +210,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
 
   /**
    * Music for a customer round: hectic while a hurry or combo request is open. A hurry request is over when its time
-   * is up; a combo request counts as open until the round ends (the pop scene does not report it earlier).
+   * is up; either request also ends when the pop scene reports it done or missed (onRequestEnd, B14).
    * @param {object|null} request the round's request
    * @returns {void}
    */
@@ -396,7 +396,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     b.textContent = t('ui.pop.menu');
     // Ignored in the short pause after a finished customer (the button is hidden then too), so the pay is never lost.
     b.addEventListener('click', () => { if (!pop?.ending?.()) onClick(); });
-    pop?.node.querySelector('.pop-head')?.prepend(b);
+    pop?.addHeadButton(b);
   }
 
   /**
@@ -414,7 +414,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       chip.classList.toggle('pop-goal--missed', missed);
     };
     paint(false);
-    pop?.node.querySelector('.pop-title')?.after(chip);
+    pop?.addTitleLine(chip);
     return paint;
   }
 
@@ -509,7 +509,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {{w: number, h: number}|null} CSS px, or null when there is no pop scene
    */
   function popStageSize() {
-    const r = pop?.node.querySelector('.pop-stage')?.getBoundingClientRect();
+    const r = pop?.stage?.getBoundingClientRect();
     return r ? { w: r.width, h: r.height } : null;
   }
 
@@ -739,8 +739,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const goalHooks = paintGoal && OW_GOALS.includes(args.daily.goal.id) ? { onOw: () => paintGoal(true) } : {};
     sound.unlock();
     pop.unlock();
+    /** The request was done or missed: back to the calm music (B14). @returns {void} */
+    const onRequestEnd = () => setMusic({ screen: 'round', request: args.request, requestOpen: false });
     /** Start (or start again) the round. @returns {void} */
-    const start = () => { roundMusic(args.request); paintGoal?.(false); pop.startRound({ ...args, ...goalHooks, customerName:args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args) }); };
+    const start = () => { roundMusic(args.request); paintGoal?.(false); pop.startRound({ ...args, ...goalHooks, onRequestEnd, customerName:args.customerNameKey ? t(args.customerNameKey) : null, onFinish: (payload) => finishRound(step, payload, start, args) }); };
     start();
   }
 

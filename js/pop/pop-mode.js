@@ -716,6 +716,10 @@ export function createPopMode({
     reqBox.classList.toggle('pop-req--done', v.status === 'done');
     reqBox.classList.toggle('pop-req--missed', v.status === 'failed');
     if (v.status !== 'open') clearInterval(c.reqTimer);
+    if (v.status !== 'open' && !c.requestEnded) {
+      c.requestEnded = true; // tell the game once, so the hectic music can stop (B14)
+      try { c.hooks.onRequestEnd?.(v.status); } catch (e) { console.warn('onRequestEnd failed:', e); }
+    }
   }
 
   /**
@@ -824,9 +828,8 @@ export function createPopMode({
     const redness = c.healed ? 0 : 1 - cleared / Math.max(1, c.total);
     const { canvas, ctx } = makeCanvas(c.w, c.h, c.dpr);
     ctx.lineCap = 'butt';
-    // face.js paints its own plain wall over the whole width first; with width 0 that wall is skipped (zero-size fill,
-    // zero-length tile lines), so only the person is drawn. Everything else in face.js reads cx, cy, rx, ry and height.
-    drawFace(ctx, { ...c.face, width: 0 }, c.spec, { mood, redness, seed: c.seed, dpr: c.dpr });
+    // Only the person: the room behind comes from backdrop.js, so face.js skips its own plain wall (B19).
+    drawFace(ctx, c.face, c.spec, { mood, redness, seed: c.seed, dpr: c.dpr, background: false });
     return canvas;
   }
 
@@ -909,7 +912,8 @@ export function createPopMode({
       strip: lay.strip ?? null, // where the nose dots are (scene px), for the reminder bubble (noseNudge)
       owed: new Set(), cleanTypes: [], cleanTools: [], popTypes: [], startAt: performance.now(), popEnd: null, finished: false,
       request: round ? cfg.request : null, onFinish: round ? cfg.onFinish : null, endTimer: 0, reqTimer: 0,
-      hooks: round ? cfg.hooks : {}, // a special mode's onPop and onOw listeners (T4.5)
+      hooks: round ? cfg.hooks : {}, // the game's onPop, onOw and onRequestEnd listeners (T4.5, B14)
+      requestEnded: false, // onRequestEnd was called for this face (once)
       newQueue: meetKinds(lay), // first-time hints for the kinds she meets on this face (T6.5)
       twistHint: round ? cfg.twistHint : null, // the twist's tip on the hint line until the first pop (T8.3)
       giggle: false, giggleTimer: 0, // a short happy face after a giggle (ticklish, T8.3)
@@ -1080,7 +1084,8 @@ export function createPopMode({
      *   first pop). boss = a boss or event customer's face rules (T8.4, data/bosses.js bossSpec `boss`) and
      *   bossNameKey = its name, shown in gold in the twist chip's place.
      *   For a special mode (T4.5): mood = a fixed face mood ('sleep'; an Ow still winces), onPop(bump, left) after
-     *   every pop and onOw(at) after every Ow.
+     *   every pop and onOw(at) after every Ow. onRequestEnd(status) runs once when the request is done or missed
+     *   ('done' or 'failed'), so the game can end the hectic music (B14).
      * @returns {void}
      */
     startRound(o = {}) {
@@ -1096,7 +1101,10 @@ export function createPopMode({
         seed: seed0,
         holdFactors: o.holdFactors ?? {}, roughReductions: o.roughReductions ?? {}, irritation: irritationScales(o.difficulty),
         request: o.request ?? null, onFinish: typeof o.onFinish === 'function' ? o.onFinish : null,
-        hooks: { onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null },
+        hooks: {
+          onPop: typeof o.onPop === 'function' ? o.onPop : null, onOw: typeof o.onOw === 'function' ? o.onOw : null,
+          onRequestEnd: typeof o.onRequestEnd === 'function' ? o.onRequestEnd : null,
+        },
         escape: o.customer?.escape === true, // the husband in armor (chapter 2) refuses the first pop and runs off
         reluctant: o.customer?.reluctant === true, // the chapter 0 husband: stern the whole round, never beams (owner 2026-10-28)
         gloves: o.gloves === true, // she owns the gloves (app-logic.js roundArgs, SPEC D32e)
@@ -1205,6 +1213,20 @@ export function createPopMode({
       const z = c.scene.view?.().z ?? 1;
       return c.scene.all().filter((p) => !p.popped).map((p) => ({ ...c.scene.toScreen(p.x, p.y), r: p.r * z }));
     },
+    /** The stage element where the face is drawn (a special mode measures it and lays its own layers over it). */
+    stage,
+    /** Put a special mode's own title in the header (B29). @param {string} text the title @returns {void} */
+    setTitle(text) { title.textContent = text; },
+    /** Add a button at the start of the header, such as a special mode's Menu (B29). @param {HTMLElement} btn the button @returns {void} */
+    addHeadButton(btn) { head.prepend(btn); },
+    /** Add a line at the top of the foot, above the hint, such as a special mode's how-to (B29). @param {HTMLElement} line the line @returns {void} */
+    addFootLine(line) { foot.prepend(line); },
+    /** Hide the foot (hint and how-to) for a special mode's scripted end, such as the torchlight catch. @returns {void} */
+    hideFoot() { foot.hidden = true; },
+    /** Add a line right under the title, such as the daily goal chip (T8.5, B29). @param {HTMLElement} line the line @returns {void} */
+    addTitleLine(line) { title.after(line); },
+    /** The canvas of the face in play (a special mode plays class animations on it), or null. @returns {HTMLCanvasElement|null} the canvas */
+    faceCanvas: () => current?.canvas ?? null,
     /** Wake the popping sounds up (call from inside a tap). @returns {void} */
     unlock: () => sound.unlock(),
     /**

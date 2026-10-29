@@ -55,8 +55,8 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
     ctx.fillStyle = g;
     ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   }
-  // As pop-mode.js does: width 0 skips face.js's plain wall, so only the person is drawn.
-  drawFace(ctx, { ...face, width: 0 }, look.spec, { mood: look.mood, redness: look.redness ?? 0, seed: look.seed, dpr: dpr * k });
+  // As pop-mode.js does: background false skips face.js's plain wall, so only the person is drawn.
+  drawFace(ctx, face, look.spec, { mood: look.mood, redness: look.redness ?? 0, seed: look.seed, dpr: dpr * k, background: false });
   for (const d of lay.decoys ?? []) drawDecoy(ctx, d);
   if (lay.strip && (!look.clean || look.stripLeft)) drawStripDots(ctx, lay.strip.dots, -Infinity); // left on: still there
   if (!look.clean) {

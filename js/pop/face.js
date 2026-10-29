@@ -2844,7 +2844,7 @@ function stillLayers(f, spec, look, seed, dpr) {
     return hit;
   }
   const { cx, cy, rx, ry } = f;
-  const sceneW = f.width > 0 ? f.width : cx * 2; // pop-mode passes width 0 (no wall); the face is always centred
+  const sceneW = f.width > 0 ? f.width : cx * 2; // the face is always centred, so a missing width is twice cx
   const base = look.skin;
   const armor = look.armor;
   const under = paintLayer([cx - rx * 2.2, 0, cx + rx * 2.2, f.height], sceneW, f.height, dpr, (ctx) => {
@@ -2902,8 +2902,9 @@ function moodOf(m) {
  * @param {CanvasRenderingContext2D} ctx where to draw (CSS pixel units)
  * @param {object} face the face geometry from faceGeometry(w, h, spec)
  * @param {object} spec the face spec (face part ids, see DEFAULT_FACE_SPEC)
- * @param {{mood?: string, redness?: number, seed?: number, dpr?: number}} [o] mood ('grim'|'ow'|'relief'|'glowing',
- *   or faceMood's 'sad'|'meh'|'happy'|'glow'), redness 0..1, a seed for the skin details, and the pixel ratio
+ * @param {{mood?: string, redness?: number, seed?: number, dpr?: number, background?: boolean}} [o] mood
+ *   ('grim'|'ow'|'relief'|'glowing', or faceMood's 'sad'|'meh'|'happy'|'glow'), redness 0..1, a seed for the skin
+ *   details, the pixel ratio, and background: false to draw only the person, without the plain wall (pop scene, reveal)
  * @returns {void}
  */
 export function drawFace(ctx, face, spec = DEFAULT_FACE_SPEC, o = {}) {
@@ -2913,7 +2914,7 @@ export function drawFace(ctx, face, spec = DEFAULT_FACE_SPEC, o = {}) {
   const f = face;
   const { cx, cy, rx, ry } = f;
   const look = faceLook(spec);
-  drawBackground(ctx, f.width, f.height);
+  if (o.background !== false) drawBackground(ctx, f.width, f.height);
   const layers = stillLayers(f, spec, look, seed, o.dpr ?? 1);
   putLayer(ctx, layers.under);
   ctx.save();

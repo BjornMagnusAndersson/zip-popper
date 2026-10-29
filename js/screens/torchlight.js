@@ -82,19 +82,17 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   pop.mount(node);
   const scene = pop.node;
   scene.classList.add('tl-scene');
-  const stage = scene.querySelector('.pop-stage');
-  scene.querySelector('.pop-title').textContent = t('special.torchlight.title');
+  const stage = pop.stage;
   if (onMenu) { // the same Menu button as in a customer round
     const menu = el('button', 'pop-btn pop-menu', t('ui.pop.menu'));
     menu.type = 'button';
     menu.addEventListener('click', () => onMenu());
-    scene.querySelector('.pop-head')?.prepend(menu);
+    pop.addHeadButton(menu);
   }
   // The how-to line sits in the pop scene's foot, above its own hint (hold or squeeze).
-  const foot = scene.querySelector('.pop-foot');
   const howto = el('p', 'tl-howto', t('special.torchlight.howto'));
   if (hasMouse()) howto.append(' ', el('span', 'tl-howto__keys', t('special.torchlight.howtoKeys')));
-  foot?.prepend(howto);
+  pop.addFootLine(howto);
   // The night: a dark layer over the room and his face with a hole for the torch (pointer events go through it).
   const dark = el('div', 'tl-dark');
   dark.setAttribute('aria-hidden', 'true');
@@ -243,7 +241,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
    */
   function animateFace(cls, ms) {
     if (still()) return;
-    const canvas = stage.querySelector('.pop-canvas');
+    const canvas = pop.faceCanvas();
     if (!canvas) return;
     canvas.classList.remove(cls);
     void canvas.offsetWidth; // restart the animation if it was already on
@@ -316,7 +314,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
     pop.halt();
     pointers.clear();
     bubble.hidden = true;
-    if (foot) foot.hidden = true;
+    pop.hideFoot();
     for (const { at, step } of catchScript(still())) {
       later(() => {
         if (step === 'phone') {
@@ -340,6 +338,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   /** Start (or restart) the round in the pop scene with this screen's listeners. @returns {void} */
   function startRound() {
     pop.startRound({ ...roundArgs, onPop, onOw, onFinish: () => {} });
+    pop.setTitle(t('special.torchlight.title')); // after startRound, which puts "Pop them!" there
   }
 
   /**
