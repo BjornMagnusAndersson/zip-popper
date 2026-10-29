@@ -3,7 +3,7 @@
 // cartoon face videos scrolls by on its own (game/phonescroll-logic.js says when); she can only flick slowly (or tap
 // Next) and tap the tiny bumps on each video, pop-it style: tiny pops, soft sounds, no score, no money, no failing.
 // Likes tick up on the other people's videos, the "videos watched" counter and the phone clock creep up. After the
-// last video the idea card ("I could do this for a living") shows, and its Continue calls onContinue (on to strip 5).
+// last video the idea card ("I could do this for a living") shows, and its Continue calls onContinue (on to strip 4b, the idea at 2:51 am).
 // Calm music only: the app plays the calm loop for every screen, and this one never asks for the hectic one.
 // Keyboard: the arrow keys move the focus over the bumps and Next, Space or Enter pops the bump or goes to the next
 // video. Reduced motion: no auto scroll, no sliding, no steam or pop puffs; the cards change only by Next.

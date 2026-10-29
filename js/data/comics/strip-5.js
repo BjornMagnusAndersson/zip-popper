@@ -102,16 +102,18 @@ export const STRIP = {
       scene: {
         layers: [
           studio(900, 1200, { floorY: 900, doorX: 0.5, doorOpen: true, windowX: 0.88, leak: false, sign: false, bulbX: 0.14, plant: false, lamp: false }),
-          ...banner(680, 1060, 1),
+          // R8: nothing floats. The banner pole stands on the floor tucked in the crook of his right arm (drawn first, so
+          // his arm goes over it); the shield is strapped on his left forearm, covering that elbow and hand.
+          ...banner(574, 1090, 1),
           knight(450, 1090, 0.95, { pose: 'hips', expr: 'proud' }),
-          ...shield(300, 760, 0.85),
+          ...shield(340, 780, 0.8),
           { id: 'her', art: 'heroine', x: 170, y: 1210, scale: 0.9, pose: 'bust', expr: 'happy', look: 1 },
         ],
       },
       camera: { move: 'pushIn', focus: [450, 600], amount: 0.08, ms: 3000 },
       sound: 'creak',
       bubbles: [
-        { kind: 'say', key: 'comic.s5.p4.her', at: [170, 430], to: 'her', w: 300 },
+        { kind: 'say', key: 'comic.s5.p4.her', at: [190, 430], to: 'her', w: 380 }, // R8: wide enough that "?!" stays on its line
         { kind: 'say', key: 'comic.s5.p4.him', at: [740, 300], to: 'him', w: 200 },
         { kind: 'say', key: 'comic.s5.p4.him2', at: [690, 1110], to: 'him', w: 380 },
       ],
@@ -226,7 +228,8 @@ export const STRIP = {
       sound: 'creak',
       bubbles: [
         { kind: 'caption', key: 'comic.s5.p10.cap', at: [1000, 46], w: 460 },
-        { kind: 'say', key: 'comic.s5.p10.insp', at: [470, 250], to: 'insp', w: 320 },
+        // R8: up by the door frame, left of the window, so the wide-eyed plant on the sill (the beat) stays clear
+        { kind: 'say', key: 'comic.s5.p10.insp', at: [250, 150], to: 'insp', w: 320 },
       ],
     },
     {

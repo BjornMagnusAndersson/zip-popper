@@ -348,9 +348,10 @@ export const ROUND_GOLD_CHANCE = 0.2;
  * @param {string[]} zones the zone name of each bump
  * @param {() => number} rand random numbers
  * @param {string[]|null} [allowed] the kinds that may be placed (null = every built kind)
+ * @param {Object<string, string[]>} [prefer] kind -> zones tried before its usual ones (roomyTop: horns on a free forehead)
  * @returns {string[]} the kind of each bump
  */
-function typesFor(zones, rand, allowed = null) {
+function typesFor(zones, rand, allowed = null, prefer = {}) {
   /** Whether a kind may be placed on this face. @param {string} t kind @returns {boolean} true when it may */
   const ok = (t) => isImplemented(t) && (!allowed || allowed.includes(t));
   let plain = PLAIN_KINDS.filter(ok);
@@ -383,7 +384,10 @@ function typesFor(zones, rand, allowed = null) {
     const { chance = 0, maxPerFace = 1, zones: want = null } = bumpInfo(type).spawn;
     for (let n = 0; n < maxPerFace; n += 1) {
       if (rand() >= chance) continue;
-      let i = take(want, true);
+      // Its preferred zones first (a horn on a free forehead); take() draws a random number only when it finds one,
+      // so the number of draws, and with it the rest of the face, stays as before.
+      let i = prefer[type] ? take(prefer[type], true) : -1;
+      if (i < 0) i = take(want, true);
       if (i < 0) i = take(null, true);
       if (i >= 0) types[i] = type;
     }
@@ -420,14 +424,16 @@ function mixList(mix) {
  * @param {string[]} zones the zone name of each bump (as many as the list)
  * @param {() => number} rand random numbers
  * @param {string[]} want the kinds (mixList), pickiest first
+ * @param {Object<string, string[]>} [prefer] kind -> zones tried before its usual ones (roomyTop: horns on a free forehead)
  * @returns {string[]} the kind of each bump
  */
-function typesFromMix(zones, rand, want) {
+function typesFromMix(zones, rand, want, prefer = {}) {
   const types = zones.map(() => null);
   for (const type of want) {
     const liked = bumpInfo(type)?.spawn?.zones ?? MIX_ZONES[type] ?? null;
     const free = zones.map((z, i) => i).filter((i) => types[i] === null);
-    const good = liked ? free.filter((i) => liked.includes(zones[i])) : free;
+    const top = prefer[type] ? free.filter((i) => prefer[type].includes(zones[i])) : []; // e.g. a horn on a free forehead
+    const good = top.length ? top : liked ? free.filter((i) => liked.includes(zones[i])) : free;
     const pool = good.length ? good : free;
     if (pool.length) types[pool[Math.floor(rand() * pool.length)]] = type;
   }
@@ -486,6 +492,35 @@ export function growStart(p, reduced) {
   return { r: r0, r0, growFor: p.growFor };
 }
 
+/** The zones an Evil Horn tries first when they have room (owner 2026-10-29: horns belong on the forehead). */
+const HORN_TOP_ZONES = ['forehead', 'temple'];
+
+/**
+ * Which of a face's top zones (forehead, temple) have bare skin for a fully grown Evil Horn: not under the hair, a hat,
+ * a fringe or a headband, and off the brows. A covered forehead sends the horn to the cheeks and jaw as before.
+ * Checks a fixed grid of points, so it draws no random numbers and old seeds keep the rest of their faces.
+ * @param {object} face the face geometry from faceGeometry()
+ * @param {{name: string, u: number[], v: number[]}[]} zones this face's zones (the temple already on its side)
+ * @param {number} r the horn's full radius in px
+ * @returns {string[]} the names of the roomy top zones, forehead first
+ */
+function roomyTop(face, zones, r) {
+  const out = [];
+  for (const name of HORN_TOP_ZONES) {
+    const z = zones.find((x) => x.name === name);
+    if (!z) continue;
+    let room = false;
+    for (let a = 0; a <= 4 && !room; a += 1) {
+      for (let b = 0; b <= 4 && !room; b += 1) {
+        const pt = facePoint(face, z.u[0] + ((z.u[1] - z.u[0]) * a) / 4, z.v[0] + ((z.v[1] - z.v[0]) * b) / 4);
+        room = onSkin(face, pt.x, pt.y, r) && !face.keepOut.some((k) => hitsBox(pt.x, pt.y, r * 1.1, k, 2));
+      }
+    }
+    if (room) out.push(name);
+  }
+  return out;
+}
+
 /**
  * Where the bumps sit on a face: one per zone (forehead, cheeks, nose, chin, jaw, temple), each on bare skin, off the
  * eyes, brows and mouth, off the nose strip, and far enough apart that every bump has its own fingertip tap circle.
@@ -511,8 +546,9 @@ export function layoutFace({ seed, face, count = FACE_BUMPS, strip = false, allo
     const z = list[i % list.length];
     zones.push(z.name === 'temple' ? { ...z, u: [z.u[0] * templeSide, z.u[1] * templeSide].sort((a, b) => a - b) } : z);
   }
-  const types = want ? typesFromMix(zones.map((z) => z.name), rand, want) : typesFor(zones.map((z) => z.name), rand, Array.isArray(allowed) ? allowed : null);
   const hornScale = Number.isFinite(grown) && grown > 0 ? grown : 0;
+  const prefer = { horn: roomyTop(face, zones, bumpInfo('horn').radius[1] * face.unit * (hornScale || 1)) };
+  const types = want ? typesFromMix(zones.map((z) => z.name), rand, want, prefer) : typesFor(zones.map((z) => z.name), rand, Array.isArray(allowed) ? allowed : null, prefer);
   const items = zones.map((zone, i) => {
     const [a, b] = bumpInfo(types[i]).radius;
     const scale = hornScale && types[i] === 'horn' ? hornScale : 1; // a boss's Evil Horns are bigger (T8.4)

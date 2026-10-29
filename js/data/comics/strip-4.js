@@ -8,12 +8,24 @@
 // Format: docs/COMIC-FORMAT.md.
 
 const SOFA = '#2f8a70'; // the sofa at night
+const NIGHT_CURTAINS = '#7b6ad8'; // the living-room curtains (the same in panel 7 when the lamp is on, R8)
 
 /** The living room at night (dark wall, moon and stars, lamp off). @param {number} w panel width @param {number} h panel height @param {object} [o] room options @returns {object} layer */
 const night = (w, h, o = {}) => ({
   art: 'room', kind: 'living', w, h, wall: ['#3b3566', '#2d2850'], stripes: '#35305e', skirting: '#4b4a86', floor: '#4a3a52',
-  boards: '#3a2d42', sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true, curtains: '#7b6ad8', lamp: false, ...o,
+  boards: '#3a2d42', sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true, curtains: NIGHT_CURTAINS, lamp: false, ...o,
 });
+
+/**
+ * The living room's floor lamp, switched off (R8: it is the lamp that clicks on in panel 7, so it stands in the room
+ * before that): the same shape as the room's own lamp, but a dull shade and no glow.
+ * @param {number} x middle @param {number} F floor line of the panel @returns {object[]} shape layers (put them before the sofa)
+ */
+const lampOff = (x, F) => [
+  { shape: 'path', d: `M${x} ${F * 0.45} L${x} ${F + 30}`, stroke: true, sw: 10 },
+  { shape: 'ellipse', x, y: F + 34, rx: 50, ry: 12, fill: '#4e3424', stroke: true, sw: 4 },
+  { shape: 'path', d: `M${x - 42} ${F * 0.28} L${x + 42} ${F * 0.28} L${x + 70} ${F * 0.46} L${x - 70} ${F * 0.46}Z`, fill: '#a8914e', stroke: true, sw: 5 },
+];
 
 /**
  * A mug of cold tea (no steam, a wrinkly skin on top), optionally with a smug face and a tiny party hat.
@@ -133,6 +145,7 @@ const PANELS = [
           night(1600, 900, { floorY: 640, windowX: 0.6, pictureX: 0.22, plantX: 0.06, plantEyes: 'sad' }),
           { shape: 'circle', x: 1420, y: 170, r: 58, fill: '#fff8ee', stroke: true, sw: 6 },
           { shape: 'path', d: 'M1420 170 L1376 158 M1420 170 L1452 176', fill: 'none', stroke: true, sw: 7 },
+          ...lampOff(1270, 640), // off for now; it clicks on in panel 7
           { art: 'sofa', x: 800, y: 870, w: 820, color: SOFA },
           { shape: 'path', d: 'M904 770 L740 430 L880 410Z', fill: '#8fe3ff', opacity: 0.22 },
           { id: 'her', art: 'heroine', x: 800, y: 905, pose: 'sit', expr: 'sad', hold: 'phone', outfit: 'pajamas', look: 1 },
@@ -225,6 +238,7 @@ const PANELS = [
       scene: {
         layers: [
           night(1600, 900, { floorY: 640, windowX: 0.5, pictureX: 0.08, plant: false }),
+          ...lampOff(1525, 640), // still off: it clicks on in the next panel
           { art: 'sofa', x: 420, y: 870, w: 700, color: SOFA },
           { id: 'her', art: 'heroine', x: 420, y: 900, pose: 'sit', expr: 'shocked', hold: 'phone', outfit: 'pajamas', look: 1 },
           ...idea(),
@@ -243,7 +257,7 @@ const PANELS = [
       scene: {
         layers: [
           { art: 'room', kind: 'living', w: 900, h: 1200, floorY: 860, windowX: 0.3, sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true,
-            picture: false, plantX: 0.92, plantEyes: 'wide', lampX: 0.7 },
+            curtains: NIGHT_CURTAINS, picture: false, plantX: 0.92, plantEyes: 'wide', lampX: 0.7 },
           { shape: 'path', d: 'M540 230 l-50 -40 M630 170 l0 -60 M720 230 l50 -40 M520 330 l-60 0 M740 330 l60 0', fill: 'none', stroke: '#ffd25a', sw: 9 },
           { art: 'sofa', x: 380, y: 1150, w: 700 },
           { id: 'her', art: 'heroine', x: 380, y: 1150, pose: 'sit', expr: 'scheming', hold: 'phone', outfit: 'pajamas', look: 1 },

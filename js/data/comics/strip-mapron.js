@@ -98,6 +98,7 @@ export const STRIP = {
   id: 'mapron',
   title: 'comic.mapron.title',
   studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
+  gloves: true, // her blue gloves once she owns them, though the strip keeps its own apron look (app-logic.js comicStudio)
   panels: [
     {
       // 1. Montage, step 1: the new apron. She ties the strings round her neck like a cape. The plant watches.

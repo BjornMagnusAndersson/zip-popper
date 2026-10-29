@@ -53,7 +53,7 @@ export const STRIP = {
       scene: {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.15, door: false, leakX: 0.9, sign: false, bulb: false, plant: false }),
-          { art: 'gloves', x: 560, y: 470, scale: 1.3 },
+          { art: 'gloves', x: 560, y: 470, scale: 1.3, sealed: true }, // still taped shut: never opened (story audit 2026-10-29)
           { art: 'plant', x: 720, y: 590, scale: 0.7, eyes: 'wide', scarf: '#e8505b', sweat: true },
           { id: 'insp', art: 'inspector', x: 240, y: 700, scale: 0.75, pose: 'point', hold: 'clipboard', expr: 'grumpy', look: 1 },
         ],

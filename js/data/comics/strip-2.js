@@ -100,6 +100,19 @@ const shield = (x, y, k) => [
   { shape: 'path', d: `M${x - 32 * k} ${y + 93 * k} L${x + 32 * k} ${y + 157 * k}`, stroke: '#c9302c', sw: 9 },
 ];
 
+/**
+ * Her forearm coming up from the bottom of a close-up panel to her fist round the giant tweezers' joined end
+ * (R8 Q16: the handle had no hand on it). Put it after the tweezers so the fist grips them.
+ * @param {number} x0 elbow x (below the panel edge) @param {number} y0 elbow y @param {number} x fist x
+ * @param {number} y fist y @returns {object[]} shape layers
+ */
+const tweezerHand = (x0, y0, x, y) => [
+  { shape: 'path', d: `M${x0} ${y0} L${x} ${y}`, stroke: true, sw: 46 },
+  { shape: 'path', d: `M${x0} ${y0} L${x} ${y}`, stroke: '#e66a8f', sw: 34 },
+  { shape: 'ellipse', x, y, rx: 26, ry: 24, fill: '#ebb795', stroke: true, sw: 5 },
+  { shape: 'path', d: `M${x - 12} ${y - 2} l0 14 M${x} ${y} l0 14 M${x + 12} ${y - 2} l0 14`, stroke: true, sw: 4, opacity: 0.6 },
+];
+
 export const STRIP = {
   id: 'strip2',
   title: 'comic.s2.title',
@@ -131,11 +144,12 @@ export const STRIP = {
         layers: [
           kitchen(800, 600, { floorY: 520, windowX: 0.8, plant: false }),
           { id: 'him', art: 'husband', x: 420, y: 660, scale: 1.2, pose: 'bust', outfit: 'armor', visor: 'up', expr: 'neutral', look: -1 },
-          { shape: 'circle', x: 338, y: 366, r: 11, fill: '#ff8fa8', stroke: true, sw: 3 },
-          { art: 'sparkles', x: 330, y: 370, r: 50 },
+          // low on his jaw, where the chink and the round's gap are (R8 Q16: at the eye corner it read as a stye)
+          { shape: 'circle', x: 322, y: 455, r: 11, fill: '#ff8fa8', stroke: true, sw: 3 },
+          { art: 'sparkles', x: 318, y: 458, r: 50 },
         ],
       },
-      camera: { move: 'pushIn', focus: [340, 370], amount: 0.12, ms: 2500 },
+      camera: { move: 'pushIn', focus: [330, 440], amount: 0.12, ms: 2500 },
       bubbles: [{ kind: 'caption', key: 'comic.s2.p2.cap', at: [400, 40], w: 600 }],
     },
     {
@@ -197,7 +211,8 @@ export const STRIP = {
           kitchen(800, 600, { floorY: 520, windowX: 0.5, plant: false }),
           { id: 'him', art: 'husband', x: 560, y: 660, scale: 1.15, pose: 'bust', outfit: 'armor', visor: 'down', expr: 'grumpy', flip: true },
           { id: 'her', art: 'heroine', x: 150, y: 690, scale: 1.0, pose: 'bust', expr: 'happy', look: 1 },
-          ...bigTweezers(260, 580, 50, 1.8),
+          ...bigTweezers(262, 572, 50, 1.8),
+          ...tweezerHand(226, 660, 262, 572),
         ],
       },
       camera: { move: 'shake' },
@@ -231,7 +246,8 @@ export const STRIP = {
           { id: 'him', art: 'husband', x: 560, y: 680, scale: 1.1, pose: 'bust', outfit: 'armor', visor: 'down', expr: 'shocked', flip: true },
           ...chink(452, 547, 0.9),
           { id: 'her', art: 'heroine', x: 170, y: 700, scale: 1.05, pose: 'bust', expr: 'bliss', look: 1 },
-          ...bigTweezers(270, 640, 62, 1.3),
+          ...bigTweezers(240, 572, 83, 1.25),
+          ...tweezerHand(200, 660, 240, 572),
         ],
       },
       camera: { move: 'pushIn', focus: [440, 540], amount: 0.12, ms: 3000 },
@@ -251,7 +267,8 @@ export const STRIP = {
           { id: 'him', art: 'husband', x: 540, y: 1000, scale: 1.15, pose: 'hips', outfit: 'armor', visor: 'down', expr: 'proud', plumes: 1 },
           ...patch(430, 560, 1),
           { art: 'sparkles', x: 430, y: 560, r: 70, color: '#ffffff' },
-          ...shield(330, 600, 1),
+          // the shield stands on the floor against his leg, his hand resting on its rim (R8 Q16: it floated)
+          ...shield(425, 760, 0.8),
           { id: 'her', art: 'heroine', x: 870, y: 1000, scale: 0.6, pose: 'stand', expr: 'sad', look: -1, hold: 'tweezers', holdScale: 2 },
         ],
       },
@@ -269,6 +286,7 @@ export const STRIP = {
       scene: {
         layers: [
           kitchen(1600, 900, { floorY: 600, windowX: 0.5, plant: false }),
+          ...shield(1460, 560, 0.6), // his new shield leaning by his chair, behind the table
           { id: 'him', art: 'husband', x: 1220, y: 960, pose: 'sit', outfit: 'armor', visor: 'down', expr: 'grumpy', plumes: 1, flip: true },
           { id: 'her', art: 'heroine', x: 380, y: 960, pose: 'pop', expr: 'bliss', look: 1 },
           ...table(-20, 1620, 700, 900),

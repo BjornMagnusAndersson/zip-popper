@@ -65,11 +65,12 @@ export const STRIP = {
   studio: 'owned', // her studio as she owns it: the sad plant on its shelf until the living plant is bought (SPEC D32j)
   panels: [
     {
-      // 1. Closing time. She reads the new review on her phone: three stars! The studio dog sleeps by the bucket.
+      // 1. Closing time. She reads the new review on her phone: three stars! The studio dog (a stray that wandered in and
+      // stayed, story audit R4) sleeps by the bucket.
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.92, windowX: 0.42, leakX: 0.72, bulbX: 0.56, signX: 0.24 }),
+          studio(1600, 900, { floorY: 600, doorX: 0.92, windowX: 0.42, leakX: 0.825, bulbX: 0.56, signX: 0.24 }), // leak over the bucket (1320)
           { art: 'bucket', x: 1320, y: 830, scale: 0.5 },
           { art: 'dog', x: 1060, y: 880, scale: 0.95, stance: 'sleep' },
           { id: 'her', art: 'heroine', x: 720, y: 900, scale: 0.8, pose: 'cheer', hold: 'phone', expr: 'bliss' },
@@ -80,6 +81,8 @@ export const STRIP = {
       bubbles: [
         { kind: 'caption', key: 'comic.mstar.p1.cap', at: [810, 60], w: 480 }, // B9: right of the CLEAN! sign
         { kind: 'say', key: 'comic.mstar.p1.her', at: [1180, 250], to: 'her', w: 440, sound: 'cheer' },
+        // R4: where the studio dog comes from (a stray), low on the left, clear of her, the dog and the CLEAN! sign
+        { kind: 'caption', key: 'comic.mstar.p1.dog', at: [300, 830], w: 460 },
       ],
     },
     {
@@ -104,9 +107,11 @@ export const STRIP = {
         layers: [
           { art: 'rays', w: 1000, h: 1000, x: 400, y: 420, colors: ['#ffe9f1', '#ffd0e0'] },
           ...confetti(0, 0, 1000, 820, 70, 3),
-          { art: 'burst', x: 420, y: 400, r: 170, color: '#ffe27a' },
-          { id: 'greta', art: 'greta', x: 210, y: 1030, scale: 0.7, pose: 'cheer', expr: 'happy', look: 1 },
-          ...cannon(343, 650, 0.95, 18, true),
+          { art: 'burst', x: 260, y: 380, r: 160, color: '#ffe27a' },
+          // Greta holds the fired cannon up over her head in both fists (drawn after it, so her fists grip it; story
+          // audit 2026-10-29: it used to float between her and {name}).
+          ...cannon(186, 701, 1.4, 12, true),
+          { id: 'greta', art: 'greta', x: 210, y: 1030, scale: 0.7, pose: 'lift', expr: 'happy', look: 1 },
           { id: 'her', art: 'heroine', x: 590, y: 1030, scale: 0.7, pose: 'cheer', expr: 'bliss' },
           { id: 'dog', art: 'dog', x: 840, y: 990, scale: 0.6, stance: 'run', face: 'bark' },
           ...confetti(40, 20, 920, 330, 26, 11, 1.2),

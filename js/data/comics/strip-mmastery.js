@@ -78,18 +78,6 @@ function blurHand(x, y, side) {
 }
 
 /**
- * The plant's red sweatband with a white stripe and a little knot, tied round the stems above the pot.
- * @param {number} x plant x @param {number} y plant floor y @param {number} s plant scale @returns {object[]} shape layers
- */
-function sweatband(x, y, s) {
-  return [
-    { shape: 'path', d: `M${x + 40 * s} ${y - 222 * s} L${x + 96 * s} ${y - 196 * s} L${x + 84 * s} ${y - 240 * s}Z`, fill: '#e8505b', stroke: true, sw: 4 },
-    { shape: 'rect', x: x - 64 * s, y: y - 244 * s, w: 128 * s, h: 34 * s, rx: 14 * s, fill: '#e8505b', stroke: true, sw: 5 },
-    { shape: 'path', d: `M${x - 58 * s} ${y - 227 * s} L${x + 58 * s} ${y - 227 * s}`, fill: 'none', stroke: '#ffffff', sw: 7 * s },
-  ];
-}
-
-/**
  * A tea mug with steam (her second tea).
  * @param {number} x middle @param {number} y bottom @param {number} k size @returns {object[]} shape layers
  */
@@ -114,21 +102,23 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.5, leakX: 0.36, bulbX: 0.5, signX: 0.86, plantX: 0.64, plantEyes: 'wide' }), // B9: in from the edge so CLEAN! shows
+          studio(1600, 900, { floorY: 600, doorX: 0.06, windowX: 0.5, leakX: 0.36, bulbX: 0.5, signX: 0.9, plantX: 0.64, plantEyes: 'wide' }), // B9: in from the edge so CLEAN! shows; sign right of Greta so her bubble tail never crosses the C (story audit 2026-10-29)
           { art: 'chair', x: 300, y: 870, scale: 0.75, color: '#9a8f6a' },
-          { id: 'nils', art: 'nils', x: 300, y: 870, scale: 0.75, pose: 'sit', expr: 'proud', look: 1 },
-          ...stopwatch(420, 640, 62, 0),
-          { art: 'chair', x: 1300, y: 870, scale: 0.75, color: '#9a8f6a' },
-          { id: 'greta', art: 'greta', x: 1300, y: 870, scale: 0.75, pose: 'sit', expr: 'happy', look: -1 },
-          ...knitting(1300, 690, 0.9),
-          { id: 'her', art: 'heroine', x: 800, y: 880, scale: 0.85, pose: 'stand', hold: 'tweezers', expr: 'squint', look: 1 },
+          // The stopwatch first, then Nils, so his raised fist grips it (story audit 2026-10-29: it used to float).
+          ...stopwatch(452, 486, 62, 0),
+          { id: 'nils', art: 'nils', x: 300, y: 870, scale: 0.75, pose: 'sitLift', expr: 'proud', look: 1 },
+          { art: 'chair', x: 1260, y: 870, scale: 0.75, color: '#9a8f6a' },
+          { id: 'greta', art: 'greta', x: 1260, y: 870, scale: 0.75, pose: 'sit', expr: 'happy', look: -1 },
+          ...knitting(1260, 690, 0.9),
+          // Popping hands ready, no tool: this strip can play before the tweezers are bought (story audit 2026-10-29).
+          { id: 'her', art: 'heroine', x: 800, y: 880, scale: 0.85, pose: 'pop', expr: 'squint', look: 1 },
         ],
       },
       camera: { move: 'pushIn', focus: [800, 450], amount: 0.06, ms: 3000 },
       bubbles: [
         { kind: 'caption', key: 'comic.mmastery.p1.cap', at: [800, 60], w: 760 },
         { kind: 'say', key: 'comic.mmastery.p1.nils', at: [300, 250], to: 'nils', w: 300 },
-        { kind: 'whisper', key: 'comic.mmastery.p1.greta', at: [1310, 320], to: 'greta', w: 280 }, // under the CLEAN! sign
+        { kind: 'whisper', key: 'comic.mmastery.p1.greta', at: [1270, 320], to: 'greta', w: 280 }, // under the CLEAN! sign
       ],
     },
     {
@@ -163,8 +153,8 @@ export const STRIP = {
           // B10: Nils bigger, his bubble up and out of the way.
           { id: 'nils', art: 'nils', x: 150, y: 1080, scale: 0.85, pose: 'bust', expr: 'shocked', look: 1 },
           ...stopwatch(300, 930, 80, 60),
-          { art: 'plant', x: 860, y: 1000, scale: 0.9, eyes: 'happy', sweat: true },
-          ...sweatband(860, 1000, 0.9),
+          // The plant draws its own sweatband, so it sits right on a drooping plant too (story audit 2026-10-29).
+          { art: 'plant', x: 860, y: 1000, scale: 0.9, eyes: 'happy', sweat: true, sweatband: true },
           zips(860, 740, 200, -40, 40, 3, 40),
         ],
       },
@@ -184,8 +174,9 @@ export const STRIP = {
           // B9: the busts, mug and stopwatch sit lower and the end caption is in the top band, clear of mouths and watch.
           { id: 'her', art: 'heroine', x: 170, y: 740, scale: 0.85, pose: 'bust', expr: 'proud', look: 1 },
           ...mug(300, 550, 0.9),
-          { id: 'nils', art: 'nils', x: 630, y: 740, scale: 0.85, pose: 'bust', expr: 'shocked', look: -1 },
-          ...stopwatch(540, 530, 48, 350),
+          // Nils mirrored so his raised right fist, on her side, grips the stopwatch (it used to float, story audit 2026-10-29).
+          ...stopwatch(443, 432, 48, 350),
+          { id: 'nils', art: 'nils', x: 630, y: 740, scale: 0.85, pose: 'bustLift', flip: true, expr: 'shocked', look: 1 },
         ],
       },
       sound: 'pop_small',

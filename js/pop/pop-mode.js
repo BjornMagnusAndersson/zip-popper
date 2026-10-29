@@ -1070,7 +1070,8 @@ export function createPopMode({
      *   room 0..2; layers = owned studio upgrades drawn in the studio (save.studioLayers, T5.1a); career = false makes a round that cannot fail (default
      *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload;
      *   customerName = shown in the header ("Popping Pilot Pete", else "Pop them!"); skipCost = what "Next customer"
-     *   costs in reputation, shown on the fail choice (left out = no cost shown). twist = the customer's twist
+     *   costs in reputation, shown on the fail choice (left out = no cost shown); retryOnly = true hides "Next customer"
+     *   (a story round before the studio opens, app-logic.js roundArgs). twist = the customer's twist
      *   (T8.3, data/twists.js: 'fidgety', 'ticklish', 'sensitive', or 'hurry' for a hurry request; shown as a label
      *   in the header, the first three also change the play); twistHintKey = its tip for the hint line (until the
      *   first pop). boss = a boss or event customer's face rules (T8.4, data/bosses.js bossSpec `boss`) and
@@ -1107,6 +1108,8 @@ export function createPopMode({
       moodOverride = typeof o.mood === 'string' ? o.mood : null;
       if (guideBtn) guideBtn.hidden = o.request?.type === 'hurry'; // a hurry clock cannot pause: no guide in that round (T6.5)
       setRoundTexts(typeof o.customerName === 'string' && o.customerName ? o.customerName : null, o.skipCost);
+      failNext.hidden = o.retryOnly === true; // a story round (Hubby): only Try again after a storm-off
+      if (o.retryOnly === true) failNote.hidden = true;
       buildToolBar(tools);
       room = o.room === 'home' ? 'home' : 'studio';
       if (Number.isFinite(o.tier)) tier = o.tier;

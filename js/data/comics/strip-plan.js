@@ -8,8 +8,8 @@
 // Running gags: his helmet gets fancier (three plumes, now with cereal loops still stuck on it), the plant (sad,
 // then amazed, then happy and greener), the roof. Visual surprise: the dream studio. Format: docs/COMIC-FORMAT.md.
 
-/** Her husband in his full armor, visor up, three plumes (the helmet ladder, see STORY.md; owner 2026-10-28: full armor, as he slept in it in strip 4 and wears it in strip 5). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
-const helmeted = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, outfit: 'armor', visor: 'up', plumes: 3, ...o });
+/** Her husband in his full armor, visor up, three plumes and Greta's knitted hat (the helmet ladder, see STORY.md; owner 2026-10-28: full armor, as he slept in it in strip 4 and wears it in strip 5; R8: the hat from strip 3 p10, as in strip 5). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
+const helmeted = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, outfit: 'armor', visor: 'up', plumes: 3, cozy: '#f27eb2', ...o });
 
 /** Where a husband layer's head is (centre and size), for things stuck to his helmet. @param {object} l the layer @returns {{x: number, y: number, k: number}} head centre and head scale */
 function headOf(l) {
@@ -56,18 +56,23 @@ function table(x0, x1, top, bottom) {
 }
 
 /**
- * His helmet upside down on the table as a cereal bowl: a steel dome, milk, cereal loops, a spoon, the plume flopped over.
+ * His helmet upside down on the table as a cereal bowl: a steel dome, milk, cereal loops, a spoon, the plumes flopped
+ * over (R8: the red one plus his three extra plumes in yellow, blue and green, as on his head in panel 2).
  * @param {number} x middle @param {number} y table top @param {number} k size @returns {object[]} shape layers
  */
 function helmetBowl(x, y, k) {
+  // The red plume's shape, flopping down to the lower left of the bowl's crown; the extra plumes are the same shape turned.
+  const plume = `M${x - 10 * k} ${y - 6 * k} C${x - 40 * k} ${y + 30 * k} ${x - 90 * k} ${y + 40 * k} ${x - 100 * k} ${y + 120 * k} C${x - 60 * k} ${y + 80 * k} ${x - 20 * k} ${y + 50 * k} ${x + 16 * k} ${y - 4 * k}Z`;
   const out = [
+    // the extra plumes first, fanned out behind the red one (turned round the crown)
+    ...[[55, '#3fae8c'], [28, '#ffd25a'], [-24, '#6a7be6']].map(([a, c]) => ({ shape: 'path', d: plume, x, y: y - 4 * k, rotate: a, fill: c, stroke: true, sw: 5 })),
     // The cheek guards stick up at both sides; the red plume flops down over the front of the table.
     { shape: 'path', d: `M${x - 112 * k} ${y - 90 * k} L${x - 128 * k} ${y - 150 * k} L${x - 84 * k} ${y - 168 * k} L${x - 78 * k} ${y - 100 * k}Z`, fill: '#c9d3de', stroke: true, sw: 5 },
     { shape: 'path', d: `M${x + 112 * k} ${y - 90 * k} L${x + 128 * k} ${y - 150 * k} L${x + 84 * k} ${y - 168 * k} L${x + 78 * k} ${y - 100 * k}Z`, fill: '#c9d3de', stroke: true, sw: 5 },
     { shape: 'path', d: `M${x - 110 * k} ${y - 96 * k} C${x - 110 * k} ${y + 10 * k} ${x + 110 * k} ${y + 10 * k} ${x + 110 * k} ${y - 96 * k}Z`, fill: '#c9d3de', stroke: true, sw: 6 },
     { shape: 'path', d: `M${x - 80 * k} ${y - 70 * k} Q${x - 70 * k} ${y - 20 * k} ${x - 30 * k} ${y - 12 * k}`, stroke: '#ffffff', sw: 8 * k, opacity: 0.7 },
     ...[[-74, -60], [74, -60], [0, -34]].map(([dx, dy]) => ({ shape: 'circle', x: x + dx * k, y: y + dy * k, r: 7 * k, fill: '#8a96a6' })),
-    { shape: 'path', d: `M${x - 10 * k} ${y - 6 * k} C${x - 40 * k} ${y + 30 * k} ${x - 90 * k} ${y + 40 * k} ${x - 100 * k} ${y + 120 * k} C${x - 60 * k} ${y + 80 * k} ${x - 20 * k} ${y + 50 * k} ${x + 16 * k} ${y - 4 * k}Z`, fill: '#e8505b', stroke: true, sw: 5 },
+    { shape: 'path', d: plume, fill: '#e8505b', stroke: true, sw: 5 },
     { shape: 'ellipse', x, y: y - 96 * k, rx: 110 * k, ry: 22 * k, fill: '#fff8ee', stroke: true, sw: 5 },
     { shape: 'path', d: `M${x + 30 * k} ${y - 100 * k} L${x + 90 * k} ${y - 200 * k}`, stroke: true, sw: 16 * k + 4 },
     { shape: 'path', d: `M${x + 30 * k} ${y - 100 * k} L${x + 90 * k} ${y - 200 * k}`, stroke: '#d7dee7', sw: 16 * k },
@@ -432,6 +437,8 @@ export const STRIP = {
         // B44(4): caption and her bubble a little to the left, so the shout fits on one line above the lamp shade.
         { kind: 'caption', key: 'comic.plan.p7.cap', at: [240, 52], w: 430 },
         { kind: 'say', key: 'comic.plan.p7.her', at: [700, 110], to: 'her', w: 400 },
+        // R9: his loophole, a callback to the ban's "Rule 3: Not in the house!" (strip 0); over the door, left of his face
+        { kind: 'say', key: 'comic.plan.p7.him', at: [160, 400], to: 'him', w: 250 },
         { kind: 'shout', key: 'comic.plan.p7.click', at: [1330, 64], w: 560, sound: 'creak' },
       ],
     },
@@ -449,8 +456,10 @@ export const STRIP = {
       },
       camera: { move: 'pullOut', focus: [800, 400], amount: 0.1, ms: 4000 },
       bubbles: [
-        { kind: 'whisper', key: 'comic.plan.p8.her', at: [420, 380], to: 'her', w: 260 },
-        { kind: 'caption', key: 'comic.plan.p8.cap', at: [320, 846], w: 600 },
+        // R8: on an upright phone both sit above the art, so the whisper goes right and the caption stays narrow on the
+        // left: the whisper's tail then comes down past the caption instead of through it.
+        { kind: 'whisper', key: 'comic.plan.p8.her', at: [1000, 300], to: 'her', w: 260 },
+        { kind: 'caption', key: 'comic.plan.p8.cap', at: [300, 830], w: 460 },
       ],
     },
   ],

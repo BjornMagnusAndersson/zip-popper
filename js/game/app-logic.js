@@ -202,19 +202,26 @@ export function comicOutfit(strip, save) {
 /**
  * What the comic player draws of her studio and hands for a strip (SPEC D32e and D32j, comic-art.js studioKit):
  * - gloves: in `dressed` strips she wears her blue gloves once she owns them (after the hygiene scare), except in
- *   strips marked `bareHands` (opening day and the scare itself: their words are about bare hands);
+ *   strips marked `bareHands` (opening day and the scare itself: their words are about bare hands); strips marked
+ *   `gloves: true` follow her gloves too without being dressed (the apron strip keeps its own outfit, story audit);
  * - livingPlant: in strips marked `studio: 'owned'` (set in her studio after the shop opens) the plant follows the
  *   shop: the sad little plant on the sill until the living plant is bought and scrubbed.
+ * - leakFixed: once "Fix the leak" is bought and scrubbed (story audit R2), every strip drops the drip and the leak
+ *   stain (the bucket stays, as a mop bucket), except the strips whose story IS the leak (LEAK_STORY_STRIPS).
  * @param {object|null} strip the strip data
  * @param {object} save the save
- * @returns {{gloves: boolean, livingPlant?: boolean}|null} what to draw, or null = draw the strip as it is
+ * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean}|null} what to draw, or null = draw the strip as it is
  */
 export function comicStudio(strip, save) {
   if (!strip) return null;
-  const gloves = Boolean(strip.dressed && !strip.bareHands && Object.hasOwn(economyFromSave(save).items, 'gloves'));
-  if (strip.studio !== 'owned') return gloves ? { gloves } : null;
-  return { gloves, livingPlant: backdropLayers(save).includes('plant') };
+  const gloves = Boolean((strip.dressed || strip.gloves) && !strip.bareHands && Object.hasOwn(economyFromSave(save).items, 'gloves'));
+  const leak = !LEAK_STORY_STRIPS.includes(strip.id) && backdropLayers(save).includes('leakFix') ? { leakFixed: true } : {};
+  if (strip.studio !== 'owned') return gloves || leak.leakFixed ? { gloves, ...leak } : null;
+  return { gloves, livingPlant: backdropLayers(save).includes('plant'), ...leak };
 }
+
+/** Strips that always draw the leak, even after "Fix the leak": opening day (strip 5) and the fix itself (mleak). */
+export const LEAK_STORY_STRIPS = ['strip5', 'mleak'];
 
 /**
  * The throwaway save of a test run (?test): a fresh save moved to the asked chapter and customer, with the asked
@@ -551,6 +558,9 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
     request, room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), pins: save.pinJar ?? 0, pin, career: true,
     decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
+    // A story round before the studio opens (Hubby, chapters 0 to 4) has no "Next customer" after a storm-off, only
+    // Try again: skipping him would jump to the ban strip without a pop (owner 2026-10-29, R8 R5).
+    retryOnly: !paysMoney(step),
     twist, twistHintKey: boss ? boss.hintKey : describeTwist(twist, { ownedTools: unlockedTools })?.hintKey ?? null,
     boss: spec.boss ?? null, bossNameKey: boss?.nameKey ?? null, // T8.4
     // T8.5: the daily challenge's date and goal (a clock goal carries its limit, the same as the hurry request's).

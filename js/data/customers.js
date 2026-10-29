@@ -60,16 +60,16 @@ function regular(id, chapter, bumps, bumpTypes, face) {
 
 /** The eight named regulars, in the order they are first met. */
 export const REGULARS = [
-  regular('pete', 2, 6, ['whitehead', 'red', 'blackhead'], {
+  regular('pete', 5, 6, ['whitehead', 'red', 'blackhead'], {
     shape: 'square', skinTone: 'light', hair: 'short', hairColor: 'grey',
     eyes: 'wide', brows: 'thick', mouth: 'flat', accessories: ['pilot-cap', 'moustache'],
   }),
   // Nils and Penny look as in the comics (R8): Nils bald with ginger tufts and a ginger moustache, no glasses.
-  regular('nils', 2, 7, ['whitehead', 'red'], {
+  regular('nils', 3, 7, ['whitehead', 'red'], {
     shape: 'long', skinTone: 'fair', hair: 'bald', hairColor: 'ginger',
     eyes: 'tiny', brows: 'worried', mouth: 'wobbly', accessories: ['moustache'],
   }),
-  regular('cora', 3, 7, ['whitehead', 'red', 'blackhead'], {
+  regular('cora', 5, 7, ['whitehead', 'red', 'blackhead'], {
     shape: 'oval', skinTone: 'tan', hair: 'bun', hairColor: 'brown',
     eyes: 'sleepy', brows: 'arched', mouth: 'smile', accessories: ['scarf', 'earrings'],
   }),

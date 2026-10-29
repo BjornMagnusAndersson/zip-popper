@@ -91,7 +91,8 @@ export const STRIP = {
           studio(1600, 900, { floorY: 600, doorX: 0.08, windowX: 0.44, leak: false, bulb: false, signX: 0.86, plantX: 0.22, lamp: false }),
           { art: 'chair', x: 1000, y: 870, scale: 0.75, color: '#9a8f6a' },
           { id: 'nils', art: 'nils', x: 1000, y: 870, scale: 0.75, pose: 'sit', expr: 'squint', look: -1 },
-          { id: 'her', art: 'heroine', x: 620, y: 880, scale: 0.85, pose: 'stand', hold: 'tweezers', expr: 'squint', look: 1 },
+          // Empty hand, pointing at the pore: this strip can play before the tweezers are bought (story audit 2026-10-29).
+          { id: 'her', art: 'heroine', x: 620, y: 880, scale: 0.85, pose: 'point', expr: 'squint', look: 1 },
           dark(1600, 900, 0.62),
         ],
       },

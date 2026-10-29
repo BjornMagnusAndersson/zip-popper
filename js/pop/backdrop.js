@@ -1463,7 +1463,8 @@ export function shelfSpot(w, h, kind) {
 
 /**
  * The pin jar on the right end of the shelf (owner 2026-10-28, game/pin-jar.js): a little glass jar with a red lid,
- * filling up with the home-popping safety pins she took away from customers. Nothing before the first pin.
+ * filling up with the home-popping safety pins she took away from customers. Nothing before the first pin. Half as big
+ * again since v83 (owner 2026-10-29: too small to notice); it stands just in front of the spa shelf's succulent.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {number} w width
  * @param {number} h height
@@ -1474,41 +1475,100 @@ export function shelfSpot(w, h, kind) {
 export function drawPinJar(ctx, w, h, kind, count) {
   if (!(count > 0)) return;
   const { x, y, len, rot } = shelfSpot(w, h, kind);
-  const k = len / 120;
-  const lw = Math.max(1, 1.3 * k);
-  const jw = 15 * k;
-  const jh = 22 * k;
+  const plank = len / 120; // the shelf's own unit
+  const k = plank * 1.5; // the jar's unit: half as big again as the first version
+  const lw = Math.max(1, 1.3 * plank);
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(rot);
-  ctx.translate(113 * k, 0);
+  ctx.translate(108 * plank, 0);
+  jarPicture(ctx, k, lw, count);
+  ctx.restore();
+}
+
+/**
+ * The pin jar itself, its bottom middle at (0, 0): the glass, the pins in rows of four from the bottom up, the shine
+ * and the red lid. While drop is under 1 the newest pin falls in from above and the lid hovers, lifted and tilted.
+ * @param {CanvasRenderingContext2D} ctx the context (already moved to where the jar stands)
+ * @param {number} k the jar's unit (15k wide, 22k high)
+ * @param {number} lw outline width
+ * @param {number} count pins in the jar
+ * @param {number} [drop] 0..1 how far the newest pin has fallen (1 = in place, lid on)
+ * @returns {void}
+ */
+function jarPicture(ctx, k, lw, count, drop = 1) {
+  const jw = 15 * k;
+  const jh = 22 * k;
+  const falling = drop < 1 ? count - 1 : -1;
   box(ctx, -jw / 2, -jh, jw, jh, 3 * k); // the glass, a faint tint
   ctx.fillStyle = 'rgba(215,238,245,0.45)';
   ctx.fill();
   const cols = ['#e2524f', '#4f8fe2', '#f2c14e', '#5fbf8e', '#c46fe0'];
-  for (let i = 0; i < count; i += 1) { // the pins: rows of four from the bottom up, each a little tilted
-    const row = Math.floor(i / 4);
-    const px = (-4.5 + (i % 4) * 3 + (row % 2) * 1.2) * k;
-    const py = -2.5 * k - row * 2.6 * k;
-    const a = ((i * 37) % 7 - 3) * 0.25;
+  /**
+   * One safety pin, lying a little tilted.
+   * @param {number} i which pin (its colour, slot and tilt)
+   * @param {number} px x
+   * @param {number} py y
+   * @returns {void}
+   */
+  const pin = (i, px, py) => {
     ctx.save();
     ctx.translate(px, py);
-    ctx.rotate(a);
+    ctx.rotate(((i * 37) % 7 - 3) * 0.25);
     ctx.strokeStyle = '#9aa4ab';
     ctx.lineWidth = Math.max(0.8, 0.8 * k);
     ctx.beginPath(); ctx.moveTo(-2.2 * k, 0); ctx.lineTo(2.2 * k, 0); ctx.stroke();
     ctx.fillStyle = cols[i % cols.length];
     ctx.beginPath(); ctx.arc(-2.4 * k, 0, 0.95 * k, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-  }
+  };
+  /** Where pin i lies in the jar. @param {number} i which pin @returns {number[]} x and y */
+  const slot = (i) => {
+    const row = Math.floor(i / 4);
+    return [(-4.5 + (i % 4) * 3 + (row % 2) * 1.2) * k, -2.5 * k - row * 2.6 * k];
+  };
+  ctx.save();
+  box(ctx, -jw / 2, -jh, jw, jh, 3 * k);
+  ctx.clip(); // the pins stay inside the glass
+  for (let i = 0; i < count; i += 1) if (i !== falling) pin(i, ...slot(i));
+  ctx.restore();
   box(ctx, -jw / 2, -jh, jw, jh, 3 * k); // the glass outline and a shine on top of the pins
   ctx.strokeStyle = INK.ink;
   ctx.lineWidth = lw;
   ctx.stroke();
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.fillRect(-jw / 2 + 2 * k, -jh + 3 * k, 1.8 * k, jh - 7 * k);
+  ctx.save();
+  if (falling >= 0) { // the lid lifted off and tilted (round its own middle) while the pin goes in
+    ctx.translate(jw * 0.1, -jh - 9 * k);
+    ctx.rotate(0.2);
+    ctx.translate(0, jh + 2 * k);
+  }
   box(ctx, -jw / 2 - 1 * k, -jh - 4 * k, jw + 2 * k, 4.5 * k, 1.5 * k); // the red lid
   inked(ctx, '#e2524f', lw, INK);
+  ctx.restore();
+  if (falling >= 0) { // the newest pin drops past the lid into its place, speeding up as it falls (drawn in front)
+    const [sx, sy] = slot(falling);
+    const t = Math.max(0, drop);
+    pin(falling, sx, -jh - 12 * k + (sy + jh + 12 * k) * t * t);
+  }
+}
+
+/**
+ * The pin jar as a small picture on its own (the result card after a pin visit, owner 2026-10-29), filling a canvas of
+ * w x h with room above the jar for the falling pin.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} count pins in the jar (game/pin-jar.js pinsDrawn)
+ * @param {number} [drop] 0..1 how far the newest pin has fallen (1 = in place, lid on)
+ * @returns {void}
+ */
+export function drawPinJarPicture(ctx, w, h, count, drop = 1) {
+  const k = Math.min(h / 40, w / 26);
+  ctx.save();
+  ctx.translate(w / 2, h - 2);
+  jarPicture(ctx, k, Math.max(1, 1.3 * k * 0.6), count, drop);
   ctx.restore();
 }
 

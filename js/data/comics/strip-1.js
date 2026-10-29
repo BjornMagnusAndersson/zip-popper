@@ -89,6 +89,15 @@ function miniHelmet(x, y, s = 1) {
   ];
 }
 
+/**
+ * Her closed hand drawn by the scene (over a prop, so it looks gripped): a skin fist with three knuckle lines.
+ * @param {number} x middle @param {number} y middle @param {number} [k] size (1 = a hand at scale 1) @returns {object[]} shape layers
+ */
+const fist = (x, y, k = 1) => [
+  { shape: 'ellipse', x, y, rx: 26 * k, ry: 24 * k, fill: '#ebb795', stroke: true, sw: 5 },
+  { shape: 'path', d: `M${x - 12 * k} ${y + 4 * k} l0 ${14 * k} M${x} ${y + 6 * k} l0 ${14 * k} M${x + 12 * k} ${y + 4 * k} l0 ${14 * k}`, stroke: true, sw: 4, opacity: 0.6 },
+];
+
 export const STRIP = {
   id: 'strip1',
   title: 'comic.s1.title',
@@ -98,7 +107,8 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          bedroom(1600, 900, { floorY: 640, windowX: 0.84, plant: true, plantX: 0.07 }),
+          // the plant on the right, by her side of the bed, as in panel 10 (R8 Q16: it changed sides)
+          bedroom(1600, 900, { floorY: 640, windowX: 0.16, plant: true, plantX: 0.93 }),
           { art: 'bed', x: 800, y: 900, w: 1000 },
           { id: 'him', art: 'husband', x: 560, y: 690, pose: 'lie', expr: 'sleepy', outfit: 'pajamas' },
           { id: 'her', art: 'heroine', x: 1040, y: 690, pose: 'lie', expr: 'sneaky', outfit: 'pajamas', look: -1 },
@@ -119,8 +129,11 @@ export const STRIP = {
         bg: ['#3a2f63', '#5a4a8a'],
         layers: [
           { shape: 'circle', x: 520, y: 300, r: 330, fill: '#fff3a8', opacity: 0.35 },
-          { id: 'her', art: 'heroine', x: 270, y: 800, pose: 'point', expr: 'sneaky', outfit: 'pajamas', hold: 'torch', look: 1 },
-          ...bubbleWrap(430, 470, 6, 2, 3),
+          // grip: the scene draws her fist round the torch, which shines down on the wrap (R8 Q16: the beam was on her face)
+          { id: 'her', art: 'heroine', x: 270, y: 800, pose: 'point', expr: 'sneaky', outfit: 'pajamas', grip: true, look: 1 },
+          ...bubbleWrap(430, 470, 6, 2, 0), // "Just one bubble": none popped yet
+          { art: 'torch', x: 545, y: 435, rotate: 195 },
+          ...fist(545, 435),
           { shape: 'path', d: 'M0 0 L800 0 L800 70 Q600 150 400 110 Q200 150 0 70Z', fill: '#7b6ad8', stroke: true, sw: 6 },
           { shape: 'path', d: 'M120 0 q20 60 0 110 M560 0 q-20 70 10 120', fill: 'none', stroke: true, sw: 4, opacity: 0.3 },
         ],
@@ -161,7 +174,8 @@ export const STRIP = {
           { id: 'him', art: 'husband', x: 300, y: 690, scale: 1.05, pose: 'bust', expr: 'sleepy', outfit: 'pajamas', look: 1 },
           { shape: 'circle', x: 820, y: 560, r: 260, fill: '#ffd25a', opacity: 0.35 },
           { shape: 'circle', x: 820, y: 560, r: 150, fill: '#fff3a8', opacity: 0.6 },
-          { shape: 'path', d: 'M-10 600 L-10 520 Q300 470 600 500 Q700 420 810 400 L810 600Z', fill: '#7b6ad8', stroke: true, sw: 6 },
+          // the blanket low enough that his beard shows (R8 Q16)
+          { shape: 'path', d: 'M-10 600 L-10 585 Q300 560 560 572 Q700 470 810 430 L810 600Z', fill: '#7b6ad8', stroke: true, sw: 6 },
         ],
       },
       camera: { move: 'pushIn', focus: [300, 330], amount: 0.08, ms: 2500 },
@@ -219,7 +233,7 @@ export const STRIP = {
         bg: '#2b2340',
         layers: [
           { shape: 'rect', x: 60, y: 40, w: 880, h: 990, rx: 10, fill: '#5a3f2a', stroke: true, sw: 8 },
-          { shape: 'circle', x: 520, y: 420, r: 380, fill: '#fff3a8', opacity: 0.3 },
+          { shape: 'circle', x: 600, y: 680, r: 360, fill: '#fff3a8', opacity: 0.3 },
           { shape: 'path', d: 'M60 170 L940 170', fill: 'none', stroke: '#c9d3de', sw: 12 },
           { shape: 'path', d: 'M110 175 L190 175 L230 520 L70 520Z', fill: '#e8735a', stroke: true, sw: 6 },
           { shape: 'path', d: 'M200 175 L280 175 L320 470 L160 470Z', fill: '#59b85f', stroke: true, sw: 6 },
@@ -227,8 +241,14 @@ export const STRIP = {
           ...wrapRoll(170, 1000, 330),
           ...wrapRoll(840, 1000, 400),
           ...wrapRoll(300, 1000, 190),
-          { id: 'her', art: 'heroine', x: 520, y: 1060, scale: 1.2, pose: 'pop', expr: 'bliss', outfit: 'pajamas', hold: 'torch' },
-          ...bubbleWrap(350, 560, 7, 2, 9),
+          // R8 Q16: the sheet is in her hands (her fists on its edges) and the torch hangs from the rail by its strap,
+          // shining down on the wrap (it used to float in front of her and the beam lit her face).
+          { id: 'her', art: 'heroine', x: 520, y: 1060, scale: 1.2, pose: 'hips', expr: 'bliss', outfit: 'pajamas' },
+          ...bubbleWrap(386, 756, 5, 2, 6, 1.1),
+          ...fist(412, 814, 1.2),
+          ...fist(628, 814, 1.2),
+          { shape: 'path', d: 'M876 172 L880 420', stroke: true, sw: 4 },
+          { art: 'torch', x: 860, y: 440, rotate: 262, scale: 1.4 },
           { art: 'sparkles', x: 200, y: 330, r: 90 },
           { art: 'sparkles', x: 820, y: 660, r: 80 },
         ],
@@ -237,7 +257,7 @@ export const STRIP = {
       sound: 'pop_small',
       bubbles: [
         { kind: 'caption', key: 'comic.s1.p7.cap', at: [500, 60], w: 640 },
-        { kind: 'whisper', key: 'comic.s1.p7.her', at: [790, 300], to: 'her', w: 300, sound: 'pop_small' },
+        { kind: 'whisper', key: 'comic.s1.p7.her', at: [210, 330], to: 'her', w: 300, sound: 'pop_small' }, // left: the torch hangs on the right
       ],
     },
     {
@@ -281,7 +301,8 @@ export const STRIP = {
         { kind: 'say', key: 'comic.s1.p9.her', at: [790, 80], to: 'her', w: 380 },
         { kind: 'say', key: 'comic.s1.p9.him', at: [225, 90], to: 'him', w: 400 },
         { kind: 'say', key: 'comic.s1.p9.her2', at: [790, 390], to: 'her', w: 320 },
-        { kind: 'shout', key: 'comic.s1.p9.no', at: [220, 450], to: 'him', w: 180 },
+        // beside his head, not on his hair (R8 Q16)
+        { kind: 'shout', key: 'comic.s1.p9.no', at: [490, 630], to: 'him', w: 170 },
       ],
     },
     {

@@ -38,8 +38,10 @@ export const HUSBAND_ARMOR = {
   introKey: 'chapter.2.husband.intro',
   resultKeys: { happy: 'chapter.2.husband.happy', ok: 'chapter.2.husband.ok', ow: 'chapter.2.husband.ow' },
   deadlineKey: 'chapter.2.husband.deadline',
-  // His comic look in his knight's helmet, visor up, one red plume (as in strip 2); the bumps sit in the open front.
-  face: { character: 'husband', armor: { plumes: 1 }, accessories: [] },
+  // His comic look in his knight's helmet, visor up, two plumes, red and yellow, as strip 2 ends (p9, p10); the bumps
+  // sit in the open front. Mind the count: here (pop/characters.js) plumes is the TOTAL, in the comics
+  // (comic-art.js) it counts the EXTRA plumes behind the red one, so strip 2's `plumes: 1` is this `plumes: 2`.
+  face: { character: 'husband', armor: { plumes: 2 }, accessories: [] },
   bumps: 2,
   bumpTypes: ['whitehead'],
   chapter: 2,

@@ -2,7 +2,7 @@
 // Beginning: the hall, Greta's welcome, Nils and Penny. Middle: the share circle, the talking sock, her confession,
 // her big idea, silence. End: the group cheers (splash). Button: outside, her husband waits in his fanciest armor,
 // wearing a hat Greta knitted him. Running gags: Greta's knitted gifts (cup cozy, talking sock, the plant's scarf,
-// his hat); the plant; the armor gets fancier (three plumes). Visual surprise: in the silence, the knight peeks in
+// his hat); the plant; the armor gets fancier (two plumes). Visual surprise: in the silence, the knight peeks in
 // at the window. Format: docs/COMIC-FORMAT.md.
 
 /** The community hall filling a panel (the plant wears Greta's scarf). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
@@ -11,7 +11,7 @@ const hall = (w, h, o = {}) => ({ art: 'room', kind: 'hall', w, h, plantScarf: '
 /** A folding chair with someone sitting on it. @param {object} who the character layer (art, x, y, scale...) @param {string} [color] seat colour @returns {object[]} layers */
 const seated = (who, color) => [{ art: 'chair', x: who.x, y: who.y, scale: who.scale, color }, { pose: 'sit', ...who }];
 
-/** Her husband peeking in at the window in his armor, now with three plumes. @param {number} x middle @param {number} y chest @param {number} s scale @returns {object} layer */
+/** Her husband peeking in at the window in his armor, now with two plumes. @param {number} x middle @param {number} y chest @param {number} s scale @returns {object} layer */
 const knightOutside = (x, y, s) => ({ art: 'husband', x, y, scale: s, pose: 'bust', outfit: 'armor', visor: 'down', plumes: 2 });
 
 /**
@@ -75,10 +75,23 @@ const yarn = (x, y, r, fill) => [
   { shape: 'path', d: `M${x - r * 0.8} ${y - r * 0.3} Q${x} ${y - r * 0.9} ${x + r * 0.8} ${y - r * 0.2} M${x - r * 0.9} ${y + r * 0.2} Q${x} ${y - r * 0.3} ${x + r * 0.9} ${y + r * 0.3} M${x - r * 0.6} ${y + r * 0.65} Q${x} ${y + r * 0.2} ${x + r * 0.6} ${y + r * 0.7}`, fill: 'none', stroke: '#ffffff', sw: 3, opacity: 0.6 },
 ];
 
-/** Greta's knitting in her lap: two needles and a growing pink square. @param {number} x middle @param {number} y middle @returns {object[]} shape layers */
+/**
+ * Greta's knitting in her lap: a growing pink piece with stitch rows, two needles sticking up out of its top edge in a
+ * V (R8: crossed over the square it read as an envelope) and a yarn strand running off to a little ball beside her.
+ * @param {number} x middle @param {number} y middle @returns {object[]} shape layers
+ */
 const knitting = (x, y) => [
-  { shape: 'rect', x: x - 34, y: y - 20, w: 68, h: 46, rx: 6, fill: '#f27eb2', stroke: true, sw: 4 },
-  { shape: 'path', d: `M${x - 70} ${y - 50} L${x + 20} ${y + 10} M${x + 70} ${y - 50} L${x - 20} ${y + 10}`, fill: 'none', stroke: '#b07a4a', sw: 6 },
+  // the needles first, so the knitted piece covers their lower ends; a round knob on each tip
+  { shape: 'path', d: `M${x - 14} ${y - 6} L${x - 62} ${y - 78} M${x + 14} ${y - 6} L${x + 62} ${y - 78}`, stroke: true, sw: 11 },
+  { shape: 'path', d: `M${x - 14} ${y - 6} L${x - 62} ${y - 78} M${x + 14} ${y - 6} L${x + 62} ${y - 78}`, stroke: '#d9a066', sw: 6 },
+  { shape: 'circle', x: x - 64, y: y - 82, r: 8, fill: '#6a7be6', stroke: true, sw: 3 },
+  { shape: 'circle', x: x + 64, y: y - 82, r: 8, fill: '#6a7be6', stroke: true, sw: 3 },
+  { shape: 'rect', x: x - 34, y: y - 18, w: 68, h: 44, rx: 6, fill: '#f27eb2', stroke: true, sw: 4 },
+  // stitch rows: little Vs, like real knitting
+  { shape: 'path', d: `M${x - 24} ${y - 6} l6 8 l6 -8 l6 8 l6 -8 l6 8 l6 -8 l6 8 l6 -8 M${x - 24} ${y + 8} l6 8 l6 -8 l6 8 l6 -8 l6 8 l6 -8 l6 8 l6 -8`, stroke: '#c95a92', sw: 3 },
+  // the yarn strand from the top corner, looping down to a small ball
+  { shape: 'path', d: `M${x + 30} ${y - 14} Q${x + 80} ${y - 30} ${x + 82} ${y + 30}`, stroke: '#f27eb2', sw: 5 },
+  ...yarn(x + 84, y + 46, 18, '#f27eb2'),
 ];
 
 export const STRIP = {
@@ -213,7 +226,7 @@ export const STRIP = {
       bubbles: [{ kind: 'shout', key: 'comic.s3.p7.her', at: [500, 140], to: 'her', w: 760, sound: 'pop_small' }],
     },
     {
-      // 8. Silence. Everyone frozen, the knitting drops. Surprise: a knight with three plumes peeks in at the window.
+      // 8. Silence. Everyone frozen, the knitting drops. Surprise: a knight with two plumes peeks in at the window.
       layout: 'wide',
       scene: {
         layers: [
@@ -266,14 +279,17 @@ export const STRIP = {
           { shape: 'rect', x: 40, y: 400, w: 200, h: 150, rx: 8, fill: '#fff3a8', stroke: true, sw: 6 },
           { shape: 'rect', x: 0, y: 1010, w: 900, h: 190, fill: '#9aa6b4', stroke: true, sw: 6 },
           { id: 'greta', art: 'greta', x: 760, y: 1010, scale: 0.65, pose: 'wave', expr: 'happy', flip: true },
-          { id: 'him', art: 'husband', x: 220, y: 1130, outfit: 'armor', plumes: 2, cozy: '#f27eb2', expr: 'proud', pose: 'hips' },
+          // R8: a little lower (his feet are behind the caption anyway), so on a landscape phone his bubble clears the hat
+          { id: 'him', art: 'husband', x: 220, y: 1250, outfit: 'armor', plumes: 2, cozy: '#f27eb2', expr: 'proud', pose: 'hips' },
           { id: 'her', art: 'heroine', x: 490, y: 1120, scale: 0.9, pose: 'cheer', expr: 'bliss', look: -1 },
         ],
       },
       camera: { move: 'pullOut', focus: [450, 700], amount: 0.1, ms: 3500 },
       bubbles: [
-        { kind: 'say', key: 'comic.s3.p10.her', at: [650, 170], to: 'her', w: 380 },
-        { kind: 'say', key: 'comic.s3.p10.him', at: [190, 150], to: 'him', w: 330 },
+        // R8: both bubbles hug the top, so on a landscape phone (where his bubble has to make room below hers) it
+        // still ends above his knitted hat instead of covering it.
+        { kind: 'say', key: 'comic.s3.p10.her', at: [670, 100], to: 'her', w: 380 },
+        { kind: 'say', key: 'comic.s3.p10.him', at: [190, 120], to: 'him', w: 330 },
         { kind: 'caption', key: 'comic.s3.p10.end', at: [450, 1150], w: 780, sound: 'pop_small' },
       ],
     },

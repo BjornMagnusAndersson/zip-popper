@@ -99,10 +99,16 @@ export const POSES = {
   // The hand cups the chin (R7: after the pop on his chin he used to cover an eye with the facepalm).
   chin: { arms: [[[-112, -270], [-116, -175]], [[135, -300], [22, -392]]], legs: 'stand' },
   facepalm: { arms: [[[-112, -270], [-116, -175]], [[150, -320], [40, -505]]], legs: 'stand' },
+  // Both fists out to the sides at chest height, gripping something wide (strip "mleak": his hands on the ladder rails).
+  grip: { arms: [[[-175, -250], [-140, -330]], [[175, -250], [140, -330]]], legs: 'stand' },
   sit: { arms: [[[-118, -230], [-104, -150]], [[118, -230], [104, -150]]], legs: 'sit', hipY: -100, down: 75 },
+  // Sitting with the right fist raised, holding something up (strip "mmastery": Nils and his stopwatch).
+  sitLift: { arms: [[[-118, -230], [-104, -150]], [[165, -330], [175, -450]]], legs: 'sit', hipY: -100, down: 75 },
   // Sitting with no arms drawn, for scenes that draw the arms themselves (strip 'plan' panel 1: his hands hold the plan).
   sitHands: { arms: null, legs: 'sit', hipY: -100, down: 75 },
   bust: { arms: [[[-112, -270], [-116, -175]], [[112, -270], [116, -175]]], legs: 'none', shift: 260 },
+  // A bust with the right fist raised into the panel, holding something up (Greta's needles, Nils's stopwatch).
+  bustLift: { arms: [[[-112, -270], [-116, -175]], [[175, -400], [190, -530]]], legs: 'none', shift: 260 },
   lie: { arms: null, legs: 'none', shift: 260 },
 };
 
@@ -869,18 +875,29 @@ function heldThing(what, at, k = 1) {
 
 /**
  * A box of rubber gloves (the inspector's gift): blue and white card box, a glove picture on the front and a puffy
- * glove popping out of the slot on top. Bottom middle at 0,0, about 190 units tall.
+ * glove popping out of the slot on top. Sealed (never opened, strip "scare"): no glove, the slot still a dotted
+ * tear-off line, and a strip of shiny tape across the top. Bottom middle at 0,0, about 190 units tall.
+ * @param {boolean} [sealed] true = the unopened box
  * @returns {SVGElement} the box
  */
-function gloveBox() {
+function gloveBox(sealed = false) {
   const g = el('g');
   const blue = GLOVE_BLUE;
   // The glove sticking out of the top: palm and four fingers, slightly puffed with air.
-  for (const [a, len] of [[-34, 54], [-12, 66], [10, 62], [32, 50]]) g.appendChild(el('rect', { x: -12, y: -len, width: 24, height: len, rx: 12, fill: blue, ...ink(4), transform: `translate(${a * 1.4 + 4} -150) rotate(${a * 0.6})` }));
-  g.appendChild(el('ellipse', { cx: 6, cy: -142, rx: 58, ry: 28, fill: blue, ...ink(4.5) }));
+  if (!sealed) {
+    for (const [a, len] of [[-34, 54], [-12, 66], [10, 62], [32, 50]]) g.appendChild(el('rect', { x: -12, y: -len, width: 24, height: len, rx: 12, fill: blue, ...ink(4), transform: `translate(${a * 1.4 + 4} -150) rotate(${a * 0.6})` }));
+    g.appendChild(el('ellipse', { cx: 6, cy: -142, rx: 58, ry: 28, fill: blue, ...ink(4.5) }));
+  }
   g.appendChild(el('rect', { x: -86, y: -140, width: 172, height: 140, rx: 8, fill: '#ffffff', ...ink(5) }));
   g.appendChild(el('rect', { x: -86, y: -60, width: 172, height: 60, rx: 6, fill: tint(blue, -0.15), ...ink(4) }));
-  g.appendChild(el('rect', { x: -40, y: -152, width: 92, height: 18, rx: 9, fill: '#2b2f3a', ...ink(3) }));
+  if (sealed) {
+    // The slot still taped shut: a band of shiny tape along the top edge, with a little folded-over tab.
+    g.appendChild(el('rect', { x: -66, y: -152, width: 144, height: 28, rx: 4, fill: '#f3e3a0', opacity: 0.95, ...ink(3.5) }));
+    g.appendChild(el('path', { d: 'M78 -152 L92 -146 L84 -126 L78 -124Z', fill: '#e6d27e', ...ink(3) }));
+    g.appendChild(line('M-56 -144 L40 -144', 4, { stroke: '#ffffff', opacity: 0.8 }));
+  } else {
+    g.appendChild(el('rect', { x: -40, y: -152, width: 92, height: 18, rx: 9, fill: '#2b2f3a', ...ink(3) }));
+  }
   // Glove picture on the front (no words: words go in bubbles) and a plus sign.
   g.appendChild(el('path', { d: 'M-50 -72 L-50 -106 Q-50 -114 -44 -114 Q-38 -114 -38 -106 L-38 -120 Q-38 -128 -32 -128 Q-26 -128 -26 -120 L-26 -122 Q-26 -130 -20 -130 Q-14 -130 -14 -122 L-14 -114 Q-14 -120 -8 -120 Q-2 -120 -2 -112 L-2 -86 Q-2 -72 -16 -72Z', fill: blue, ...ink(3.5) }));
   g.appendChild(el('path', { d: 'M38 -118 l0 44 M16 -96 l44 0', stroke: '#e8505b', 'stroke-width': 14, 'stroke-linecap': 'round' }));
@@ -1139,7 +1156,7 @@ export const ROOMS = {
     sky: ['#8fd3ff', '#dff4ff'], cloud: true, curtains: '#f2c14e', picture: false, plant: true, lamp: false, board: true,
   },
   // Her first studio, tier 0 (strip 5 on), matching the game's dingy room (pop/backdrop.js): greenish grey paint with
-  // stains and peeling bits, grimy tiles, a sagging ceiling with a leak, a bare flickering bulb, a door, the "Clean!"
+  // stains and peeling bits, grimy tiles, an old pipe with a leaking joint, a bare flickering bulb, a door, the "Clean!"
   // sign (the painted word CLEAN!, a small tick, sparkles and a stain) and a cheap lamp. Options: leakX, bulbX, signX, signTilt,
   // signY (its nail's height as a share of the floor line, default 0.12), doorX, doorOpen, leak/bulb/sign/door false to hide one.
   studio: {
@@ -1158,8 +1175,8 @@ export const ROOMS = {
 };
 
 /**
- * The dingy studio's wall (tier 0): grimy tiles low down, water stains, peeling paint, cracks, a door and a sagging
- * ceiling patch with a drop hanging from it. Drawn into the room before the window.
+ * The dingy studio's wall (tier 0): grimy tiles low down, water stains, peeling paint, cracks and a door (the leaking
+ * pipe is drawn later, in shabbyFront). Drawn into the room before the window.
  * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
  * @returns {void}
  */
@@ -1211,15 +1228,6 @@ function shabbyWall(g, r, w, F) {
       g.appendChild(el('circle', { cx: dx + dw * 0.84, cy: dy + dh * 0.55, r: 10 * k, fill: '#c9a24a', ...ink(3) }));
     }
   }
-  if (r.leak) {
-    // The sagging ceiling: a damp bulge with stain rings, and a fat drop hanging under it.
-    const lx = w * (r.leakX ?? 0.5);
-    const s = 150 * k;
-    g.appendChild(el('path', { d: `M${lx - s * 1.4} 0 Q${lx - s * 0.8} ${s * 0.1} ${lx - s * 0.5} ${s * 0.32} Q${lx} ${s * 0.6} ${lx + s * 0.5} ${s * 0.32} Q${lx + s * 0.8} ${s * 0.1} ${lx + s * 1.4} 0Z`, fill: '#a39e7c', ...ink(5) }));
-    g.appendChild(el('ellipse', { cx: lx, cy: s * 0.22, rx: s * 0.6, ry: s * 0.14, fill: '#786834', opacity: 0.35 }));
-    g.appendChild(line(`M${lx - s * 0.9} ${s * 0.14} Q${lx} ${s * 0.4} ${lx + s * 0.9} ${s * 0.14}`, 3, { stroke: '#786834', opacity: 0.6 }));
-    g.appendChild(el('path', { d: `M${lx} ${s * 0.44} C${lx + 14 * k} ${s * 0.44 + 22 * k} ${lx + 14 * k} ${s * 0.44 + 38 * k} ${lx} ${s * 0.44 + 38 * k} C${lx - 14 * k} ${s * 0.44 + 38 * k} ${lx - 14 * k} ${s * 0.44 + 22 * k} ${lx} ${s * 0.44}Z`, fill: '#9ad8ff', ...ink(3.5) }));
-  }
 }
 
 /**
@@ -1256,7 +1264,7 @@ function signWordProp(l) {
 }
 
 /**
- * The dingy studio's things in front of the wall: the bare bulb on its cord (with flicker marks) and the "Clean!"
+ * The dingy studio's things in front of the wall: the leaking ceiling pipe (leak), the bare bulb on its cord (with flicker marks) and the "Clean!"
  * sign hanging crooked from a nail (the painted word CLEAN! with a small tick, sparkles, plus a stain that says
  * otherwise).
  * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
@@ -1264,6 +1272,11 @@ function signWordProp(l) {
  */
 function shabbyFront(g, r, w, F) {
   const k = Math.min(F / 600, w / 1000);
+  if (r.leak) {
+    // The leak (story audit 2026-10-29: the same as strip "mleak" and the game): the old grey pipe along the top of the
+    // wall, its dull joint at leakX with a brown stain under it and a drop hanging from it. In front of the curtain rod.
+    g.appendChild(pipe({ x: 0, w, y: 26 * k, r: 14 * k, jointX: w * (r.leakX ?? 0.5), joint: 'old' }).node);
+  }
   if (r.sign) {
     const sx = w * (r.signX ?? 0.72);
     const sy = F * (r.signY ?? 0.12);
@@ -1480,9 +1493,8 @@ function room(l) {
       g.appendChild(el('rect', { x: x - 62 * k, y, width: 124 * k, height: 36 * k, rx: 4 * k, fill: '#a07a48', ...ink(4) }));
       g.appendChild(line(`M${x - 52 * k} ${y + 18 * k} L${x + 52 * k} ${y + 18 * k}`, 3, { opacity: 0.5 }));
     }
-    g.appendChild(plant({ x, y: y + 2, scale: s, eyes: l.plantEyes, scarf: l.plantScarf || undefined, droop: l.plantSill ? l.plantEyes === 'sad' : true }).node);
-    // She highlighted everything (strip "books"): yellow stripes across the leaves.
-    if (l.plantHighlight) for (const [dy, i] of [[160, 0], [205, 1], [250, 2]]) g.appendChild(el('path', { d: `M${x - (100 - i * 14) * s} ${y - dy * s} L${x + (100 - i * 14) * s} ${y - dy * s - 20 * s}`, stroke: '#e9f542', 'stroke-width': 22 * s, opacity: 0.75, 'stroke-linecap': 'round' }));
+    // She highlighted everything (strip "books"): the plant draws the yellow stripes on its own leaves (droop or not).
+    g.appendChild(plant({ x, y: y + 2, scale: s, eyes: l.plantEyes, scarf: l.plantScarf || undefined, droop: l.plantSill ? l.plantEyes === 'sad' : true, highlight: !!l.plantHighlight }).node);
   } else if (r.plant) {
     const px = w * (l.plantX ?? 0.06);
     for (const [a, len] of [[-40, 150], [-15, 190], [10, 170], [35, 140], [-60, 110], [55, 105]]) {
@@ -1770,11 +1782,11 @@ function ladder(l) {
 
 /**
  * A box of rubber gloves on its own (the inspector's gift; "Gloves. Always gloves.").
- * @param {object} l layer: x, y (bottom middle), scale, rotate
+ * @param {object} l layer: x, y (bottom middle), scale, rotate, sealed (true = never opened: taped shut, no glove out)
  * @returns {{node: SVGElement}} the box
  */
 function gloves(l) {
-  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) rotate(${l.rotate ?? 0}) scale(${l.scale ?? 1})` }, [gloveBox()]) };
+  return { node: el('g', { transform: `translate(${l.x ?? 0} ${l.y ?? 0}) rotate(${l.rotate ?? 0}) scale(${l.scale ?? 1})` }, [gloveBox(!!l.sealed)]) };
 }
 
 /**
@@ -1782,7 +1794,8 @@ function gloves(l) {
  * carrying around. Same look as the room's plant, but it scales. Running gag: it watches with eyes on the pot.
  * @param {object} l layer: x, y (floor, middle of the pot), scale, eyes ('sad' | 'wide' | 'smug' | 'happy'),
  *   scarf (colour of Greta's knitted scarf), bud (true or a colour: a round pink bud on top), sweat (a worried drop),
- *   droop (true: a limp, pale plant with leaves flopping sideways)
+ *   droop (true: a limp, pale plant with leaves flopping sideways), highlight (yellow highlighter stripes on the
+ *   leaves), sweatband (a red sweatband on the stems, or on the pot's rim when it droops)
  * @returns {{node: SVGElement}} the plant
  */
 function plant(l) {
@@ -1808,6 +1821,26 @@ function plant(l) {
     g.appendChild(el('path', { d: 'M-40 -190 Q0 -170 44 -192 L46 -156 Q0 -134 -42 -154Z', fill: l.scarf, ...ink(5) }));
     g.appendChild(el('path', { d: 'M22 -158 L58 -76 L86 -88 L48 -164Z', fill: l.scarf, ...ink(5) }));
     g.appendChild(line('M-14 -178 l0 34 M14 -180 l0 34 M46 -112 l24 -10', 6, { stroke: '#ffffff', opacity: 0.8 }));
+  }
+  if (l.highlight) {
+    // She highlighted everything (strip "books"): yellow stripes across the tall leaves, or along the drooping ones.
+    const stripes = l.droop
+      ? [-1, 1].flatMap((sx) => [[58, 125], [86, 150]].map(([a, len]) => {
+        const dx = Math.sin((a * Math.PI) / 180);
+        const dy = -Math.cos((a * Math.PI) / 180);
+        return `M${sx * dx * len * 0.3} ${-130 + dy * len * 0.3} L${sx * dx * len * 0.85} ${-130 + dy * len * 0.85}`;
+      }))
+      : [[160, 0], [205, 1], [250, 2]].map(([dy, i]) => `M${-(100 - i * 14)} ${-dy} L${100 - i * 14} ${-dy - 20}`);
+    for (const d of stripes) g.appendChild(el('path', { d, stroke: '#e9f542', 'stroke-width': 22, opacity: 0.75, 'stroke-linecap': 'round' }));
+  }
+  if (l.sweatband) {
+    // A red sweatband with a white stripe and a knot (strip "mmastery"): round the stems of a tall plant, or round the
+    // pot's rim (its forehead) when the plant droops and no stems show.
+    const by = l.droop ? -137 : -227;
+    const bw = l.droop ? 80 : 64;
+    g.appendChild(el('path', { d: `M${bw * 0.62} ${by + 5} L${bw * 1.5} ${by + 31} L${bw * 1.31} ${by - 13}Z`, fill: '#e8505b', ...ink(4) }));
+    g.appendChild(el('rect', { x: -bw, y: by - 17, width: bw * 2, height: 34, rx: 14, fill: '#e8505b', ...ink(5) }));
+    g.appendChild(line(`M${-bw + 6} ${by} L${bw - 6} ${by}`, 7, { stroke: '#ffffff' }));
   }
   const k = l.eyes;
   if (k) {
@@ -2070,8 +2103,10 @@ export function dressHeroine(arts, outfit) {
  * - livingPlant: false = the studio's plant is the sad little plant (the one the game's tier-0 studio shows) on a
  *   small crate at its spot, and a plant on its own droops (she has not bought the living plant yet); true = the strips draw the
  *   big plant as they are.
+ * - leakFixed: true = she bought "Fix the leak" (story audit R2): studio rooms lose the old pipe with its stained,
+ *   dripping joint, drop layers draw nothing, and the bucket stays as a plain mop bucket (still water, no ripples).
  * @param {Record<string, Function>} arts an art kit (usually ARTS, maybe already dressed)
- * @param {{gloves?: boolean, livingPlant?: boolean}|null} [o] what she has (null or nothing = the kit unchanged)
+ * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean}|null} [o] what she has (null or nothing = the kit unchanged)
  * @returns {Record<string, Function>} the art kit to hand the comic player
  */
 export function studioKit(arts, o = null) {
@@ -2082,6 +2117,13 @@ export function studioKit(arts, o = null) {
     // A studio room keeps its own plantSill if it sets one, else its plant sits on the shelf; a stand-alone plant droops.
     if (typeof arts.room === 'function') kit.room = (l, k) => arts.room(l.kind === 'studio' && l.plantSill === undefined && l.plantShelf === undefined ? { ...l, plantShelf: true } : l, k);
     if (typeof arts.plant === 'function') kit.plant = (l, k) => arts.plant(l.droop === undefined ? { ...l, droop: true } : l, k);
+  }
+  if (o.leakFixed) {
+    // Chained on top of the plant change above (kit.room may already be wrapped): a studio room has no leak any more.
+    const room = kit.room;
+    if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' ? { ...l, leak: false } : l, k);
+    if (typeof arts.bucket === 'function') kit.bucket = (l, k) => arts.bucket({ ...l, ripple: false }, k);
+    if (typeof arts.drip === 'function') kit.drip = () => null; // no drop falls any more: the layer draws nothing
   }
   return kit;
 }

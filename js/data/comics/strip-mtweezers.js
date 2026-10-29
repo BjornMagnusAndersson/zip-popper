@@ -118,9 +118,11 @@ export const STRIP = {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.5, door: false, leak: false, sign: false, bulb: false, plant: false }),
           { art: 'plant', x: 715, y: 590, scale: 0.6, eyes: 'happy', scarf: '#e8505b' },
-          { id: 'greta', art: 'greta', x: 230, y: 620, scale: 0.85, pose: 'bust', expr: 'bliss', look: 1 },
+          // The needles start in her raised fist (drawn first, so the fist grips them; story audit 2026-10-29: they used
+          // to stand up on their own from the panel bottom).
+          { shape: 'path', d: 'M376 414 L446 316 M384 420 L494 316', fill: 'none', stroke: '#c9a46a', sw: 9 },
+          { id: 'greta', art: 'greta', x: 230, y: 620, scale: 0.85, pose: 'bustLift', expr: 'bliss', look: 1 },
           { shape: 'path', d: 'M196 430 q-8 18 0 26 q8 -8 0 -26Z M268 430 q-8 18 0 26 q8 -8 0 -26Z', fill: '#8fd3ff', stroke: true, sw: 2.5 },
-          { shape: 'path', d: 'M420 600 L446 316 M520 600 L494 316', fill: 'none', stroke: '#c9a46a', sw: 9 },
           { shape: 'circle', x: 446, y: 312, r: 9, fill: '#e8505b', stroke: true, sw: 3 },
           { shape: 'circle', x: 494, y: 312, r: 9, fill: '#e8505b', stroke: true, sw: 3 },
           ...tinyCape(470, 330, 1),

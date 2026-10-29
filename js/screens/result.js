@@ -7,6 +7,50 @@
 
 import { el, button, starIcon, icon, coinPill, screenShell } from './dom.js';
 import { starStates, coinRows, resultTitleKey, reputationLine } from './screen-logic.js';
+import { drawPinJarPicture } from '../pop/backdrop.js';
+import { pinsDrawn } from '../game/pin-jar.js';
+
+/** How the pin drops into the jar on the result card (owner 2026-10-29): a short wait, then the fall, in ms. */
+const PIN_DROP = { wait: 500, fall: 650 };
+/** The running pin-drop animation frame (one result screen at a time), so dispose can stop it. */
+let jarFrame = 0;
+
+/**
+ * The little pin jar picture for the "Pin taken away!" line: the jar with the pins in it, and the new pin dropping in
+ * while the lid hovers (reduced motion: the jar as it ends up, no fall).
+ * @param {number} count pins in the jar now (the new one included)
+ * @param {boolean} still true = reduced motion
+ * @returns {HTMLCanvasElement} the picture (decorative: the line beside it says it in words)
+ */
+function pinJarPicture(count, still) {
+  const W = 34;
+  const H = 52;
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const c = el('canvas', 'app-result__jar');
+  c.width = W * dpr;
+  c.height = H * dpr;
+  c.setAttribute('aria-hidden', 'true');
+  const ctx = c.getContext('2d');
+  const n = pinsDrawn(count);
+  /** Draw the jar with the newest pin this far down. @param {number} drop 0..1 @returns {void} */
+  const draw = (drop) => {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    drawPinJarPicture(ctx, W, H, n, drop);
+  };
+  if (still) { draw(1); return c; }
+  draw(0);
+  const start = performance.now();
+  /** One animation step. @param {number} now time in ms @returns {void} */
+  const step = (now) => {
+    const drop = Math.min(1, Math.max(0, (now - start - PIN_DROP.wait) / PIN_DROP.fall));
+    draw(drop);
+    if (drop < 1) jarFrame = requestAnimationFrame(step);
+  };
+  cancelAnimationFrame(jarFrame);
+  jarFrame = requestAnimationFrame(step);
+  return c;
+}
 
 /**
  * Build the result screen.
@@ -76,7 +120,7 @@ export function createResultScreen({
     }
     if (pinCount) { // a pin visit (owner 2026-10-28): she took the customer's pin from home away, into the jar
       const pin = el('p', 'app-result__stamp app-result__pin');
-      pin.append(icon('bulb'), el('span', '', t('ui.pin.taken', { n: pinCount })));
+      pin.append(pinJarPicture(pinCount, reducedMotion), el('span', '', t('ui.pin.taken', { n: pinCount })));
       main.append(pin);
     }
     if (reactionKey) main.append(el('p', 'app-result__quote', t(reactionKey, { name: playerName })));
@@ -122,6 +166,6 @@ export function createResultScreen({
   body.append(left, main);
   shell.node.append(body);
   /** Stop the reveal (if any) and remove the screen. @returns {void} */
-  const dispose = () => { reveal?.dispose?.(); shell.dispose(); };
+  const dispose = () => { reveal?.dispose?.(); cancelAnimationFrame(jarFrame); shell.dispose(); };
   return { node: shell.node, dispose };
 }

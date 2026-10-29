@@ -203,6 +203,7 @@
 .app-result__stamp svg { flex: none; width: 24px; height: 24px; }
 /* A pin visit (owner 2026-10-28): "Pin taken away!" in a pale blue pill (the jar's glass), not the gold of a stamp. */
 .app-result__pin { background: linear-gradient(160deg, #eef8fb, #bfe2ee); }
+.app-result__jar { flex: none; width: 34px; height: 52px; margin: -4px 0; } /* the jar picture, the pin drops in (v83) */
 .app-rep {
   order: 3; display: flex; align-items: center; justify-content: center; gap: 8px; align-self: center; max-width: 100%; padding: 6px 16px 6px 10px; border-radius: 999px;
   border: 3px solid var(--ink); background: var(--pink-soft); font-weight: 800; box-shadow: 0 3px 0 var(--ink);

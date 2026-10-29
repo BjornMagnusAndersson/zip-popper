@@ -191,7 +191,9 @@ const PANELS = [
       // 7. He knows that look. A fast dramatic zoom.
       layout: 'small',
       scene: { layers: [living(800, 600, { floorY: 520, windowX: 0.18, picture: false, plant: false, lamp: false }),
-        { id: 'him', art: 'husband', x: 530, y: 640, scale: 1.25, pose: 'bust', expr: 'shocked', flip: true }] },
+        { id: 'him', art: 'husband', x: 530, y: 640, scale: 1.25, pose: 'bust', expr: 'shocked', flip: true },
+        // the teeny chin bump from panel 5, just under his mouth (R8 Q16: it was missing in this close-up)
+        { shape: 'circle', x: 510, y: 482, r: 16, fill: '#ff9cb5', stroke: true, sw: 3 }] },
       camera: { move: 'pushIn', focus: [530, 300], amount: 0.16, ms: 700 },
       bubbles: [{ kind: 'shout', key: 'comic.s0.p7.him', at: [210, 130], to: 'him', w: 300 }],
     },
@@ -259,7 +261,8 @@ const PANELS = [
         { id: 'him', art: 'husband', x: 565, y: 640, scale: 0.95, pose: 'bust', expr: 'proud', flip: true }] },
       camera: { move: 'panRight', focus: [400, 300], amount: 0.1, ms: 2500 },
       bubbles: [
-        { kind: 'think', key: 'comic.s0.p10.her', at: [230, 90], to: 'her', w: 320 },
+        // said out loud, not thought: he answers it (R8 Q16)
+        { kind: 'say', key: 'comic.s0.p10.her', at: [230, 90], to: 'her', w: 320 },
         { kind: 'say', key: 'comic.s0.p10.him', at: [740, 250], to: 'him', w: 150 },
       ],
     },

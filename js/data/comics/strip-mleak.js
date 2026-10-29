@@ -1,33 +1,27 @@
 // Milestone strip "Fix the leak": shown when the player buys the studio upgrade "Fix the leak" in the shop. 5 panels.
 // Beginning: "Plink." The old ceiling pipe joint drips into the bucket; {name} holds up a shiny new pipe joint.
-// Middle: her husband, in his fanciest armor yet (six plumes, Greta's knitted hat, the purple cape and now a plumber's
-// tool belt with a giant wrench and a plunger), climbs the stepladder: "This is a job for a knight!" The ladder bows and
+// Middle: her husband, in his armor (five plumes, Greta's knitted hat and, new for this job, a plumber's tool belt with
+// a giant wrench and a plunger; no cape: strip "books" reveals that, story audit R3), climbs the stepladder: "This is a job for a knight!" The ladder bows and
 // creaks under all that steel. They swap: she climbs, he holds the ladder, "Steady as a castle!" Visual surprise: from
 // the top she spots a gap between his helmet and his collar, and in it a little bump (the zoom circle). "Hold still,
 // dear..." Button: he looks up just as the last drip falls on him, "Plink!", and jumps: "Leak: fixed. Husband: still
 // unpopped." Running gags: the armor ladder, he always escapes being popped. Format: docs/COMIC-FORMAT.md.
 
-/** Her tier-0 studio by day (the plant in Greta's scarf), with the room's sagging-ceiling leak off: here the leak is the pipe. @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
+/** Her tier-0 studio by day (the plant in Greta's scarf), with the room's own leak off: this strip draws its pipe as a layer. @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
 const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', leak: false, lamp: false, ...o });
 
-/** Her husband in his fanciest armor yet: six plumes and Greta's knitted hat (cape and tool belt are separate layers). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer */
-const knight = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, outfit: 'armor', visor: 'up', plumes: 6, cozy: '#f27eb2', ...o });
+/**
+ * Her husband in his armor: five plumes (one fewer than strip "books"), Greta's knitted hat, and no cape: this strip can
+ * play before "books", which reveals the cape as new (story audit R3). His new piece for this job is the tool belt (a
+ * separate layer). @param {number} x @param {number} y @param {number} s scale @param {object} [o] more options @returns {object} layer
+ */
+const knight = (x, y, s, o = {}) => ({ id: 'him', art: 'husband', x, y, scale: s, outfit: 'armor', visor: 'up', plumes: 5, cozy: '#f27eb2', ...o });
 
 /** The ladder, the same one in every panel. @param {number} x middle @param {number} y floor @param {number} s scale @param {object} [o] more options (bend, creak, wobble) @returns {object} layer */
 const stepladder = (x, y, s, o = {}) => ({ art: 'ladder', x, y, scale: s, h: 620, w: 220, steps: 4, ...o });
 
 /** Where a figure stands on the ladder's top step. @param {number} y ladder floor @param {number} s ladder scale @returns {number} y of the top step */
 const topStep = (y, s) => y - (620 + 26) * s;
-
-/**
- * His cape from strip "books" (purple with gold trim and little hearts), worn behind him.
- * @param {number} x his floor x @param {number} y his floor y @param {number} s his scale @returns {object[]} shape layers
- */
-const cape = (x, y, s) => [
-  { shape: 'path', d: `M${x - 120 * s} ${y - 380 * s} L${x + 120 * s} ${y - 380 * s} Q${x + 200 * s} ${y - 160 * s} ${x + 250 * s} ${y - 30 * s} Q${x} ${y + 10 * s} ${x - 250 * s} ${y - 30 * s} Q${x - 200 * s} ${y - 160 * s} ${x - 120 * s} ${y - 380 * s}Z`, fill: '#8e5bd0', stroke: true, sw: 6 },
-  { shape: 'path', d: `M${x - 244 * s} ${y - 44 * s} Q${x} ${y - 6 * s} ${x + 244 * s} ${y - 44 * s}`, fill: 'none', stroke: '#ffd25a', sw: 10 },
-  ...[[-180, -90], [190, -110]].map(([dx, dy]) => ({ shape: 'path', d: `M${x + dx * s} ${y + dy * s} c-10 -13 -28 0 0 18 c28 -18 10 -31 0 -18Z`, fill: '#ffd8e6', stroke: true, sw: 3 })),
-];
 
 /**
  * The new silly touch on his armor: a plumber's tool belt over the steel, with two pouches, a giant golden wrench on
@@ -128,18 +122,19 @@ export const STRIP = {
       scene: {
         layers: [
           studio(900, 1200, { floorY: 880, door: false, windowX: 0.84, bulb: false, sign: false, plant: false }),
-          { art: 'pipe', y: 110, w: 900, jointX: 470, joint: 'old' },
-          ...cape(470, 960, 0.7),
-          stepladder(470, 1160, 1, { bend: 1, creak: true }),
-          knight(470, 960, 0.7, { pose: 'hips', expr: 'proud', look: -1 }),
-          ...toolBelt(470, 960, 0.7),
+          { art: 'pipe', y: 110, w: 900, jointX: 560, joint: 'old' },
+          // He stands ON the top step (story audit 2026-10-29: he used to stand inside the ladder),
+          // a little right of the middle so his bubble fits on the left without covering him.
+          stepladder(560, 1160, 0.85, { bend: 1, creak: true }),
+          knight(560, topStep(1160, 0.85), 0.62, { pose: 'hips', expr: 'proud', look: -1 }),
+          ...toolBelt(560, topStep(1160, 0.85), 0.62),
           { id: 'her', art: 'heroine', x: 140, y: 1170, scale: 0.55, pose: 'stand', hold: 'pipeJoint', expr: 'shocked', look: 1 },
         ],
       },
       camera: { move: 'shake' },
       sound: 'creak',
       bubbles: [
-        { kind: 'say', key: 'comic.mleak.p2.him', at: [250, 300], to: 'him', w: 380 },
+        { kind: 'say', key: 'comic.mleak.p2.him', at: [210, 330], to: 'him', w: 330 }, // left of him, clear of him on the ladder top
         { kind: 'shout', key: 'comic.mleak.p2.creak', at: [700, 930], w: 400, sound: 'creak' }, // wide enough that the word never breaks
       ],
     },
@@ -152,8 +147,7 @@ export const STRIP = {
           { art: 'pipe', y: 110, w: 900, jointX: 590, joint: 'old' },
           stepladder(470, 1160, 1),
           { id: 'her', art: 'heroine', x: 470, y: topStep(1160, 1), scale: 0.6, pose: 'wave', hold: 'pipeJoint', expr: 'happy', look: 1 },
-          ...cape(470, 1170, 0.72),
-          knight(470, 1170, 0.72, { pose: 'stand', expr: 'proud', look: 1 }),
+          knight(470, 1170, 0.72, { pose: 'grip', expr: 'proud', look: 1 }), // his fists on the rails: "Steady as a castle!"
           ...toolBelt(470, 1170, 0.72),
         ],
       },
@@ -169,9 +163,9 @@ export const STRIP = {
         layers: [
           studio(1000, 1000, { floorY: 720, door: false, windowX: 0.62, bulb: false, sign: false, plant: false }),
           stepladder(300, 985, 0.85),
-          { id: 'her', art: 'heroine', x: 300, y: topStep(985, 0.85), scale: 0.55, pose: 'stand', hold: 'tweezers', expr: 'scheming', look: 1 },
+          // Wiggling popping fingers, no tool: this strip can play before the tweezers are bought (story audit 2026-10-29).
+          { id: 'her', art: 'heroine', x: 300, y: topStep(985, 0.85), scale: 0.55, pose: 'pop', expr: 'scheming', look: 1 },
           ...glint(300, topStep(985, 0.85) - 283, 0.55),
-          ...cape(300, 990, 0.62),
           knight(300, 990, 0.62, { pose: 'stand', expr: 'happy', look: -1 }),
           ...toolBelt(300, 990, 0.62),
           ...neckZoom(740, 670, 180, [340, 770]),
@@ -194,7 +188,6 @@ export const STRIP = {
           { art: 'bucket', x: 1160, y: 850, scale: 0.55, ripple: false },
           stepladder(720, 880, 0.75, { wobble: true }),
           { id: 'her', art: 'heroine', x: 720, y: topStep(880, 0.75), scale: 0.55, pose: 'wave', expr: 'grumpy', look: 1 },
-          ...cape(860, 885, 0.68),
           knight(860, 885, 0.68, { pose: 'shrug', expr: 'shocked', look: -1 }),
           ...toolBelt(860, 885, 0.68),
           { art: 'drip', x: 860, y: 506, r: 16, splash: true },

@@ -53,7 +53,7 @@ import { STRIP as mstar } from './js/data/comics/strip-mstar.js';
 import { STRIP as mleak } from './js/data/comics/strip-mleak.js';
 import { STRIP as scare } from './js/data/comics/strip-scare.js';
 import { ARTS, EXPRESSIONS, POSES, OUTFITS, CHARACTERS, checkArtLayer, dressHeroine, studioKit } from './js/game/comic-art.js';
-import { stripVars } from './js/game/app-logic.js';
+import { stripVars, LEAK_STORY_STRIPS } from './js/game/app-logic.js';
 import { defaultSave } from './js/core/save.js';
 
 const STRIPS = [strip0, strip0b, strip1, strip2, strip3, strip4, strip4b, plan, strip5, scare, books, mplant, mlamp, mapron, mmastery, mtweezers, mstar, mleak, testStrip, placeholder]; // add new strips here to see them in the chooser
@@ -157,10 +157,12 @@ function open(strip) {
   for (const [k, key] of Object.entries(sv.keys)) vars[k] = t(key);
   return playComic(strip, {
     name: nameBox.value.trim(), vars, reducedMotion: stillBox.checked || undefined, sound,
-    // &gloves = her blue gloves in dressed strips, &studio=bare = no living plant yet (as the game does, SPEC D32e, D32j)
+    // &gloves = her blue gloves in dressed strips, &studio=bare = no living plant yet (as the game does, SPEC D32e, D32j),
+    // &leak=fixed = "Fix the leak" bought: no drip or leak stain, the bucket stays (story audit R2; not strip 5 or mleak)
     arts: studioKit(dressHeroine(ARTS, strip.dressed ? params.get('outfit') : null), {
-      gloves: params.has('gloves') && !!strip.dressed && !strip.bareHands,
+      gloves: params.has('gloves') && !!(strip.dressed || strip.gloves) && !strip.bareHands, // mapron has its own gloves flag (R8 2026-10-29)
       livingPlant: strip.studio === 'owned' && params.get('studio') === 'bare' ? false : undefined,
+      leakFixed: params.get('leak') === 'fixed' && !LEAK_STORY_STRIPS.includes(strip.id),
     }),
     onSeen: (id, info) => { log.textContent += `seen: ${id}${info.skipped ? ' (skipped)' : ''}\n`; },
   });
