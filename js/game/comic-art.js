@@ -1540,7 +1540,7 @@ function room(l) {
     const lx = w * (l.lampX ?? 0.94);
     const k = F / 600;
     const R = 58 * k;
-    const cy = F * 0.32;
+    const cy = F * 0.52; // about head height, below the speech bubbles at the top
     const gl = `cl${gid += 1}`;
     g.appendChild(el('defs', {}, [el('radialGradient', { id: gl }, [el('stop', { offset: 0, 'stop-color': '#fffbe6', 'stop-opacity': 0.75 }), el('stop', { offset: 1, 'stop-color': '#fffbe6', 'stop-opacity': 0 })])]));
     g.appendChild(el('circle', { cx: lx, cy, r: R * 3.4, fill: `url(#${gl})` }));

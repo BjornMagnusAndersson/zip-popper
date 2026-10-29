@@ -19,7 +19,7 @@ export const STRIP = {
       layout: 'wide',
       scene: {
         layers: [
-          studio(1600, 900, { floorY: 600, doorX: 0.12, doorOpen: true, windowX: 0.56, leakX: 0.36, bulbX: 0.66, signX: 0.84, plantX: 0.93, plantEyes: 'wide', lamp: false }),
+          studio(1600, 900, { floorY: 600, doorX: 0.12, doorOpen: true, windowX: 0.56, leakX: 0.36, bulbX: 0.66, signX: 0.84, plantX: 0.93, plantEyes: 'wide', lampX: 0.73 }),
           { art: 'bucket', x: 576, y: 830, scale: 0.5 },
           { id: 'insp', art: 'inspector', x: 192, y: 870, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'grumpy', look: 1 },
           { id: 'her', art: 'heroine', x: 1060, y: 880, scale: 0.8, pose: 'pop', expr: 'shocked', look: -1 },
@@ -37,7 +37,8 @@ export const STRIP = {
       layout: 'small',
       scene: {
         layers: [
-          studio(800, 600, { floorY: 470, windowX: 0.8, door: false, leak: false, sign: false, bulb: false, plant: false }),
+          // The lamp stands right of the window in every panel (owner 2026-10-29): here that spot is just out of view.
+          studio(800, 600, { floorY: 470, windowX: 0.8, door: false, leak: false, sign: false, bulb: false, plant: false, lamp: false }),
           { id: 'insp', art: 'inspector', x: 200, y: 700, scale: 0.75, pose: 'point', hold: 'magnifier', expr: 'shocked', look: 1 },
           { id: 'her', art: 'heroine', x: 600, y: 700, scale: 0.75, pose: 'shrug', expr: 'sneaky', look: -1 },
         ],
@@ -52,7 +53,7 @@ export const STRIP = {
       layout: 'small',
       scene: {
         layers: [
-          studio(800, 600, { floorY: 470, windowX: 0.15, door: false, leakX: 0.9, sign: false, bulb: false, plant: false }),
+          studio(800, 600, { floorY: 470, windowX: 0.15, door: false, leakX: 0.9, sign: false, bulb: false, plant: false, lamp: false }), // he stands in front of the lamp's spot
           { art: 'gloves', x: 560, y: 470, scale: 1.3, sealed: true }, // still taped shut: never opened (story audit 2026-10-29)
           { art: 'plant', x: 720, y: 590, scale: 0.7, eyes: 'wide', scarf: '#e8505b', sweat: true },
           { id: 'insp', art: 'inspector', x: 240, y: 700, scale: 0.75, pose: 'point', hold: 'clipboard', expr: 'grumpy', look: 1 },
@@ -68,7 +69,7 @@ export const STRIP = {
       layout: 'square',
       scene: {
         layers: [
-          studio(1000, 1000, { floorY: 640, windowX: 0.5, door: false, leak: false, sign: false, bulbX: 0.2, plantX: 0.92, plantEyes: 'happy' }),
+          studio(1000, 1000, { floorY: 640, windowX: 0.5, door: false, leak: false, sign: false, bulbX: 0.2, plantX: 0.92, plantEyes: 'happy', lampX: 0.72 }),
           { id: 'insp', art: 'inspector', x: 220, y: 1000, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'neutral', look: 1 },
           // "Gloves on!": her hands are in the blue gloves now (SPEC D32e), the box held up in one of them.
           { id: 'her', art: 'heroine', x: 700, y: 1000, scale: 0.85, pose: 'wave', hold: 'gloves', gloves: true, expr: 'bliss', look: -1 },
