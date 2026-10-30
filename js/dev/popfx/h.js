@@ -1,7 +1,7 @@
 // Pop effects test page, variant H: Bubble and ooze. A look-and-feel test only (see popfx/shared.js for the hooks).
 // The bump, crater and goo drawing come from popfx/g.js. Cartoon only: creamy goo, a soft pink crater, never red.
 import { KIND, CALM, smooth, play, later, buzz, tone, hiss, sc, bp, T, holdId, rand } from './shared.js';
-import { gooOf, throb, outDir, drawDome, drawCrater, drawGooBall, gooShadow, drawGooRibbon, stepFlyers, drawFlyer, drawLanded, leanIn } from './g.js';
+import { gooOf, throb, outDir, drawDome, drawCrater, drawGooBall, gooShadow, drawGooRibbon, stepFlyers, drawFlyer, drawLanded, leanIn, makeGlass } from './g.js';
 
 /**
  * H: bubble and ooze, softer and less cartoon than D. While held the head swells in throbs, the skin over it opens
@@ -19,6 +19,7 @@ function makeH() {
   const dir = outDir();
   const flying = [];
   const landed = [];
+  const glass = makeGlass();
   const runMax = bp.r * (big ? 1.5 : 0.95); // how far it runs while held
   const runMore = bp.r * (big ? 0.7 : 0.45); // and on at the release
   const w0 = Math.max(3, bp.r * (big ? 0.46 : 0.42)); // the run's thickness once clear of the mouth
@@ -106,7 +107,10 @@ function makeH() {
         if (!saidRun && peak > 0.78) { saidRun = true; play('drip'); }
       }
       stepFlyers(flying, landed, sdt);
+      glass.step(sdt);
     },
+    /** The goo drops on the screen glass. @param {CanvasRenderingContext2D} c context @returns {void} */
+    screen: (c) => glass.draw(c, g),
     /** Lean in on the bump, with a short springy jolt at the release. @returns {object|null} camera */
     cam() {
       const base = leanIn(popAt, big ? 0.22 : 0.3);
@@ -129,7 +133,7 @@ function makeH() {
       const t = T - popAt;
       const sink = smooth((t - 0.08) / 0.45);
       const settle = smooth((t - 0.8) / 1.3); // the crater heals back to smooth skin about two seconds after the release
-      const R = pop0.s * 0.5 * (1 - 0.25 * settle);
+      const R = pop0.s * 0.34 * (1 - 0.25 * settle); // a small dip, not a hole
       if (sink < 1) {
         c.save();
         c.globalAlpha = 1 - sink * sink;
@@ -175,7 +179,7 @@ function makeH() {
         flying.push({ ...at(sq, 0.6), z: 4, vx: Math.cos(sq) * v, vy: Math.sin(sq) * v, vz: 75 + i * 6, r: (5.2 - i * 0.45) * sc * k });
       }
       // The splash: thick drops all round, flatter upwards so they keep clear of the eyes, more of them down the run's way.
-      const n = CALM ? 6 : big ? 16 : 12;
+      const n = CALM ? 6 : big ? 22 : 16;
       for (let i = 0; i < n; i += 1) {
         const a0 = i % 3 === 0 ? dir + (rand() - 0.5) * 1.4 : (i / n) * Math.PI * 2 + rand() * 0.4;
         const a = Math.sin(a0) < 0 ? Math.atan2(Math.sin(a0) * 0.5, Math.cos(a0)) : a0;
@@ -183,6 +187,7 @@ function makeH() {
         const r = (i % 4 === 0 ? 4.4 + rand() * 1.4 : 2.4 + rand() * 1.6) * sc * k;
         flying.push({ ...at(a, 0.8), z: 3, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 60 + rand() * 70, r });
       }
+      glass.hit(big ? 3 : 2, bp.x, bp.y);
       play(big ? 'pop_big' : 'pop_small');
       tone(big ? 300 : 420, big ? 90 : 130, 0, 0.16, 0.2);
       hiss(0, big ? 0.4 : 0.3, { type: 'bandpass', f0: 1500, f1: 400, q: 0.7, vol: 0.1, attack: 0.02 });

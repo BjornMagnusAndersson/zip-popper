@@ -333,6 +333,82 @@ export function drawLanded(c, s, g) {
   const ry = s.r * (0.84 - 0.35 * k);
   gooShadow(c, s.x + s.r * 0.15, s.y + s.r * 0.35, rx, ry * 0.9, 0.15);
   drawGooBall(c, s.x, s.y, rx, ry, 0, g, 0.9);
+  const grow = smooth(s.age / 0.12); // two little splatter specks thrown on ahead of it as it hits
+  for (const [d, k, side] of [[1.7, 0.3, 0.35], [2.4, 0.19, -0.3]]) {
+    const a = s.sa + side;
+    drawGooBall(c, s.x + Math.cos(a) * s.r * d * grow, s.y + Math.sin(a) * s.r * d * grow, s.r * k * 1.1 * grow, s.r * k * 0.85 * grow, 0, g, 0.7);
+  }
+}
+
+/**
+ * Goo on the "glass" (the screen itself): at the pop a few drops hit the screen with a small splat and some specks,
+ * cling a moment, then slide slowly down, leaving a thin wet trail, shrinking and fading away over a few seconds.
+ * Drawn in screen px (the screen hook), so the camera does not move them. None in the calm version.
+ * @returns {{hit: (n: number, x: number, y: number) => void, step: (sdt: number) => void, draw: (c: CanvasRenderingContext2D, g: object) => void}} the glass
+ */
+export function makeGlass() {
+  const drops = [];
+  return {
+    /** Throw n drops at the screen round (x, y), well clear of the bump itself. @param {number} n how many @param {number} x screen x @param {number} y screen y @returns {void} */
+    hit(n, x, y) {
+      if (CALM) return;
+      const m = Math.min(W, H);
+      for (let i = 0; i < n; i += 1) {
+        const a = (i / n) * Math.PI * 2 + rand() * 1.2;
+        const d = m * (0.2 + rand() * 0.22);
+        const r = (8 + rand() * 5) * Math.max(0.8, sc); // a bit bigger than the drops on the skin: nearer the eye
+        const px = clamp(x + Math.cos(a) * d, r * 2, W - r * 2);
+        const py = clamp(y + Math.sin(a) * d * 0.8, r * 2, H * 0.7);
+        drops.push({
+          x: px, y: py, x0: px, y0: py, r, r0: r,
+          age: -0.04 - i * 0.07 - rand() * 0.05, hold: 0.35 + rand() * 0.6, vy: 0, life: 3 + rand() * 1.5, sway: rand() * 6,
+          trail: [], specks: Array.from({ length: 4 }, () => ({ a: rand() * Math.PI * 2, d: 1.5 + rand() * 1.3, k: 0.14 + rand() * 0.14 })),
+        });
+      }
+    },
+    /** The drops cling, then slide down a little faster as they go, laying a trail and shrinking. @param {number} sdt scene seconds @returns {void} */
+    step(sdt) {
+      for (let i = drops.length - 1; i >= 0; i -= 1) {
+        const q = drops[i];
+        q.age += sdt;
+        if (q.age > q.life) { drops.splice(i, 1); continue; }
+        if (q.age < q.hold) continue;
+        q.vy = Math.min(q.vy + 30 * sdt, (22 + q.r * 4) * Math.max(0.8, sc));
+        q.y += q.vy * sdt;
+        q.x += Math.sin(q.age * 3 + q.sway) * 4 * sdt;
+        q.r = Math.max(q.r0 * 0.45, q.r - q.r0 * 0.12 * sdt);
+        const last = q.trail[q.trail.length - 1];
+        if (!last || Math.hypot(q.x - last.x, q.y - last.y) > 3) q.trail.push({ x: q.x, y: q.y - q.r * 0.3 });
+      }
+    },
+    /** The trails, the specks and the drops on the glass. @param {CanvasRenderingContext2D} c context @param {object} g goo colours @returns {void} */
+    draw(c, g) {
+      for (const q of drops) {
+        if (q.age < 0) continue;
+        const fade = Math.min(1, (q.life - q.age) / 1.2);
+        const hitK = smooth(q.age / 0.09); // the splat: wide and flat as it hits, then rounding up
+        c.save();
+        c.globalAlpha = 0.78 * fade; // a little see-through, so it reads as on the glass, not on the skin
+        if (q.trail.length > 1) { // the thin wet trail it leaves, see-through and fainter at the top
+          c.lineCap = 'round';
+          c.lineJoin = 'round';
+          for (const [w, col, al] of [[0.8, g.shade, 0.35], [0.4, g.hi, 0.5]]) {
+            c.strokeStyle = col;
+            c.lineWidth = Math.max(1, q.r0 * w);
+            c.globalAlpha = al * fade;
+            c.beginPath();
+            q.trail.forEach((p, j) => (j ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+            c.stroke();
+          }
+          c.globalAlpha = 0.78 * fade;
+        }
+        for (const s of q.specks) drawGooBall(c, q.x0 + Math.cos(s.a) * q.r0 * s.d * hitK, q.y0 + Math.sin(s.a) * q.r0 * s.d * hitK, q.r0 * s.k, q.r0 * s.k * 0.85, 0, g, 0.8); // the specks stay where it hit
+        const moving = q.vy > 1 ? Math.min(1, q.vy / 40) : 0;
+        drawGooBall(c, q.x, q.y, q.r * (1.5 - 0.5 * hitK) * (1 - 0.1 * moving), q.r * (0.6 + 0.4 * hitK) * (1 + 0.15 * moving), 0, g);
+        c.restore();
+      }
+    },
+  };
 }
 
 /**
@@ -356,7 +432,8 @@ export function leanIn(popAt, zoom) {
  * creamy head shows through more and more and it throbs, a bead of goo forming at the tip. The pop splits the top
  * open (a small opening with a soft rim), a glossy mound of goo pushes out of it and F's explosion goes off from it
  * (a soft pale shockwave ring, no dark outline, and a spray of round glossy drops that land with weight); the dome sinks into a soft pink crater
- * with a raised rim, which heals back to smooth skin about two seconds after the pop.
+ * with a raised rim, which heals back to smooth skin about two seconds after the pop. A few drops hit the screen
+ * glass and slide slowly down it (makeGlass).
  * @returns {object} the variant
  */
 function makeG() {
@@ -366,6 +443,7 @@ function makeG() {
   const dir = outDir();
   const flying = [];
   const landed = [];
+  const glass = makeGlass();
   let popAt = -1;
   let popS = 0;
   let popHr = 0;
@@ -392,9 +470,12 @@ function makeG() {
         if (Math.floor(phase) > before && !CALM) tone(160 + 150 * bp.pressure, 110 + 90 * bp.pressure, 0, 0.09, 0.035);
       }
       stepFlyers(flying, landed, sdt);
+      glass.step(sdt);
     },
     /** Lean in on the bump. @returns {object|null} camera */
     cam: () => leanIn(popAt, big ? 0.2 : 0.28),
+    /** The goo drops on the screen glass. @param {CanvasRenderingContext2D} c context @returns {void} */
+    screen: (c) => glass.draw(c, g),
     /** The bump: doming up while held; at the pop it splits, the goo pushes out and it sinks into a crater. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */
     afterBump(c, p) {
       if (!bp.popped) {
@@ -406,7 +487,7 @@ function makeG() {
       const split = smooth(t / 0.05); // the top tears open
       const sink = smooth((t - 0.08) / 0.4); // the emptied dome sinks down
       const settle = smooth((t - 0.7) / 1.3); // the crater heals back to smooth skin about two seconds after the pop
-      const R = popS * 0.5 * (1 - 0.25 * settle);
+      const R = popS * 0.34 * (1 - 0.25 * settle); // a small dip, not a hole
       if (sink < 1) {
         c.save();
         c.globalAlpha = 1 - sink * sink;
@@ -424,7 +505,7 @@ function makeG() {
       // over the lower rim with its weight, where it stays (the dip shows beside it).
       const rise = smooth((t - 0.02) / 0.1);
       const slump = smooth((t - 0.16) / 0.6);
-      const m = popHr * 0.78 * (big ? 1.05 : 0.95) * rise * (1 - 0.3 * slump);
+      const m = popHr * 0.9 * (big ? 1.05 : 0.95) * rise * (1 - 0.3 * slump);
       if (m > 0.5) {
         const ox = Math.cos(dir) * R * 1.25 * slump;
         const oy = Math.sin(dir) * R * 1.25 * slump - popHr * 0.12 * (1 - slump);
@@ -445,7 +526,7 @@ function makeG() {
       popHr = d.hr;
       // A ring of round drops all round the opening (more of them square to the squeeze, clear of the fingers),
       // landing close by so the eye stays on the bump. Fewer, fatter drops than F: thick goo, not seeds.
-      const n = CALM ? (big ? 12 : 9) : big ? 18 : 13;
+      const n = CALM ? (big ? 12 : 9) : big ? 26 : 19;
       const orx = popHr * 0.78;
       for (let i = 0; i < n; i += 1) {
         const side = i % 2 ? 1 : -1;
@@ -459,6 +540,7 @@ function makeG() {
           z: 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 70 + rand() * 90, r,
         });
       }
+      glass.hit(big ? 4 : 3, bp.x, bp.y);
       play(big ? 'pop_big' : 'pop_small');
       hiss(0.02, big ? 0.55 : 0.42, { type: 'bandpass', f0: big ? 1500 : 1800, f1: 420, q: 0.7, vol: 0.12, attack: 0.02 });
       tone(big ? 220 : 290, big ? 70 : 90, 0.08, 0.45, 0.08, 'triangle');
