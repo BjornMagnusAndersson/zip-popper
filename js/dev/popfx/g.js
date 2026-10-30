@@ -452,7 +452,10 @@ export function makeRipple() {
    * @returns {number} px
    */
   const bendAt = (x, a, s) => a * 1.6487 * (x / s) * Math.exp(-(x * x) / (2 * s * s)); // 1.6487 = e^0.5, so the peak is exactly a
+  let warm = 3; // the first frames after a reset run the whole path once, invisibly, so the phone sets it up then, not at the pop (B114)
   return {
+    /** Whether the frame should be drawn on the hidden canvas now (a wave is alive, or still warming up). @returns {boolean} yes */
+    busy: () => !CALM && (warm > 0 || waves.length > 0),
     /**
      * Start the ripple at screen point (x, y). Knobs: far (how far out it goes, scene px), r0 (where it starts), life
      * (seconds), amp (the strongest bend, scene px), width (the wave's half-width, scene px), waves ([[delay s,
@@ -470,20 +473,36 @@ export function makeRipple() {
      * Bend the screen along each live wave (weaker ones first, so the main wave lies on top where they cross).
      * @param {CanvasRenderingContext2D} c the stage context (its transform is the dpr one)
      * @param {number} [zoom] the camera's zoom now, so the wave grows with the scene
+     * @param {HTMLCanvasElement|null} [src] the hidden canvas this frame was drawn on (shared.js render, while busy()):
+     *   sampled instead of the shown canvas; without it the frame is copied to a spare canvas first (older path)
      * @returns {void}
      */
-    draw(c, zoom = 1) {
+    draw(c, zoom = 1, src = null) {
       if (CALM) return;
-      const b = rippleBuf(); // made on the first frame, long before the pop, so making it never stutters the pop
       for (let i = waves.length - 1; i >= 0; i -= 1) if (T - waves[i].t0 > waves[i].life) waves.splice(i, 1);
       const live = waves.filter((w) => T >= w.t0).sort((p, q) => p.k - q.k);
-      if (!live.length) return;
-      b.ctx.globalCompositeOperation = 'copy';
-      b.ctx.drawImage(mine, 0, 0); // the frame as it is now, before any bending
-      const pat = c.createPattern(b.canvas, 'no-repeat');
+      const warming = warm > 0 && !live.length;
+      if (warm > 0) warm -= 1;
+      if (!live.length && !warming) return;
+      let from0 = src;
+      if (!from0) {
+        const b = rippleBuf(); // made on the first frame, long before the pop, so making it never stutters the pop
+        b.ctx.globalCompositeOperation = 'copy';
+        b.ctx.drawImage(mine, 0, 0); // the frame as it is now, before any bending
+        from0 = b.canvas;
+      }
+      const pat = c.createPattern(from0, 'no-repeat');
       if (!pat || !pat.setTransform) return;
       c.save();
       c.setTransform(1, 0, 0, 1, 0, 0); // work in device px
+      if (warming) { // one ring of the picture laid exactly on itself: no change on screen, but the path is set up
+        pat.setTransform(new DOMMatrix([1, 0, 0, 1, 0, 0]));
+        c.strokeStyle = pat;
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(bp.x * dpr, bp.y * dpr, bp.r * 3 * dpr, 0, Math.PI * 2);
+        c.stroke();
+      }
       for (const w of live) {
         const u = (T - w.t0) / w.life;
         const z = zoom * dpr;
@@ -584,9 +603,11 @@ function makeG() {
       glass.step(sdt);
     },
     cam: camNow,
-    /** The see-through ripple bending the screen, then the goo drops on the glass over it. @param {CanvasRenderingContext2D} c context @returns {void} */
-    screen(c) {
-      ripple.draw(c, camNow()?.sx ?? 1);
+    /** Draw the frame on the hidden canvas first while the ripple runs (or warms up), B114. @returns {boolean} yes */
+    offscreen: () => ripple.busy(),
+    /** The see-through ripple bending the screen, then the goo drops on the glass over it. @param {CanvasRenderingContext2D} c context @param {HTMLCanvasElement|null} world the hidden frame to sample @returns {void} */
+    screen(c, world) {
+      ripple.draw(c, camNow()?.sx ?? 1, world);
       glass.draw(c, g);
     },
     /** The bump: doming up while held; at the pop it splits, the goo pushes out and it sinks into a crater. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */

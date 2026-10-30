@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Effect strips test</title>
+<link rel="stylesheet" href="css/comic.css">
+<style>
+  /* Developer page: test comic strips with the light, smoke and particle effects (look only, the game is not changed).
+     Options: ?strip=horn|prom|unicorn|scrub|great &still &lite &step=<n> &shot. See js/dev/fx-strips.js. */
+  html, body { height: 100%; }
+  body { margin: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
+    color: #2a211d; font-family: system-ui, sans-serif; -webkit-user-select: none; user-select: none;
+    background-color: #3b2f3f; background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.5px, transparent 1.6px); background-size: 14px 14px; }
+  .bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; padding: max(6px, env(safe-area-inset-top)) 10px 2px; }
+  .bar button { font: 700 14px system-ui, sans-serif; min-width: 44px; min-height: 40px; padding: 0 10px; border-radius: 999px;
+    color: #2a211d; background: #fff3e6; border: 3px solid #2a211d; box-shadow: 0 2px 0 #2a211d; cursor: pointer; touch-action: manipulation; }
+  .bar button[aria-pressed="true"] { background: #5eead4; }
+  #pick { display: flex; flex-wrap: wrap; gap: 5px; }
+  #title { flex: 1 1 100%; order: 3; margin: 0; color: #fff3e6; font-weight: 800; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #ms { margin: 0 0 0 auto; color: rgba(255, 243, 230, 0.6); font: 600 11px ui-monospace, monospace; }
+  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4px 12px; cursor: pointer;
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .comic-panel .fxs-canvas, .comic-panel .comic-balloons, .comic-panel .comic-texts { pointer-events: none; }
+  .fxs-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #hint { flex: none; margin: 0; padding: 2px 12px max(6px, env(safe-area-inset-bottom)); text-align: center; color: rgba(255, 243, 230, 0.7); font-size: 0.82rem; }
+  #end { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: rgba(30, 22, 32, 0.72); cursor: default; }
+  #end[hidden] { display: none; }
+  #end p { margin: 0 16px; max-width: 30rem; padding: 10px 22px; color: #2a211d; background: #ffe08a; border: 3px solid #2a211d; border-radius: 10px;
+    font-size: 1.3rem; font-weight: 900; text-align: center; transform: rotate(-2deg); box-shadow: 5px 6px 0 rgba(20, 12, 18, 0.55); }
+  #end div { display: flex; gap: 12px; }
+  .shot .is-pop, .shot .is-pop-late, .shot .is-new { animation: none !important; }
+  .shot #ms { visibility: hidden; }
+  @media (max-height: 420px) {
+    .bar { padding-top: max(3px, env(safe-area-inset-top)); }
+    .bar button { min-height: 34px; font-size: 13px; padding: 0 8px; }
+    #title { flex: 1 1 auto; order: 0; font-size: 0.85rem; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="bar" id="bar">
+  <div id="pick" role="group"></div>
+  <button type="button" id="b-replay">Replay</button>
+  <p id="ms"></p>
+  <p id="title"></p>
+</div>
+<div id="stage"></div>
+<p id="hint">Tap, Space or Enter: next</p>
+<div id="end" hidden>
+  <p id="end-text"></p>
+  <div><button type="button" class="comic-btn" id="b-again">Replay</button><button type="button" class="comic-btn comic-btn--main" id="b-next">Next strip</button></div>
+</div>
+<script type="module" src="js/dev/fx-strips.js"></script>
+</body>
+</html>

@@ -42,6 +42,19 @@ const PRECACHE = [
   './js/dev/fx/steam.js',
   './js/dev/fx/reveal.js',
   './js/dev/fx/coins.js',
+  './fx-strips.html',
+  './js/dev/fx-strips.js',
+  './js/dev/fxstrips/player.js',
+  './js/dev/fxstrips/bubbles.js',
+  './js/dev/fxstrips/raster.js',
+  './js/dev/fxstrips/kit.js',
+  './js/dev/fxstrips/effects.js',
+  './js/dev/fxstrips/strips.js',
+  './js/dev/fxstrips/strip-horn.js',
+  './js/dev/fxstrips/strip-prom.js',
+  './js/dev/fxstrips/strip-unicorn.js',
+  './js/dev/fxstrips/strip-scrub.js',
+  './js/dev/fxstrips/strip-great.js',
   './js/screens/dom.js',
   './js/screens/mascot.js',
   './js/screens/screen-logic.js',
@@ -148,7 +161,7 @@ const PRECACHE = [
   './assets/audio/sizzle.wav',
 ];
 
-const CACHE_VERSION = 'v100';
+const CACHE_VERSION = 'v101';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

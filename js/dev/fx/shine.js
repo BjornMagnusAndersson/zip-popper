@@ -6,6 +6,8 @@
 // Fire: one big shine sweeps over the whole picture with a bright "ting" glint (and a soft ting sound, unless &mute).
 // Tier 0: only a rare dull sweep over the tiles. Still: a calm still frame (a few glints, petals where they are).
 // Lite: about half the motes and petals. See the README in core.js for the effect interface.
+// Optional env.shiny (used by fx-strips.html, not set on this page): a list of shiny things {id, box: [x, y, w, h], path(c),
+// hot: [[x, y]...]} in px to use instead of the studio's own (the comic panels' rooms have other shapes).
 import { layerSpots } from '../../pop/backdrop.js';
 import { clamp, smooth, lerp, TAU } from './sprites.js';
 import { paintGlint } from './dust.js';
@@ -213,7 +215,7 @@ function shinyThings(env) {
  */
 function make(env) {
   const { W, H, sc, tier, still, party, room } = env;
-  const things = shinyThings(env);
+  const things = env.shiny ?? shinyThings(env); // env.shiny: another page's own list of shiny things (fx-strips.html), same shape
   const band = env.sprite('shine-band', 64, 16, paintBand, 1);
   const gloss = env.sprite('shine-gloss', 128, 16, (c, w, h) => paintGloss(c, w, h, '255,255,255'), 1);
   const goldGloss = env.sprite('shine-gloss-gold', 128, 16, (c, w, h) => paintGloss(c, w, h, '250,222,150'), 1); // shows on white tiles

@@ -120,9 +120,11 @@ function makeH() {
       stepFlyers(flying, landed, sdt);
       glass.step(sdt);
     },
-    /** The see-through ripple bending the screen, then the goo drops on the glass over it. @param {CanvasRenderingContext2D} c context @returns {void} */
-    screen(c) {
-      ripple.draw(c, camNow()?.sx ?? 1);
+    /** Draw the frame on the hidden canvas first while the ripple runs (or warms up), B114. @returns {boolean} yes */
+    offscreen: () => ripple.busy(),
+    /** The see-through ripple bending the screen, then the goo drops on the glass over it. @param {CanvasRenderingContext2D} c context @param {HTMLCanvasElement|null} world the hidden frame to sample @returns {void} */
+    screen(c, world) {
+      ripple.draw(c, camNow()?.sx ?? 1, world);
       glass.draw(c, g);
     },
     cam: camNow,

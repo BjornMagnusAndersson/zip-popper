@@ -555,9 +555,29 @@ export function drawWorld(c) {
   fx.over?.(c, p);
 }
 
-/** Draw one frame: the camera (shake, squash), the world, then whatever sits on the "glass". @returns {void} */
+let hidden = null; // a hidden canvas the world is drawn on first while a variant asks (offscreen hook, the ripple)
+
+/** The hidden world canvas, the size of the stage (made once, remade on a new size). @returns {{canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D}} it */
+function hiddenWorld() {
+  if (!hidden) hidden = { canvas: document.createElement('canvas'), ctx: null };
+  if (hidden.canvas.width !== mine.width || hidden.canvas.height !== mine.height || !hidden.ctx) {
+    hidden.canvas.width = mine.width;
+    hidden.canvas.height = mine.height;
+    hidden.ctx = hidden.canvas.getContext('2d');
+  }
+  return hidden;
+}
+
+/**
+ * Draw one frame: the camera (shake, squash), the world, then whatever sits on the "glass". While the variant's
+ * offscreen() says so, the world is drawn on a hidden canvas first and then copied to the shown one in one go, and the
+ * screen hook gets that hidden canvas to sample (so the ripple never reads the shown canvas half way through a frame,
+ * which on some phones could flash a half-drawn picture, B114).
+ * @returns {void}
+ */
 export function render() {
-  const c = mctx;
+  const off = fx.offscreen?.() ? hiddenWorld() : null;
+  const c = off ? off.ctx : mctx;
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.fillStyle = '#bcdcd6';
   c.fillRect(0, 0, mine.width, mine.height);
@@ -574,7 +594,14 @@ export function render() {
   }
   drawWorld(c);
   c.restore();
-  fx.screen?.(c);
+  if (off) { // the finished world onto the shown canvas in one copy
+    mctx.setTransform(1, 0, 0, 1, 0, 0);
+    mctx.globalCompositeOperation = 'copy';
+    mctx.drawImage(off.canvas, 0, 0);
+    mctx.globalCompositeOperation = 'source-over';
+    mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  fx.screen?.(mctx, off?.canvas ?? null);
 }
 
 /** A five-point star path round (0, 0). @param {CanvasRenderingContext2D} c context @param {number} s size @returns {void} */
@@ -672,7 +699,9 @@ export function showChoice() {
 //   afterBump(c, p, lk)      draw over the bump (also called after the pop: then draw your own leftovers).
 //   mid(c, p)                draw after the landed goo, under the cartoon fingertips.
 //   over(c, p)               draw over everything in the scene (scene px, moves with the camera).
-//   screen(c)                draw on the "glass" (screen px, after the camera; the close-up bubble, lens goo).
+//   screen(c, world)         draw on the "glass" (screen px, after the camera; the close-up bubble, lens goo); world
+//                            is the hidden canvas the frame was drawn on while offscreen() is true, else null.
+//   offscreen()              -> true while the variant wants the frame drawn on a hidden canvas first (the ripple).
 //   cam()                    -> {dx, dy, rot, sx, sy, ax, ay} or null: shake (dx, dy, rot) and squash (sx, sy round
 //                            the point ax, ay) of the whole scene.
 //   rate()                   -> the time rate (1 = normal, 0.2 = slow motion); applies to sdt and the goo.

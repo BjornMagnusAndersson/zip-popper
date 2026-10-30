@@ -4,7 +4,8 @@
 // forehead and the chin, then a soft "ding": a warm glow over the face, a ring of light that opens out and fades, and
 // a few tiny sparkles that float up. Idle: now and then one small glint twinkles on the skin.
 // Still: no sweep; Fire fades the glints and the glow in and out. The bands and glows are sprites painted once.
-// See the README in core.js for the effect interface.
+// See the README in core.js for the effect interface. Optional env.spots (set by fx-strips.html, not here): the glint spots
+// as [x share, y share, size] of the face's half sizes, instead of SPOTS (the comic heads have their eyes lower down).
 import { clamp, smooth, TAU } from './sprites.js';
 
 const SWEEP = 0.9; // seconds for the shine to cross the face
@@ -69,7 +70,7 @@ function make(env) {
   const dx = Math.cos(ANGLE);
   const dy = Math.sin(ANGLE);
   const reach = Math.abs(f.rx * dx) + Math.abs(f.ry * dy); // how far the face reaches along the travel direction
-  const spots = SPOTS.map(([u, v, s]) => {
+  const spots = (env.spots ?? SPOTS).map(([u, v, s]) => { // env.spots: another page's own glint spots (fx-strips.html: comic heads)
     const x = f.cx + u * f.rx;
     const y = f.cy + v * f.ry;
     const along = ((x - f.cx) * dx + (y - f.cy) * dy) / reach; // -1 .. 1 along the travel
