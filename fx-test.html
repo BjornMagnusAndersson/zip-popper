@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Light and smoke test</title>
+<style>
+  /* Developer page: light, smoke and particle effects to try on a phone before any go into the game (look only).
+     Options: ?fx=disco,smoke &tier=0..2 &party &noface &still &lite &who=<regular id> &shot. See js/dev/fx/core.js. */
+  html, body { height: 100%; }
+  body { margin: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
+    background: #1d2430; color: #eef6f4; font: 15px/1.25 system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 5px 8px; align-items: center; padding: 5px 6px; padding-top: max(5px, env(safe-area-inset-top));
+    background: #1d2430; position: relative; z-index: 2; }
+  .group { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .bar button { font: 600 15px system-ui, sans-serif; min-width: 44px; min-height: 44px; padding: 0 9px; border-radius: 12px;
+    border: 1px solid #6b8fb0; background: #2b3a4e; color: inherit; cursor: pointer; touch-action: manipulation; }
+  .bar button[aria-pressed="true"] { background: #ffd84a; color: #2a1d12; border-color: #ffd84a; }
+  .bar .fxb { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 4px; min-width: 46px; line-height: 1; }
+  .fxb b { font-size: 17px; }
+  .fxb small { font-size: 10px; font-weight: 600; margin-top: 2px; }
+  body.min .bar { position: absolute; top: 0; left: 0; background: none; }
+  body.min #fxs, body.min #scene { display: none; }
+  #stage { flex: 1; position: relative; overflow: hidden; background: #000; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  #stage canvas[hidden] { display: none; } /* else display: block above keeps a hidden canvas on top, catching every touch (B111) */
+  #label { position: absolute; right: 6px; bottom: max(6px, env(safe-area-inset-bottom)); margin: 0; padding: 3px 9px; border-radius: 10px;
+    pointer-events: none; background: rgba(20,26,36,0.7); color: #fff; font: 600 12px system-ui, sans-serif; }
+  #fps { position: absolute; left: 6px; bottom: max(6px, env(safe-area-inset-bottom)); margin: 0; padding: 3px 7px; border-radius: 10px;
+    pointer-events: none; background: rgba(20,26,36,0.7); color: #fff; font: 600 12px ui-monospace, monospace; }
+  #fps:empty { display: none; }
+  body.min #label { display: none; }
+</style>
+</head>
+<body>
+<div class="bar" id="bar">
+  <div class="group" id="hidebar"></div>
+  <div class="group" id="fxs" role="group"></div>
+  <div class="group" id="scene"></div>
+</div>
+<div id="stage">
+  <canvas id="view"></canvas>
+  <p id="label"></p>
+  <p id="fps"></p>
+</div>
+<script type="module" src="js/dev/fx-test.js"></script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 // This file also holds the bump, crater and goo drawing that H (popfx/h.js) uses too: the bump is drawn here, not by
 // the game's drawPimple, so it can dome up, thin, bubble, split open and leave a soft pink crater.
 // Cartoon only: the goo is creamy white or yellow-cream, the crater is soft pink skin, never red, no wounds.
-import { KIND, CALM, smooth, clamp, play, buzz, tone, hiss, W, H, sc, bp, T, holdId, rand, face } from './shared.js';
+import { KIND, CALM, smooth, clamp, play, buzz, tone, hiss, W, H, sc, bp, T, holdId, rand, face, mine, dpr } from './shared.js';
 
 // The goo colours G and H use: body (lit top), shade, deep (the underside), hi (shine), rim (a soft see-through edge).
 export const GOO = {
@@ -411,6 +411,114 @@ export function makeGlass() {
   };
 }
 
+let spare = null; // the ripple's spare canvas, shared by every ripple on the page (see rippleBuf)
+
+/**
+ * The ripple's spare canvas the size of the stage, which the frame is copied into before it is bent: made once for
+ * the page, and again only if the stage size changes.
+ * @returns {{canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D}} the spare canvas
+ */
+function rippleBuf() {
+  if (!spare) {
+    const canvas = document.createElement('canvas');
+    spare = { canvas, ctx: null };
+  }
+  if (spare.canvas.width !== mine.width || spare.canvas.height !== mine.height || !spare.ctx) {
+    spare.canvas.width = mine.width;
+    spare.canvas.height = mine.height;
+    spare.ctx = spare.canvas.getContext('2d');
+  }
+  return spare;
+}
+
+/**
+ * The pop's ripple: no line and no colour, only a light bend of what is already on the screen (face, goo, room),
+ * travelling out from the bump like a ring of water or a sound wave and fading as it goes. The outer half of the wave
+ * magnifies a little and the inner half shrinks a little, so the picture bends as if seen through a thin glass ring.
+ * How: once a frame while a wave is alive, the finished frame is copied to a spare canvas (rippleBuf) and thin rings
+ * of that copy are stroked back on (as a pattern), each scaled very slightly about the bump. The rings are cut where the
+ * bend changes by about half a screen pixel, so features bend smoothly instead of breaking. Drawn in the screen hook
+ * (screen px); none in the calm version.
+ * @returns {{start: (x: number, y: number, o: object) => void, draw: (c: CanvasRenderingContext2D, zoom?: number) => void}} the ripple
+ */
+export function makeRipple() {
+  const waves = [];
+  const STEP = 0.8; // device px of bend between one ring and the next (smaller is smoother but costs more rings)
+  /**
+   * The bend at distance x (px) from the wave's middle: pushed out past the middle, pulled in before it, nothing far off.
+   * @param {number} x px from the middle (outwards +)
+   * @param {number} a the strongest bend (px)
+   * @param {number} s the wave's half-width (px)
+   * @returns {number} px
+   */
+  const bendAt = (x, a, s) => a * 1.6487 * (x / s) * Math.exp(-(x * x) / (2 * s * s)); // 1.6487 = e^0.5, so the peak is exactly a
+  return {
+    /**
+     * Start the ripple at screen point (x, y). Knobs: far (how far out it goes, scene px), r0 (where it starts), life
+     * (seconds), amp (the strongest bend, scene px), width (the wave's half-width, scene px), waves ([[delay s,
+     * strength, reach]...], e.g. one main wave and a weaker one just after).
+     * @param {number} x screen x
+     * @param {number} y screen y
+     * @param {object} o knobs
+     * @returns {void}
+     */
+    start(x, y, o) {
+      if (CALM) return;
+      for (const [delay, k, reach] of o.waves) waves.push({ x, y, t0: T + delay, k, far: o.far * reach, r0: o.r0, life: o.life, amp: o.amp, width: o.width });
+    },
+    /**
+     * Bend the screen along each live wave (weaker ones first, so the main wave lies on top where they cross).
+     * @param {CanvasRenderingContext2D} c the stage context (its transform is the dpr one)
+     * @param {number} [zoom] the camera's zoom now, so the wave grows with the scene
+     * @returns {void}
+     */
+    draw(c, zoom = 1) {
+      if (CALM) return;
+      const b = rippleBuf(); // made on the first frame, long before the pop, so making it never stutters the pop
+      for (let i = waves.length - 1; i >= 0; i -= 1) if (T - waves[i].t0 > waves[i].life) waves.splice(i, 1);
+      const live = waves.filter((w) => T >= w.t0).sort((p, q) => p.k - q.k);
+      if (!live.length) return;
+      b.ctx.globalCompositeOperation = 'copy';
+      b.ctx.drawImage(mine, 0, 0); // the frame as it is now, before any bending
+      const pat = c.createPattern(b.canvas, 'no-repeat');
+      if (!pat || !pat.setTransform) return;
+      c.save();
+      c.setTransform(1, 0, 0, 1, 0, 0); // work in device px
+      for (const w of live) {
+        const u = (T - w.t0) / w.life;
+        const z = zoom * dpr;
+        const R = (w.r0 + (w.far - w.r0) * (1 - (1 - u) ** 2)) * z; // fast at first, slowing as it spreads
+        const a = w.amp * w.k * z * (1 - u) ** 1.6 * smooth(u / 0.12); // in quickly, fading as it goes
+        const s = w.width * z * (0.8 + 0.5 * u); // and a little wider as it goes
+        if (a < STEP * 0.6) continue;
+        const cx = w.x * dpr;
+        const cy = w.y * dpr;
+        // Walk across the wave, inside to outside, cutting it into rings where the bend moves on by one STEP.
+        let from = -3 * s;
+        let lvl = Math.round(bendAt(from, a, s) / STEP);
+        for (let x = from + 0.5; x <= 3 * s + 0.5; x += 0.5) {
+          const now = x > 3 * s ? 0 : Math.round(bendAt(x, a, s) / STEP);
+          if (now === lvl) continue;
+          const r = R + (from + x) / 2; // this ring's middle
+          const d = lvl * STEP; // its bend
+          if (lvl !== 0 && R + from > x - from + 2 && r > Math.abs(d) * 3) {
+            const k = r / (r - d); // scaled about the bump so a point at r shows the picture from r - d
+            pat.setTransform(new DOMMatrix([k, 0, 0, k, cx - k * cx, cy - k * cy]));
+            c.strokeStyle = pat; // set again after the change, to be safe in every browser
+            c.lineWidth = x - from + 1; // a pixel of overlap, so no seam shows between rings
+            c.beginPath();
+            c.arc(cx, cy, r, 0, Math.PI * 2);
+            c.stroke();
+          }
+          from = x;
+          lvl = now;
+        }
+      }
+      c.restore();
+    },
+  };
+}
+
 /**
  * The camera leaning in on the bump while it is squeezed, so the opening and the goo read past the fingertips; it
  * stays in through the pop and eases back out after. None in the calm version.
@@ -431,9 +539,9 @@ export function leanIn(popAt, zoom) {
  * G: crater burst. While held the bump domes up tight and shiny, a pale ring of stretched skin forms round it, the
  * creamy head shows through more and more and it throbs, a bead of goo forming at the tip. The pop splits the top
  * open (a small opening with a soft rim), a glossy mound of goo pushes out of it and F's explosion goes off from it
- * (a soft pale shockwave ring, no dark outline, and a spray of round glossy drops that land with weight); the dome sinks into a soft pink crater
- * with a raised rim, which heals back to smooth skin about two seconds after the pop. A few drops hit the screen
- * glass and slide slowly down it (makeGlass).
+ * (a see-through ripple that bends the picture as it goes out, makeRipple, and a spray of round glossy drops that
+ * land with weight); the dome sinks into a soft pink crater with a raised rim, which heals back to smooth skin about
+ * two seconds after the pop. A few drops hit the screen glass and slide slowly down it (makeGlass).
  * @returns {object} the variant
  */
 function makeG() {
@@ -444,8 +552,11 @@ function makeG() {
   const flying = [];
   const landed = [];
   const glass = makeGlass();
+  const ripple = makeRipple();
   let popAt = -1;
   let popS = 0;
+  /** Lean in on the bump. @returns {object|null} camera */
+  const camNow = () => leanIn(popAt, big ? 0.2 : 0.28);
   let popHr = 0;
   let phase = 0;
   /** The dome now: its size, tightness, head and bead, with the throb. @returns {{s: number, pr: number, k: number, head: number, hr: number, bead: number}} dome */
@@ -472,10 +583,12 @@ function makeG() {
       stepFlyers(flying, landed, sdt);
       glass.step(sdt);
     },
-    /** Lean in on the bump. @returns {object|null} camera */
-    cam: () => leanIn(popAt, big ? 0.2 : 0.28),
-    /** The goo drops on the screen glass. @param {CanvasRenderingContext2D} c context @returns {void} */
-    screen: (c) => glass.draw(c, g),
+    cam: camNow,
+    /** The see-through ripple bending the screen, then the goo drops on the glass over it. @param {CanvasRenderingContext2D} c context @returns {void} */
+    screen(c) {
+      ripple.draw(c, camNow()?.sx ?? 1);
+      glass.draw(c, g);
+    },
     /** The bump: doming up while held; at the pop it splits, the goo pushes out and it sinks into a crater. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */
     afterBump(c, p) {
       if (!bp.popped) {
@@ -541,28 +654,15 @@ function makeG() {
         });
       }
       glass.hit(big ? 4 : 3, bp.x, bp.y);
+      // The see-through ripple: a main wave and a weaker one just after (the bump's screen point is the camera's anchor).
+      ripple.start(bp.x, bp.y, { far: Math.min(W, H) * (big ? 0.62 : 0.5), r0: bp.r, life: 0.5, amp: 3.4, width: 10, waves: [[0, 1, 1], [0.1, 0.55, 0.8]] });
       play(big ? 'pop_big' : 'pop_small');
       hiss(0.02, big ? 0.55 : 0.42, { type: 'bandpass', f0: big ? 1500 : 1800, f1: 420, q: 0.7, vol: 0.12, attack: 0.02 });
       tone(big ? 220 : 290, big ? 70 : 90, 0.08, 0.45, 0.08, 'triangle');
       buzz(big ? [50, 30, 110] : [30, 20, 50]);
     },
-    /** The shockwave rings and the drops in the air, over everything. @param {CanvasRenderingContext2D} c context @returns {void} */
+    /** The drops in the air, over everything. @param {CanvasRenderingContext2D} c context @returns {void} */
     over(c) {
-      if (popAt < 0) return;
-      const t = T - popAt;
-      const far = Math.min(W, H) * (big ? 0.62 : 0.5);
-      for (const [delay, k] of CALM ? [[0, 0.8]] : [[0, 1], [0.09, 0.65]]) { // a ring and a smaller one just after
-        const u = (t - delay) / 0.45;
-        if (u < 0 || u > 1) continue;
-        const rr = bp.r + (far * k - bp.r) * (1 - (1 - u) ** 3);
-        const lw = Math.max(1.5, 8 * sc * k * (1 - u));
-        c.save();
-        c.globalAlpha = (1 - u * u) * 0.55; // a soft pale ring, no dark outline (the owner found the black circles distracting)
-        c.strokeStyle = '#fffdf2';
-        c.lineWidth = lw;
-        c.beginPath(); c.arc(bp.x, bp.y, rr, 0, Math.PI * 2); c.stroke();
-        c.restore();
-      }
       for (const d of flying) drawFlyer(c, d, g);
     },
   };

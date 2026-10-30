@@ -1,13 +1,14 @@
 // Pop effects test page, variant H: Bubble and ooze. A look-and-feel test only (see popfx/shared.js for the hooks).
 // The bump, crater and goo drawing come from popfx/g.js. Cartoon only: creamy goo, a soft pink crater, never red.
-import { KIND, CALM, smooth, play, later, buzz, tone, hiss, sc, bp, T, holdId, rand } from './shared.js';
-import { gooOf, throb, outDir, drawDome, drawCrater, drawGooBall, gooShadow, drawGooRibbon, stepFlyers, drawFlyer, drawLanded, leanIn, makeGlass } from './g.js';
+import { KIND, CALM, smooth, play, later, buzz, tone, hiss, sc, bp, T, holdId, rand, W, H } from './shared.js';
+import { gooOf, throb, outDir, drawDome, drawCrater, drawGooBall, gooShadow, drawGooRibbon, stepFlyers, drawFlyer, drawLanded, leanIn, makeGlass, makeRipple } from './g.js';
 
 /**
  * H: bubble and ooze, softer and less cartoon than D. While held the head swells in throbs, the skin over it opens
  * like a little mouth, the goo wells up in it as a glossy dome, overflows the rim and runs a little way down the
  * cheek. At full pressure a final release: the dome of goo bulges and bursts, a squirt of goo shoots out sideways in
- * a line, a splash of thick drops goes all round and lands with weight, a soft pale ring and a jolt of the view, the
+ * a line, a splash of thick drops goes all round and lands with weight, a gentle see-through ripple bends the picture
+ * as it goes out (makeRipple in g.js) and the view jolts, the
  * run slides on a bit further, and the bump sinks into a soft pink crater that heals back to smooth
  * skin about two seconds later.
  * @returns {object} the variant
@@ -20,6 +21,7 @@ function makeH() {
   const flying = [];
   const landed = [];
   const glass = makeGlass();
+  const ripple = makeRipple();
   const runMax = bp.r * (big ? 1.5 : 0.95); // how far it runs while held
   const runMore = bp.r * (big ? 0.7 : 0.45); // and on at the release
   const w0 = Math.max(3, bp.r * (big ? 0.46 : 0.42)); // the run's thickness once clear of the mouth
@@ -29,6 +31,15 @@ function makeH() {
   let pop0 = null; // the dome at the pop
   let saidOpen = false;
   let saidRun = false;
+  /** Lean in on the bump, with a short springy jolt at the release. @returns {object|null} camera */
+  const camNow = () => {
+    const base = leanIn(popAt, big ? 0.22 : 0.3);
+    if (CALM || popAt < 0) return base;
+    const t = T - popAt;
+    const kick = (big ? 0.07 : 0.05) * Math.exp(-t * 9) * Math.cos(t * 34);
+    const z = (base?.sx ?? 1) * (1 + kick);
+    return Math.abs(z - 1) < 0.001 ? null : { ax: bp.x, ay: bp.y, sx: z, sy: z };
+  };
   /** The dome now: size, tightness, throb, head, how far the mouth is open and how much goo has welled up. @returns {object} dome */
   const domeNow = () => {
     const pr = bp.pressure;
@@ -109,17 +120,12 @@ function makeH() {
       stepFlyers(flying, landed, sdt);
       glass.step(sdt);
     },
-    /** The goo drops on the screen glass. @param {CanvasRenderingContext2D} c context @returns {void} */
-    screen: (c) => glass.draw(c, g),
-    /** Lean in on the bump, with a short springy jolt at the release. @returns {object|null} camera */
-    cam() {
-      const base = leanIn(popAt, big ? 0.22 : 0.3);
-      if (CALM || popAt < 0) return base;
-      const t = T - popAt;
-      const kick = (big ? 0.07 : 0.05) * Math.exp(-t * 9) * Math.cos(t * 34);
-      const z = (base?.sx ?? 1) * (1 + kick);
-      return Math.abs(z - 1) < 0.001 ? null : { ax: bp.x, ay: bp.y, sx: z, sy: z };
+    /** The see-through ripple bending the screen, then the goo drops on the glass over it. @param {CanvasRenderingContext2D} c context @returns {void} */
+    screen(c) {
+      ripple.draw(c, camNow()?.sx ?? 1);
+      glass.draw(c, g);
     },
+    cam: camNow,
     /** The bump with its mouth, the welling goo and the run; after the release the crater, the run and the goo left. @param {CanvasRenderingContext2D} c context @param {object} p bump @returns {void} */
     afterBump(c, p) {
       if (!bp.popped) {
@@ -161,7 +167,7 @@ function makeH() {
     },
     /**
      * The final release: the goo bulges and bursts, a squirt of goo shoots out in a line (out and a little up, away
-     * from the run), a splash of thick drops goes all round, a soft pale ring, a pop, a plop, a squelch and a buzz.
+     * from the run), a splash of thick drops goes all round, a see-through ripple, a pop, a plop, a squelch and a buzz.
      * @returns {void}
      */
     pop() {
@@ -188,25 +194,16 @@ function makeH() {
         flying.push({ ...at(a, 0.8), z: 3, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 60 + rand() * 70, r });
       }
       glass.hit(big ? 3 : 2, bp.x, bp.y);
+      // The see-through ripple, gentler and shorter than G's: a main wave and a faint one just after.
+      ripple.start(bp.x, bp.y, { far: Math.min(W, H) * (big ? 0.52 : 0.44), r0: bp.r * 1.2, life: 0.45, amp: 2.5, width: 9, waves: [[0, 1, 1], [0.1, 0.5, 0.8]] });
       play(big ? 'pop_big' : 'pop_small');
       tone(big ? 300 : 420, big ? 90 : 130, 0, 0.16, 0.2);
       hiss(0, big ? 0.4 : 0.3, { type: 'bandpass', f0: 1500, f1: 400, q: 0.7, vol: 0.1, attack: 0.02 });
       later(0.08, 'squelch');
       buzz(big ? [55, 30, 90] : [35, 20, 50]);
     },
-    /** The soft pale ring at the release and the flung drops in the air, over everything. @param {CanvasRenderingContext2D} c context @returns {void} */
+    /** The flung drops in the air, over everything. @param {CanvasRenderingContext2D} c context @returns {void} */
     over(c) {
-      if (popAt >= 0) {
-        const u = (T - popAt) / 0.4;
-        if (u >= 0 && u <= 1) {
-          c.save();
-          c.globalAlpha = (1 - u * u) * 0.5;
-          c.strokeStyle = '#fffdf2';
-          c.lineWidth = Math.max(1.5, 7 * sc * (1 - u));
-          c.beginPath(); c.arc(bp.x, bp.y, bp.r * (1.2 + (big ? 4 : 3.4) * (1 - (1 - u) ** 3)), 0, Math.PI * 2); c.stroke();
-          c.restore();
-        }
-      }
       for (const d of flying) drawFlyer(c, d, g);
     },
   };
