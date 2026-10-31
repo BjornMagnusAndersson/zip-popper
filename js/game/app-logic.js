@@ -792,7 +792,19 @@ export function skillNews(skills) {
 }
 
 /**
- * The extra {placeholders} a strip's texts need. Only the Tool mastery strip has any: {kind} = the kind of bump she got
+ * The books strip's first caption ({studioNow}) follows what she has done to the studio (SPEC D47, INTERVIEW 35):
+ * nothing scrubbed in yet = as written ("still shabby"), some upgrades = "a little less shabby every day", the wall
+ * paint and the new sign both in = "starting to look like a real one".
+ * @param {string[]} layers the studio upgrades shown (bought and scrubbed, backdropLayers)
+ * @returns {string} string key
+ */
+export function booksCaptionKey(layers) {
+  if (layers.includes('wallPaint') && layers.includes('sign')) return 'comic.books.p1.capNice';
+  return layers.length ? 'comic.books.p1.capSome' : 'comic.books.p1.capBare';
+}
+
+/**
+ * The extra {placeholders} a strip's texts need: the books strip's first caption (booksCaptionKey) and the Tool mastery strip: {kind} = the kind of bump she got
  * Skilled at (the most trained kind; on a replay, the most trained kind now), {level} and {max} = that kind's level now
  * and the Master level, {pct} = how much faster that level pops, {levelName} and {levelCaps} = the level's name ("Skilled",
  * "Master"; B93 8: a replay names the level the kind has by then, not always Skilled) and {more} = what comes next.
@@ -801,6 +813,7 @@ export function skillNews(skills) {
  * @returns {{keys: Record<string, string>, values: Record<string, number>}} placeholders to translate, and plain ones
  */
 export function stripVars(id, save) {
+  if (id === 'books') return { keys: { studioNow: booksCaptionKey(backdropLayers(save)) }, values: {} };
   if (id !== STRIP_FIRST_MASTERY) return { keys: {}, values: {} };
   const state = economyFromSave(save);
   let best = null;

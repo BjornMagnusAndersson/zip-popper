@@ -152,7 +152,9 @@ function open(strip) {
   }));
   log.textContent = problems.length ? problems.join('\n') : '';
   // The strip's extra placeholders as the game fills them, for a save Skilled at &kind= (default whitehead)
-  const sv = stripVars(strip.id, { ...defaultSave(0), mastery: { [params.get('kind') ?? 'whitehead']: 70 } });
+  // (and with the studio upgrades the &ring &pinkchair &paint &newsign flags say she owns, for the books caption, D47)
+  const owned = [['ring', 'lamp'], ['pinkchair', 'chair'], ['paint', 'wallPaint'], ['newsign', 'sign']].filter(([f]) => params.has(f)).map(([, id]) => id);
+  const sv = stripVars(strip.id, { ...defaultSave(0), mastery: { [params.get('kind') ?? 'whitehead']: 70 }, studioLayers: owned });
   const vars = { ...sv.values };
   for (const [k, key] of Object.entries(sv.keys)) vars[k] = t(key);
   return playComic(strip, {
