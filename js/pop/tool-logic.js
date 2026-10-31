@@ -185,14 +185,28 @@ export function warmHoldScale(warmth, bumpType) {
  * @param {string} toolId a tool id
  * @param {string} bumpType a bump id
  * @param {number} [warmth] the warm meter, 0..1
+ * @param {number} [coldHold] extra hold multiplier while the bump is cold (SPEC D49, the Big Evil Horn boss's horns:
+ *   1.4 = 40 percent longer when cold), fading to 1 as it warms (coldFactor); left out = 1 (every other bump)
  * @returns {number} seconds (never below 0.1)
  */
-export function effectiveHold(baseHold, toolId, bumpType, warmth = 0) {
-  return Math.max(0.1, baseHold * toolHoldScale(toolId, bumpType) * warmHoldScale(warmth, bumpType));
+export function effectiveHold(baseHold, toolId, bumpType, warmth = 0, coldHold = 1) {
+  return Math.max(0.1, baseHold * toolHoldScale(toolId, bumpType) * warmHoldScale(warmth, bumpType) * coldFactor(coldHold, warmth));
 }
 
 /** Clamp a number to 0..1 (not a number = 0). @param {number} v value @returns {number} 0..1 */
 const unit = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+
+/**
+ * A multiplier that only counts while a bump is cold (SPEC D49, the Big Evil Horn boss's horns): the full factor on a
+ * cold bump, fading in a straight line to 1 on a fully warm one (like the sensitive skin's extra, skinRoughFactor).
+ * @param {number} scale the factor when cold (not a positive number = 1, nothing changes)
+ * @param {number} [warmth] the bump's warm meter, 0..1
+ * @returns {number} the multiplier
+ */
+export function coldFactor(scale, warmth = 0) {
+  const s = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  return 1 + (s - 1) * (1 - unit(warmth));
+}
 
 /**
  * How rough a tool is on a kind of bump while the face is this warm: the bump's rough chance (data/bumps.js) times
@@ -216,10 +230,12 @@ export function roughness(toolId, bumpType, warmth = 0) {
  * @param {number} [irritation] the irritation meter, 0..1
  * @param {number} [skin] how delicate the skin is (T8.3 sensitive skin: data/twists.js SENSITIVE.roughScale; 1 =
  *   normal); see skinRoughFactor
+ * @param {number} [coldRough] extra rough-press multiplier while the bump is cold (SPEC D49, the Big Evil Horn boss's
+ *   horns, round-logic.js applyColdHorn), fading to 1 as it warms (coldFactor); left out = 1 (every other bump)
  * @returns {number} chance 0..1
  */
-export function roughChance(toolId, bumpType, warmth = 0, irritation = 0, skin = 1) {
-  return Math.min(1, roughness(toolId, bumpType, warmth) * skinRoughFactor(skin, warmth) * (1 + IRRITATION.boost * unit(irritation)));
+export function roughChance(toolId, bumpType, warmth = 0, irritation = 0, skin = 1, coldRough = 1) {
+  return Math.min(1, roughness(toolId, bumpType, warmth) * skinRoughFactor(skin, warmth) * coldFactor(coldRough, warmth) * (1 + IRRITATION.boost * unit(irritation)));
 }
 
 /**

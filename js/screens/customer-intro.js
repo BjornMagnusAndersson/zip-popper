@@ -29,7 +29,8 @@ import { startIntroStage } from '../fx/intro-stage.js';
  *   "Event" or "Boss", its name, a funny line, the reward and a tip (a boss has no twist and no request), and the
  *   stage moment (D45); lowDetail = Lighter graphics (fewer particles); playSound = the game's sound player (the
  *   spotlight's clunk)
- * @returns {{node: HTMLElement, dispose: () => void}} the screen
+ * @returns {{node: HTMLElement, dispose: () => void, stageBusy: () => boolean}} the screen (stageBusy = the stage
+ *   moment is still playing)
  */
 export function createCustomerIntroScreen({
   t, customer, playerName = '', request = null, step = null, portrait = null, hintKey = null, twist = null, boss = null, onStart, onMenu,
@@ -97,5 +98,14 @@ export function createCustomerIntroScreen({
   const stage = boss ? startIntroStage({ host: shell.node, portrait: frame, bossId: boss.id, reduced: reducedMotion, lite: lowDetail, playSound }) : null;
   /** Stop the stage moment and take the screen away. @returns {void} */
   const dispose = () => { stage?.stop(); shell.dispose(); };
-  return { node: shell.node, dispose };
+  /**
+   * Whether the boss or event stage moment is still playing (the game waits with building the face ahead, B99(4), so
+   * the moment never stutters). False for a normal customer and for the still (reduced motion) picture.
+   * @returns {boolean} true while it plays
+   */
+  const stageBusy = () => {
+    if (!stage) return false;
+    try { const s = stage.state(); return !s.stopped && !s.still; } catch { return false; }
+  };
+  return { node: shell.node, dispose, stageBusy };
 }

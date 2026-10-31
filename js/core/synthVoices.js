@@ -3,6 +3,24 @@
 // soundTable.js says which voice is used for which sound name. The seed's pop sounds are kept as they were;
 // the voices at the end (ooh, laugh, ow, cash, squelch, splat) are first placeholders that recordings can replace.
 
+/** The tip coins' rising run (coinTing): which step rang last and when (audio time in seconds; -1 = not yet). */
+const CHIME = { step: 0, at: -1 };
+/** The notes of the run, a bright major pentatonic from G5 up (Hz). */
+export const CHIME_NOTES = [784, 880, 1046.5, 1174.7, 1318.5, 1568, 1760, 2093, 2349.3, 2637, 3136, 3520];
+
+/**
+ * The pitch of the next coin "ting": one step up the run when the last one rang just now (under 0.4 s ago), else the
+ * bottom note again; o.step sets the step instead.
+ * @param {number} t start time @param {{step?: number}} [o] a set step
+ * @returns {number} Hz
+ */
+export function chimeNote(t, o) {
+  if (Number.isFinite(o?.step)) CHIME.step = o.step;
+  else CHIME.step = CHIME.at >= 0 && t >= CHIME.at && t - CHIME.at < 0.4 ? CHIME.step + 1 : 0;
+  CHIME.at = t;
+  return CHIME_NOTES[Math.min(CHIME_NOTES.length - 1, Math.max(0, Math.floor(CHIME.step)))];
+}
+
 export const VOICES = {
   /** A wet little creak while squeezing (higher as the pressure builds). @param {object} k kit @param {number} t start @param {{level?: number}} o pressure */
   squish(k, t, o) {
@@ -89,7 +107,7 @@ export const VOICES = {
   },
   /**
    * The Evil Horn's big pop (owner 2026-10-31): a loud, dry CRACK (a sharp noise snap and a falling knock), a wet
-   * splash of goo, a whoosh as it spins away, then, 0.42 s on, the THWACK of it sticking in the wall, a rubbery
+   * splash of goo, a whoosh as it spins away, then, 0.42 s on, the THWACK of it hitting the screen glass, a rubbery
    * "boi-oi-oing" as it quivers there, and a small bright "ding". With o.calm (reduced motion: it only lifts off) the
    * crack and the splash only. @param {object} k kit @param {number} t start @param {{calm?: boolean}} [o] options
    */
@@ -274,6 +292,25 @@ export const VOICES = {
     const f = 118 + Math.random() * 8;
     k.vowel(f, t + 0.5, 0.5, { slideTo: f * 1.38, formants: [300, 1150], vol: 0.085 }); // "hm?"
     k.hiss(t + 0.46, 0.1, { type: 'lowpass', freq: 800, vol: 0.02 }); // the "h"
+  },
+  /**
+   * A tip coin landing in the Total (SPEC D45, fx/coins-fx.js): a soft, bright little "ting" (a bell-like note with a
+   * faint shimmer above it). A coin landing soon after the one before rings one step higher, so a burst of coins plays
+   * a little rising run; after a short pause it starts low again. Kept quiet on purpose.
+   * @param {object} k kit @param {number} t start @param {{step?: number}} [o] which note of the run (else the next one)
+   */
+  coinTing(k, t, o) {
+    const f = chimeNote(t, o);
+    k.tone(f, t, 0.24, { type: 'triangle', vol: 0.045 });
+    k.tone(f * 2, t, 0.12, { vol: 0.016 });
+    k.tone(f * 3.01, t + 0.004, 0.07, { vol: 0.007 });
+  },
+  /** The last tip coin: its "ting", then a bright sparkly "ding" running up over it, with a faint shimmer. @param {object} k kit @param {number} t start @param {{step?: number}} [o] which note of the run */
+  coinDing(k, t, o) {
+    VOICES.coinTing(k, t, o);
+    [2093, 2637, 3136, 4186].forEach((f, i) => k.tone(f, t + 0.05 + i * 0.045, 0.36, { type: 'triangle', vol: 0.028 }));
+    k.tone(1568, t + 0.05, 0.6, { vol: 0.03 });
+    k.hiss(t + 0.04, 0.42, { type: 'highpass', freq: 7000, vol: 0.014 });
   },
   /** Money in: a bright two-note ka-ching. @param {object} k kit @param {number} t start */
   cash(k, t) {

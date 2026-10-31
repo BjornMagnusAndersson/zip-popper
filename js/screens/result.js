@@ -165,7 +165,7 @@ function startEffects(o) {
       /** Where the layer is on the page now. @returns {DOMRect} its box */
       const base = () => o.node.getBoundingClientRect();
       layer.add((W, H) => (coins = makeCoinFlight({
-        kit: layer.kit, n: counter.coins, W, H,
+        kit: layer.kit, n: counter.coins, W, H, lite: o.lite, playSound: o.playSound, // a "ting" per coin, a "ding" for the last
         from: () => belowReveal(o.reveal?.node?.getBoundingClientRect(), o.reveal?.faceCentre?.(), base()) ?? spotIn(o.fromNode?.getBoundingClientRect(), base(), 0.5) ?? { x: W / 2, y: H * 0.3, r: 20 },
         to: () => spotIn(o.totalPill.querySelector('.app-icon')?.getBoundingClientRect(), base()) ?? { x: W / 2, y: H / 2, r: 10 },
         onLand: (i) => {

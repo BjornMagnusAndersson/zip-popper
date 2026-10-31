@@ -4,10 +4,14 @@
    height): the stage fills everything and a smaller header and the hint float over the room at the sides, so the face
    stays big (SPEC D10). The face and bumps are drawn on canvas. Every button is at least 44 px for fingers. */
 
-.pop-game {
+.pop-game, .pop-prep {
   position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
   background: #5c6857; color: #102a28; font-family: system-ui, sans-serif;
 }
+/* The next round's scene built ahead behind the customer intro (B99(4), pop-mode.js mount hidden): laid out at exactly
+   the size it will have, but not painted and not touchable until it becomes the .pop-game on show. */
+.pop-prep { position: absolute; inset: 0; z-index: -1; visibility: hidden; pointer-events: none; }
+.pop-prep * { visibility: hidden !important; }
 .pop-head {
   flex: none; display: flex; align-items: center; gap: 8px; position: relative; z-index: 2;
   padding: calc(6px + env(safe-area-inset-top)) 10px 6px 14px; background: rgba(16, 42, 40, 0.88); color: #fff;

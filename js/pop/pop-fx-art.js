@@ -7,7 +7,7 @@
 // landed drops are cartoon splats (drawLanded: irregular glossy blob, specks, shadow, drip run, merged puddles), and
 // the Evil Horn's show (drawHornShow: crack flash, speed trail, stuck in the wall with a "ding", dust puffs).
 import { rng } from './logic.js';
-import { craterAt, hornAt, FALL_TIME, GLASS_DROP, glassRadius } from './pop-fx.js';
+import { craterAt, hornAt, HORN_SHOW, FALL_TIME, GLASS_DROP, glassRadius } from './pop-fx.js';
 import { drawHorn, drawTwinkle } from './art.js';
 
 // The goo colours per kind: body (lit top), shade, deep (the underside), hi (shine), rim (a soft see-through edge),
@@ -528,13 +528,14 @@ export function drawLanded(c, s) {
 }
 
 /**
- * The Evil Horn's show (owner 2026-10-31), t = hn.t seconds after the crack: a comic crack flash at the base, the horn
- * spinning off with a speed trail (two fading ghosts and white streaks; no ghosts with Lighter graphics), then stuck
- * in the wall quivering like a dart, with a ring and a burst of little stars where it hit, then dropping loose and
- * fading. With reduced motion (hn.calm) it only lifts off and fades. pop-fx.js hornAt says where it is.
- * @param {CanvasRenderingContext2D} c context (scene px)
+ * The Evil Horn's show (owner 2026-10-31, the new ending), t = hn.t seconds after the crack: a comic crack flash at
+ * the base, the horn flying at you, spinning and growing, with a speed trail (two fading ghosts and white streaks; no
+ * ghosts with Lighter graphics), then stuck in the screen glass like a dart, quivering, with a ring and a burst of
+ * little stars at its tip, then drooping from its tip and falling off the bottom of the screen. With reduced motion
+ * (hn.calm) it only lifts off and fades. pop-fx.js hornAt says where it is.
+ * @param {CanvasRenderingContext2D} c context (screen px: the glass is in front of the zoom)
  * @param {{x: number, y: number, r: number, len: number, t: number, spin: number, aimX: number, aimY: number, aimA: number,
- *   calm?: boolean, lite?: boolean}} hn the flying horn
+ *   grow?: number, H?: number, calm?: boolean, lite?: boolean}} hn the flying horn (screen px)
  * @returns {void}
  */
 export function drawHornShow(c, hn) {
@@ -545,7 +546,7 @@ export function drawHornShow(c, hn) {
   if (at.flying) {
     const back = hornAt(hn, Math.max(0, t - 0.1));
     /** The horn's middle (half way up its length) for a hornAt state. @param {{x: number, y: number, a: number}} q state @returns {number[]} [x, y] */
-    const mid = (q) => [q.x + Math.sin(q.a) * hn.len * 0.45, q.y - Math.cos(q.a) * hn.len * 0.45];
+    const mid = (q) => [q.x + Math.sin(q.a) * hn.len * q.k * q.fore * 0.5, q.y - Math.cos(q.a) * hn.len * q.k * q.fore * 0.5];
     const [x0, y0] = mid(back);
     const [x1, y1] = mid(at);
     const ang = Math.atan2(y1 - y0, x1 - x0);
@@ -554,23 +555,40 @@ export function drawHornShow(c, hn) {
     c.lineCap = 'round';
     c.strokeStyle = 'rgba(255,255,255,0.6)'; // speed streaks behind it
     for (const [o, wk] of [[-0.32, 0.07], [0, 0.11], [0.32, 0.07]]) {
-      c.lineWidth = Math.max(1, hn.r * wk);
-      const ox = nx * hn.r * o;
-      const oy = ny * hn.r * o;
+      c.lineWidth = Math.max(1, hn.r * at.k * wk);
+      const ox = nx * hn.r * at.k * o;
+      const oy = ny * hn.r * at.k * o;
       c.beginPath(); c.moveTo(x0 + ox, y0 + oy); c.lineTo(x1 + ox, y1 + oy); c.stroke();
     }
     if (!hn.lite) {
       for (const [dt, al] of [[0.075, 0.18], [0.04, 0.35]]) {
         const gh = hornAt(hn, Math.max(0, t - dt));
         c.globalAlpha = al;
-        drawHorn(c, gh.x, gh.y, hn.r, gh.a, { flip: hn.spin });
+        drawShowHorn(c, hn, gh);
       }
     }
   }
   c.globalAlpha = at.alpha;
-  if (at.alpha > 0.01) drawHorn(c, at.x, at.y, hn.r, at.a, { flip: hn.spin }); // it flies off to its own side, hooking outwards as on the face
+  if (at.alpha > 0.01) drawShowHorn(c, hn, at); // it flies at you on its own side, hooking outwards as on the face
   c.restore();
-  if (at.hit >= 0 && at.hit < 0.6) drawWallHit(c, hn.aimX, hn.aimY, hn.r, at.hit, hn.lite);
+  if (at.hit >= 0 && at.hit < 0.6) drawGlassHit(c, hn.aimX, hn.aimY, hn.r * (hn.grow ?? 1) * 0.7, at.hit, hn.lite);
+}
+
+/**
+ * One look of the flying or stuck Evil Horn (a hornAt state): drawHorn turned so its hooked tip lies along the state's
+ * way (a), and squashed along that way by fore (pointing at you it looks short, nearly end on), its tip at the spot.
+ * @param {CanvasRenderingContext2D} c context (screen px)
+ * @param {{r: number, spin: number}} hn the horn (its size and the way its tip hooks)
+ * @param {{x: number, y: number, a: number, k: number, fore: number}} q where it is now (pop-fx.js hornAt)
+ * @returns {void}
+ */
+function drawShowHorn(c, hn, q) {
+  c.save();
+  c.translate(q.x, q.y);
+  c.rotate(q.a);
+  c.scale(1, Math.max(0.05, q.fore));
+  drawHorn(c, 0, 0, hn.r * q.k, -hn.spin * HORN_SHOW.tipTurn, { flip: hn.spin });
+  c.restore();
 }
 
 /**
@@ -601,8 +619,8 @@ function drawCrackFlash(c, x, y, r, u) {
 }
 
 /**
- * Where the horn hit the wall: a quick white ring, a few short impact lines and little cartoon stars bursting out
- * (a "ding!"). Lighter graphics: the ring and fewer stars.
+ * Where the horn's tip hit the screen glass: a quick soft white ring and little cartoon stars bursting out (a
+ * "ding!"); no cracks (cartoon only). Lighter graphics: the ring and fewer stars.
  * @param {CanvasRenderingContext2D} c context
  * @param {number} x the hit's spot
  * @param {number} y the hit's spot
@@ -611,21 +629,13 @@ function drawCrackFlash(c, x, y, r, u) {
  * @param {boolean} [lite] Lighter graphics
  * @returns {void}
  */
-function drawWallHit(c, x, y, r, t, lite = false) {
+function drawGlassHit(c, x, y, r, t, lite = false) {
   c.save();
   const u = Math.min(1, t / 0.32);
   if (u < 1) {
     c.strokeStyle = `rgba(255,255,255,${0.85 * (1 - u)})`;
     c.lineWidth = Math.max(1.2, r * 0.1 * (1 - u * 0.6));
     c.beginPath(); c.arc(x, y, r * (0.25 + 1.1 * u), 0, Math.PI * 2); c.stroke();
-    c.lineCap = 'round';
-    c.strokeStyle = `rgba(255,248,220,${0.9 * (1 - u)})`;
-    c.lineWidth = Math.max(1, r * 0.08);
-    for (let i = 0; i < 6; i += 1) {
-      const a = (i / 6) * Math.PI * 2 + 0.4;
-      c.beginPath(); c.moveTo(x + Math.cos(a) * r * (0.45 + 0.4 * u), y + Math.sin(a) * r * (0.45 + 0.4 * u));
-      c.lineTo(x + Math.cos(a) * r * (0.75 + 0.6 * u), y + Math.sin(a) * r * (0.75 + 0.6 * u)); c.stroke();
-    }
   }
   const v = Math.min(1, t / 0.6);
   const e = 1 - (1 - v) ** 2;

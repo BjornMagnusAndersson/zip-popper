@@ -3212,3 +3212,31 @@ export function makeFaceTexture(w, h, dpr, face, spec, o = {}) {
   drawFace(ctx, face, spec, { ...o, dpr });
   return canvas;
 }
+
+/**
+ * The still layers of a face painted ahead (B99(4): the next face is built while the customer intro shows), so the
+ * first picture of the round only copies them. The same layers drawFace uses (kept in the layer cache).
+ * @param {object} face the face geometry from faceGeometry(w, h, spec)
+ * @param {object} spec the face spec
+ * @param {number} [seed] the skin seed (as drawFace's o.seed)
+ * @param {number} [dpr] pixel ratio (as drawFace's o.dpr)
+ * @returns {HTMLCanvasElement[]} the two layer canvases (under and over)
+ */
+export function faceLayerCanvases(face, spec = DEFAULT_FACE_SPEC, seed = 1, dpr = 1) {
+  const layers = stillLayers(face, spec, faceLook(spec), seed, dpr);
+  return [layers.under.canvas, layers.over.canvas];
+}
+
+/**
+ * Give a face picture that is used again (the face built ahead, or Try again's same face, B99(4)) a fresh idle life:
+ * new blinks and glances from now, as drawFace gives a new picture.
+ * @param {HTMLCanvasElement} canvas the face picture (drawFace's canvas)
+ * @param {object} face the face geometry it was drawn with
+ * @param {object} spec the face spec
+ * @param {{mood?: string, seed?: number, dpr?: number}} [o] as drawFace's options
+ * @returns {HTMLCanvasElement} the same picture
+ */
+export function renewFaceLife(canvas, face, spec = DEFAULT_FACE_SPEC, o = {}) {
+  canvas.faceLife = makeFaceLife(face, spec, { mood: moodOf(o.mood), seed: o.seed ?? 1, look: faceLook(spec), dpr: o.dpr ?? 1 });
+  return canvas;
+}

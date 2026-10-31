@@ -35,7 +35,7 @@
 // the bump as cartoon splats (merged into puddles, drip runs), a fine mist flies and vanishes; goo lands only on bare
 // skin (the picture's skin mask, face.js skinAt), elsewhere it slides down and fades; a drop flying at an eye makes her
 // flinch (faceLife.flinch) and slides off the shut eye down the cheek. The Evil Horn's own show: it trembles and creaks
-// louder while squeezed, then cracks, shoots off spinning and sticks in the wall like a dart (pop-fx.js hornAt).
+// louder while squeezed, then cracks, flies at you spinning and thunks into the screen glass like a dart (pop-fx.js hornAt).
 import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius, grownHold, growStart } from './logic.js';
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
@@ -167,7 +167,8 @@ function affine(s, d) {
  *   useful ('patchFirst' = a patch on a bump that is not popped yet)
  * @returns {object} add(pimples), left(), all(), step(), setTexture(tex), resize(w, h, tex, move), setRatio(r, tex), size(), keyPress(),
  *   setTool(id), tool(), setTools(ids), warmth(), irritation(), halt(), setPaused(on), paused(), dispose(). A bump may carry hold (seconds) and
- *   roughMul (part of the rough-press chance left after mastery, round-logic.js applyMastery).
+ *   roughMul (part of the rough-press chance left after mastery, round-logic.js applyMastery); the Big Evil Horn boss's horns
+ *   also coldRough, coldHold and fullCold (SPEC D49, round-logic.js applyColdHorn).
  */
 export function createPopScene(canvas, o) {
   let w = o.width; // changed only by resize()
@@ -366,7 +367,7 @@ export function createPopScene(canvas, o) {
       const due = held && !held.p.popped && tickleDue(time - held.since, held.p.zone, time - giggleAt);
       // B74: a squeeze that pops in this very frame pops; she does not giggle first (a plain whitehead's 1.1 s squeeze
       // is exactly the giggle time, so on a cheek it always giggled away at the last moment and needed a second press).
-      const popsNow = due && pressureStep(held.p.pressure, dt, true, effectiveHold(held.p.hold, held.p.tool ?? START_TOOL, held.p.type, held.p.warm ?? 0)) >= 1;
+      const popsNow = due && pressureStep(held.p.pressure, dt, true, effectiveHold(held.p.hold, held.p.tool ?? START_TOOL, held.p.type, held.p.warm ?? 0, held.p.coldHold)) >= 1;
       if (due && !popsNow) giggle(held.p);
     }
     const rx = face ? face.rx : Math.min(w, h) / 3;
@@ -832,8 +833,9 @@ export function createPopScene(canvas, o) {
   }
 
   /**
-   * The Evil Horn's show (owner 2026-10-31, pop-fx.js hornPlan): a loud crack, the horn shoots off spinning and sticks
-   * in the wall like a dart (hornAt), its base pops open into a soft crater that heals, a big burst of pale horn goo
+   * The Evil Horn's show (owner 2026-10-31, pop-fx.js hornPlan): a loud crack, the horn flies at you spinning and
+   * growing, thunks into the screen glass like a dart, quivers, droops and falls off the bottom of the screen (hornAt;
+   * the wipe does not wait for it), its base pops open into a soft crater that heals, a big burst of pale horn goo
    * with a mound and a mist, puffs of dust round the base, and the extras: glass drops, the strongest ripple, a jolt.
    * Its game rules (warm cloth, hold, irritation) are the same as before; only the look, feel and sound changed.
    * @param {object} p the horn bump (popped now)
@@ -843,15 +845,20 @@ export function createPopScene(canvas, o) {
   function hornPop(p, plan) {
     const s = p.r * 1.45; // the bump at full squeeze (drawPimple), so the flying horn starts the size it was
     const hr = s * 1.65 * 1.06;
-    const len = hr * 1.3;
     const x = p.x;
     const y = p.y + s * 0.1;
     let boxes = [];
     try { boxes = o.covered?.() ?? []; } catch { boxes = []; }
-    const v = shown(); // the buttons' boxes are screen px: into scene px for the target
-    const avoid = boxes.map((b) => { const a = screenToScene(v, b.x, b.y); const c = screenToScene(v, b.x + b.w, b.y + b.h); return { x: a.x, y: a.y, w: c.x - a.x, h: c.y - a.y }; });
-    const aim = hornTarget({ x, y, len, w, h, face, avoid }); // it sticks in the wall, never behind a button
-    horns.push({ x, y, r: hr, len, t: 0, spin: aim.x >= x ? 1 : -1, show: true, calm: reduced, lite, aimX: aim.x, aimY: aim.y, aimA: aim.a, hit: false });
+    // The flying horn lives on the screen glass, in front of the zoom (like the glass drops): screen px, so it is always
+    // on screen and the same size feel upright, sideways and zoomed in (the buttons' boxes are screen px already).
+    const v = shown();
+    const at = sceneToScreen(v, x, y);
+    const tipLen = hr * HORN_SHOW.tipLen * v.z; // base to its hooked tip, on screen
+    const aim = hornTarget({ x: at.x, y: at.y, len: tipLen, w, h, avoid: boxes }); // never behind a button
+    horns.push({
+      x: at.x, y: at.y, r: hr * v.z, len: tipLen, t: 0, spin: aim.x >= at.x ? 1 : -1, show: true, calm: reduced, lite,
+      aimX: aim.x, aimY: aim.y, aimA: aim.a, grow: aim.grow, H: h, hit: false,
+    });
     const goo = 'horn';
     p.popAt = time; // its base pops open and sinks into a soft crater that heals (drawPopped)
     p.popS = s * 0.85;
@@ -1049,7 +1056,7 @@ export function createPopScene(canvas, o) {
       // B72: the pop that clears the face stops the meter just under full, so a customer whose every bump is out
       // never storms off in that same moment (that counted as a fail with no pay, even with no Ow at all).
       const last = pimples.every((q) => q === p || q.popped);
-      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, p.warm ?? 0) * (p.roughMul ?? 1), last, irrScale.cold);
+      raiseIrritation(coldPopIrritation(p.tool ?? START_TOOL, p.type, p.warm ?? 0) * (p.roughMul ?? 1), last, p.fullCold ? irrScale.rise : irrScale.cold); // D49: a Big Evil Horn boss horn counts fully
       if (p.tool === 'cottonPad') irr = irritationSoothe(irr, 'pad');
     }
     p.popped = true;
@@ -1104,7 +1111,8 @@ export function createPopScene(canvas, o) {
     const start = () => {
       if (disposed || step !== 'pop' || halted) return; // halted (a special mode's scripted end, B28): no wipe step
       if (paused) { deferred.push(start); return; } // frozen (D48): look again when the scene goes on, no polling meanwhile
-      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || !popStepOver(pimples, strip, Boolean(peel))) { setTimeout(start, 120); return; }
+      // A flying Evil Horn is not waited for: it carries on over the wipe on the glass (owner 2026-10-31, B122).
+      if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || hairs.length || !popStepOver(pimples, strip, Boolean(peel))) { setTimeout(start, 120); return; }
       beginWipe();
     };
     setTimeout(start, reduced ? 200 : 450);
@@ -1122,9 +1130,10 @@ export function createPopScene(canvas, o) {
   }
 
   /**
-   * Put all the goo on its own layer so the pad can wipe it off; count how much there is. No goo at all: straight to
-   * the cream, unless the nose strip is still on the face (B61(1)): then a wipe with nothing to wipe waits a few
-   * seconds (tool-logic.js noGooWait) so she can still stick and peel it, as on other faces.
+   * Put all the goo on its own layer so the pad can wipe it off; count how much there is. No goo at all (none landed,
+   * or it all flew off the scene): straight to the cream, unless the nose strip is still on the face (B61(1)): then a
+   * wipe step with nothing to wipe (wipe.empty: no pad, no wiping, the hint is about the strip only, B110(7)) waits a
+   * few seconds (tool-logic.js noGooWait) so she can still stick and peel it, as on other faces.
    * @returns {void}
    */
   function beginWipe() {
@@ -1153,15 +1162,18 @@ export function createPopScene(canvas, o) {
     blobs.length = 0;
     gooLayer = null; // the juicy goo is on the wipe's layer now
     const { cells, cols, rows, count } = found;
-    const corner = 40 * scale * wipeReach(tool); // the pad waits in the bottom corner (further in when it is the big one)
+    // No goo cell on the scene at all (it all flew off, B71) and no nose strip to wait for: nothing to wipe, so no wipe
+    // step at all, straight to the cream (B110(7): before, a short wipe step said "Wipe the goo away" over a clean face).
+    if (count === 0 && !wait) { beginCream(); return; }
+    const corner =40 * scale * wipeReach(tool); // the pad waits in the bottom corner (further in when it is the big one)
     let covered = [];
     try { covered = o.covered?.() ?? []; } catch (e) { console.warn('covered failed:', e); }
     // ...but never behind the tool bar or other buttons (B13 round 2c); the boxes are screen px, so it is found in screen px (B43a).
     const pad = padStartSpot(shown(), w, h, 26 * scale * wipeReach(tool), corner, covered);
-    // No goo cell on the scene at all (it all flew off): nothing to wipe, the wipe fades out by itself (B71), after
-    // the strip's wait when it is still on (B61(1), see update).
+    // No goo cell on the scene (only the nose strip is left): the step only waits for the strip, then fades out by
+    // itself (B61(1), see update); it draws no pad and takes no wiping (B110(7)).
     const empty = count === 0;
-    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: empty && !wait ? 0.0001 : 0, wait: empty ? wait : 0 };
+    wipe = { dirt, dc, cells, cols, rows, dirty: Math.max(1, count), clean: 0, pad, last: null, id: null, auto: null, fade: 0, wait: empty ? wait : 0, empty };
     setStep('wipe');
   }
 
@@ -1224,7 +1236,7 @@ export function createPopScene(canvas, o) {
     for (const k of marks) mv(k);
     for (const hn of horns) {
       mv(hn, ['r', 'len']);
-      if (hn.show) { hn.aimX = hn.aimX * s + tx; hn.aimY = hn.aimY * s + ty; } // where it sticks in the wall moves too
+      if (hn.show) { hn.aimX = hn.aimX * s + tx; hn.aimY = hn.aimY * s + ty; hn.H = h; } // where it hit the glass moves too (screen px, like the glass drops)
     }
     for (const pf of puffs) mv(pf, ['r', 'vx', 'vy']);
     for (const hr of hairs) mv(hr, ['reach']);
@@ -1354,6 +1366,7 @@ export function createPopScene(canvas, o) {
   /** Wipe for the player (keyboard): the pad sweeps back and forth across the scene. @returns {void} */
   function autoWipe() {
     if (!wipe || wipe.fade || wipe.auto) return;
+    if (wipe.empty) { wipe.wait = 0; wipe.fade = 0.0001; kick(); return; } // nothing to wipe (B110(7)): the key just goes on
     wipe.auto = { t: 0 };
     wipe.last = null;
     kick();
@@ -1398,7 +1411,7 @@ export function createPopScene(canvas, o) {
         else if (memory?.bump === p) { /* a squeezing finger lifted a moment ago: the pressure waits for it */ }
         else if (twist === 'ticklish' && giggleBlocks(time, giggleAt)) { /* she is giggling: the press keeps what it had (R4 finding 2) */ }
         else if (keyHold?.p === p && time < keyHold.until) p.pressure = Math.min(keyHold.target, p.pressure + dt * 2.4);
-        else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, p.warm ?? 0));
+        else if (keyHold?.p !== p || hold?.p === p) p.pressure = pressureStep(p.pressure, dt, hold?.p === p, effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, p.warm ?? 0, p.coldHold));
         for (const th of [0.3, 0.6, 0.85]) {
           const key = `${p.id}:${th}`;
           if (before < th && p.pressure >= th && !warnedThresholds.has(key)) { warnedThresholds.add(key); play('squish', { level: th }); buzz(6); }
@@ -1564,7 +1577,7 @@ export function createPopScene(canvas, o) {
       const hn = horns[i];
       hn.t += dt;
       busy = true;
-      if (hn.show && !hn.calm && !hn.hit && hn.t >= HORN_SHOW.fly) { // thwack: it sticks in the wall (a second, smaller jolt)
+      if (hn.show && !hn.calm && !hn.hit && hn.t >= HORN_SHOW.fly) { // thwack: it sticks in the screen glass (a second, smaller jolt)
         hn.hit = true;
         if (!reduced) { quake = time; quakeK = 0.55; }
         buzz(30);
@@ -1753,8 +1766,8 @@ export function createPopScene(canvas, o) {
       ctx.restore();
     }
     for (const pf of puffs) drawPuff(ctx, pf); // dust puffs round an Evil Horn's base
-    for (const hn of horns) { // an Evil Horn that creaked out: it pops up, tumbles away and fades (its big show: drawHornShow)
-      if (hn.show) { drawHornShow(ctx, hn); continue; }
+    for (const hn of horns) { // an Evil Horn that creaked out: it pops up, tumbles away and fades
+      if (hn.show) continue; // its big show is on the screen glass (drawHornShow, at the end of render)
       const up = smooth(hn.t / 0.5) * 40 * scale + Math.max(0, hn.t - 0.5) * 60 * scale;
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, hn.t - 0.7) / 0.4);
@@ -1783,7 +1796,7 @@ export function createPopScene(canvas, o) {
     if (steamK > 0.01 && steamAt) { // soft steam wisps curling up from the cloth (D45 item 5; still with reduced motion)
       drawClothSteam(ctx, steamAt.x, steamAt.y, 34 * scale, reduced ? 1.7 : time, steamK, steamWisps(lite, reduced), lite);
     }
-    if (wipe && !wipe.fade) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale * wipeReach(tool)); // bigger with the cotton pad
+    if (wipe && !wipe.fade && !wipe.empty) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale * wipeReach(tool)); // bigger with the cotton pad; no pad over a clean face (B110(7))
     if (cream) {
       for (const d of cream.dollops) {
         const grow = smooth((cream.t - d.at) / 0.18);
@@ -1814,12 +1827,13 @@ export function createPopScene(canvas, o) {
       shownCtx.globalCompositeOperation = 'source-over';
       ripple.draw(shownCtx, off.canvas, time, { at: (x, y) => sceneToScreen(shown(), x, y), z: shown().z, dpr });
     }
-    if (splats.length) { // the lens is in front of the zoom: splats and glass drops are drawn in screen px
+    if (splats.length || horns.some((hn) => hn.show)) { // the lens is in front of the zoom: splats and glass drops are drawn in screen px
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       for (const s of splats) {
         if (s.glass) drawGlassDrop(ctx, s);
         else if (time >= s.born) drawSplat(ctx, s);
       }
+      for (const hn of horns) if (hn.show) drawHornShow(ctx, hn); // the Evil Horn flies at you and sticks in the glass, over the drops
       ctx.setTransform(...viewMatrix());
     }
     wobbleScreen();
@@ -2017,7 +2031,7 @@ export function createPopScene(canvas, o) {
     const out = pressOutcome(tool, p.type);
     if (out === 'ow') { ow(p); return false; }
     if (out !== 'squeeze' && out !== 'pull') return false;
-    if (!pressAgain(p) && roll() < roughChance(tool, p.type, p.warm ?? 0, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
+    if (!pressAgain(p) && roll() < roughChance(tool, p.type, p.warm ?? 0, irr.level, skin, p.coldRough) * (p.roughMul ?? 1)) { ow(p); return false; } // a rough press on a cold bump (mastery lowers it; delicate skin raises it, T8.3)
     if (p.pressure < 0.05 || p.tool !== tool) { p.tool = tool; if (out === 'squeeze') p.axis = fingerAxis(p); }
     delete p.sqReach; // a one-finger hold uses the drawn fingers again (not a two-finger squeeze's ghost pads)
     hold = { p, id: e.pointerId, since: time };
@@ -2048,7 +2062,7 @@ export function createPopScene(canvas, o) {
       try { o.onStripStuck?.(); } catch (err) { console.warn('onStripStuck failed:', err); } // the hint says: now peel it
     } else if (step === 'wipe' && toolInfo(tool)?.use === 'patch' && patchAt(pt)) {
       // a patch went on a popped spot; no wiping with this press
-    } else if (step === 'wipe' && wipe && !wipe.fade) {
+    } else if (step === 'wipe' && wipe && !wipe.fade && !wipe.empty) { // nothing to wipe: the press is not used (B110(7))
       wipe.id = e.pointerId;
       wipe.auto = null;
       wipe.last = null;
@@ -2148,7 +2162,7 @@ export function createPopScene(canvas, o) {
       const out = pressOutcome(tool, p.type);
       if (out === 'ow') { ow(p); return; }
       if (out !== 'squeeze' && out !== 'pull') return;
-      if (!pressAgain(p) && roll() < roughChance(tool, p.type, p.warm ?? 0, irr.level, skin) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
+      if (!pressAgain(p) && roll() < roughChance(tool, p.type, p.warm ?? 0, irr.level, skin, p.coldRough) * (p.roughMul ?? 1)) { ow(p); return; } // as for a press
     }
     stale = false;
     p.tool = tool;
@@ -2193,7 +2207,7 @@ export function createPopScene(canvas, o) {
     if (!a || !b) return p.pressure;
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     sq.d0 = Math.max(sq.d0, d); // spread wider: closing counts from there (spreading never zooms)
-    const hold = effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, p.warm ?? 0);
+    const hold = effectiveHold(p.hold, p.tool ?? START_TOOL, p.type, p.warm ?? 0, p.coldHold);
     sq.drive =stepDrive(sq.drive, dt, closeAmount(sq.d0, d), hold);
     const next = squeezeProgress(p.pressure, sq.drive.level, dt, hold);
     aimSqueeze(sq);
@@ -2572,6 +2586,8 @@ export function createPopScene(canvas, o) {
     stripOn: () => Boolean(strip && !strip.off),
     /** Whether the nose strip is stuck on and waiting to be peeled. @returns {boolean} true when stuck on */
     stripStuck: () => Boolean(strip && !strip.off && strip.stuck),
+    /** Whether the wipe step has no goo to wipe (it only waits for the nose strip, B110(7)). @returns {boolean} true then */
+    wipeEmpty: () => Boolean(wipe?.empty),
     /**
      * Swap the background picture (the face changes mood as it is cleared).
      * @param {HTMLCanvasElement} tex the new texture

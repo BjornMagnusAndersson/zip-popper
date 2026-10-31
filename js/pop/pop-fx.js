@@ -151,7 +151,7 @@ export function popPlan(o) {
 
 /**
  * The Evil Horn's pop show (owner 2026-10-31: "not really a wow anymore"): after the grand show the biggest moment in
- * the game. A loud crack, the horn shoots off spinning and sticks in the wall like a dart, a big burst of pale horn goo,
+ * the game. A loud crack, the horn flies at you spinning and thunks into the screen glass like a dart, a big burst of pale horn goo,
  * a puff of dust at the base, the strongest ripple, several glass drops and a screen jolt. Reduced motion: no flight,
  * ripple, glass or jolt, fewer drops; Lighter graphics: fewer drops and glass drops, no ripple.
  * @param {boolean} grand it is the last goo bump of the face (a little more goo)
@@ -173,78 +173,107 @@ export function hornPlan(grand, reduced, lite) {
   };
 }
 
-/** The Evil Horn's flight, in seconds after the crack: it leaves (launch), hits the wall (fly), hangs there quivering
- * (until stick), then drops loose and fades (gone). turns = spins on the way. */
-export const HORN_SHOW = { launch: 0.05, fly: 0.42, stick: 1.2, gone: 1.75, turns: 2 };
+/** The Evil Horn's flight onto the screen glass (owner 2026-10-31, the new ending), in seconds after the crack: it
+ * leaves (launch), flies at the viewer, growing and spinning, and thunks into the glass like a dart (fly; the thwack in
+ * the horn_crack sound comes at 0.42 s), quivers there (until stick), droops from its tip (until droop), then comes
+ * loose and falls off the bottom of the screen (gone). turns = spins on the way; grow = at most this many times its
+ * size on the face once it is on the glass; fore = how long it looks while it points at you, stuck in the glass (a
+ * share of its length: it is seen nearly end on, then it droops to its full length); tipLen and tipTurn = where
+ * drawHorn's hooked tip is, seen from its base (in horn sizes, and turned this far from straight up). */
+export const HORN_SHOW = { launch: 0.05, fly: 0.42, stick: 1.0, droop: 1.4, gone: 1.9, turns: 2, grow: 2.6, fore: 0.5, tipLen: 1.37, tipTurn: 0.34 };
 
 /**
- * Where the Evil Horn sticks in the wall: up and out on its own side of the face, beside the hair (pure numbers in scene
- * px). It stays on the scene, its tip a little in from the edge.
- * @param {{x: number, y: number, len: number, w: number, h: number, face: {cx: number, cy: number, rx: number, ry: number}|null,
- *   avoid?: {x: number, y: number, w: number, h: number}[]}} o x, y = the horn's base; len = the horn's length; w, h =
- *   the scene; face = the skin oval; avoid = boxes of buttons over the scene (scene px): it never sticks behind one
- * @returns {{x: number, y: number, a: number}} the tip's spot and the horn's turn there (0 = tip up; it points along its flight)
+ * Where the Evil Horn hits the screen glass (all in screen px: the glass is in front of the zoom, so the spot is always
+ * on screen, never over the hair or a cap, the same upright, sideways and zoomed in): a little up from the middle, on
+ * the horn's own side, never behind a button. Its body points back the way it came (tip first into the glass), and it
+ * grows as it comes at you, to about 0.4 of the screen's short side (at most HORN_SHOW.grow times, never smaller).
+ * @param {{x: number, y: number, len: number, w: number, h: number, avoid?: {x: number, y: number, w: number, h: number}[]}} o
+ *   x, y = the horn's base on screen; len = base to tip on screen now; w, h = the screen (canvas CSS px); avoid = boxes
+ *   of buttons over the scene (screen px)
+ * @returns {{x: number, y: number, a: number, grow: number}} the tip's spot, the way from its base to its tip there
+ *   (0 = tip straight up) and its size on the glass (times its size now)
  */
 export function hornTarget(o) {
-  const f = o.face ?? { cx: o.w / 2, cy: o.h / 2, rx: o.w / 4, ry: o.h / 4 };
-  const side = o.x >= f.cx ? 1 : -1;
-  const m = o.len * 0.35;
-  const top = o.len * 0.75;
-  const wallX = side > 0 ? Math.min(o.w - m, f.cx + f.rx * 1.75) : Math.max(m, f.cx - f.rx * 1.75);
-  const tries = [];
-  // beside the hair on its own side, when there is wall there (sideways); else the top corner (a phone held upright),
-  // then further in along the top
-  if (Math.abs(wallX - f.cx) >= f.rx * 1.5) tries.push([wallX, clamp(f.cy - f.ry * 0.95, o.len * 0.9, Math.max(o.len * 0.9, o.h - o.len))]);
-  for (const k of [1, 0.75, 0.5, 0.3]) tries.push([f.cx + side * (Math.abs(wallX - f.cx) * k), top]);
-  /** Whether the stuck horn (its tip and its middle) would sit behind a button. @param {number} x tip x @param {number} y tip y @param {number} a turn @returns {boolean} yes */
-  const hidden = (x, y, a) => (o.avoid ?? []).some((b) => [0, 0.5].some((s) => {
-    const px = x - Math.sin(a) * o.len * s;
-    const py = y + Math.cos(a) * o.len * s;
-    const pad = o.len * 0.25;
-    return px > b.x - pad && px < b.x + b.w + pad && py > b.y - pad && py < b.y + b.h + pad;
+  const grow = clamp((Math.min(o.w, o.h) * 0.4) / Math.max(1, o.len), 1, HORN_SHOW.grow);
+  const L = o.len * grow; // base to tip once it hangs full length from the glass
+  const side = o.x >= o.w / 2 ? 1 : -1;
+  const tries = [[0.16, 0.36], [0.06, 0.32], [0.24, 0.45], [-0.08, 0.38], [0.1, 0.5], [0, 0.26]];
+  /** The way it points for a tip spot: from where it came from, else a slight tilt. @param {number} x tip x @param {number} y tip y @returns {number} turn */
+  const turn = (x, y) => (Math.hypot(x - o.x, y - o.y) > L * 0.3 ? Math.atan2(x - o.x, -(y - o.y)) : side * 0.5);
+  /** Whether the stuck or hanging horn (tip, middle, base) would sit behind a button or off the screen. @param {number} x tip x @param {number} y tip y @param {number} a turn @returns {boolean} yes */
+  const bad = (x, y, a) => [[a, HORN_SHOW.fore], [0, 1]].some(([q, f]) => [0, 0.5, 1].some((s) => {
+    const px = x - Math.sin(q) * L * f * s;
+    const py = y + Math.cos(q) * L * f * s;
+    const pad = L * 0.15;
+    if (px < pad || px > o.w - pad || py < pad || py > o.h - pad) return true;
+    return (o.avoid ?? []).some((b) => px > b.x - pad && px < b.x + b.w + pad && py > b.y - pad && py < b.y + b.h + pad);
   }));
-  const at = tries.map(([x, y]) => ({ x, y, a: Math.atan2(x - o.x, -(y - o.y)) })); // tip first, along the line from the base
-  return at.find((t) => !hidden(t.x, t.y, t.a)) ?? at[0];
+  const at = tries.map(([fx, fy]) => {
+    const x = o.w / 2 + side * o.w * fx;
+    const y = o.h * fy;
+    return { x, y, a: turn(x, y), grow };
+  });
+  return at.find((t) => !bad(t.x, t.y, t.a)) ?? at[0];
 }
 
 /**
- * The Evil Horn at t seconds after the crack (hornShow drawings, engine.js): where its base is, its turn and how
- * visible, and the wall hit (its spot and the seconds since). Calm (reduced motion): it only lifts off and fades.
- * @param {{x: number, y: number, len: number, spin: number, aimX: number, aimY: number, aimA: number, calm?: boolean}} hn
- *   x, y = its base on the face; len = its length; spin = -1 or 1; aimX, aimY, aimA = hornTarget's tip spot and turn
+ * The Evil Horn at t seconds after the crack (drawHornShow, pop-fx-art.js; screen px): where its base is, the way from
+ * its base to its tip (a), its size (k times its size on the face), how long it looks (fore: 1 = full length, less
+ * while it points at you) and how visible, and the glass hit (seconds since). On the way it spins about its middle,
+ * grows faster and faster and turns its tip to you; on the glass it quivers about its tip, droops until it hangs full
+ * length from the tip, then falls off the bottom of the screen, tumbling. Calm (reduced motion): it only lifts off and
+ * fades.
+ * @param {{x: number, y: number, len: number, spin: number, aimX: number, aimY: number, aimA: number, grow?: number,
+ *   H?: number, calm?: boolean}} hn x, y = its base on screen at the crack; len = base to tip then; spin = -1 or 1 (and
+ *   the way its tip hooks); aimX, aimY, aimA, grow = hornTarget's tip spot, turn and size; H = the screen's height
  * @param {number} t seconds since the crack
- * @returns {{x: number, y: number, a: number, alpha: number, flying: boolean, hit: number, done: boolean}} the base,
- *   turn (radians), alpha, flying = on its way (speed trail), hit = seconds since it hit the wall (-1 = not yet)
+ * @returns {{x: number, y: number, a: number, k: number, fore: number, alpha: number, flying: boolean, hit: number,
+ *   done: boolean}} the base, the way to its tip (radians), size, length share, alpha, flying = on its way (speed
+ *   trail), hit = seconds since it hit the glass (-1 = not yet)
  */
 export function hornAt(hn, t) {
   const S = HORN_SHOW;
   if (hn.calm) {
     const up = smooth(t / 0.5) * hn.len * 0.5 + Math.max(0, t - 0.5) * hn.len * 0.4;
-    return { x: hn.x, y: hn.y - up, a: 0, alpha: clamp(1 - (t - 0.7) / 0.4, 0, 1), flying: false, hit: -1, done: t >= 1.1 };
+    return { x: hn.x, y: hn.y - up, a: hn.spin * S.tipTurn, k: 1, fore: 1, alpha: clamp(1 - (t - 0.7) / 0.4, 0, 1), flying: false, hit: -1, done: t >= 1.1 };
   }
-  const ux = Math.sin(hn.aimA); // the way it points at the end (tip first)
-  const uy = -Math.cos(hn.aimA);
-  const bx = hn.aimX - ux * hn.len * 0.72; // its base once stuck (the tip a little way into the wall)
-  const by = hn.aimY - uy * hn.len * 0.72;
+  const G = hn.grow ?? 1;
+  /** A state from its tip spot, turn and length share (full size). @param {number} x tip x @param {number} y tip y @param {number} a turn @param {number} f length share @returns {object} state */
+  const from = (x, y, a, f) => ({ x: x - Math.sin(a) * hn.len * G * f, y: y + Math.cos(a) * hn.len * G * f, a, k: G, fore: f });
   if (t < S.fly) {
-    const u = t / S.fly;
-    const e = 1 - (1 - u) ** 2; // fast off, easing into the wall
-    const arc = Math.sin(Math.PI * u) * Math.hypot(bx - hn.x, by - hn.y) * 0.22; // a little up-curve on the way
-    const a = e * (hn.aimA + hn.spin * Math.PI * 2 * S.turns);
-    return { x: hn.x + (bx - hn.x) * e, y: hn.y + (by - hn.y) * e - arc, a, alpha: 1, flying: t > S.launch * 0.5, hit: -1, done: false };
+    const u = Math.max(0, t) / S.fly;
+    const e = 1 - (1 - u) ** 2; // fast off, easing onto the glass
+    const k = 1 + (G - 1) * u * u; // it grows faster and faster as it comes at you
+    const a0 = hn.spin * S.tipTurn; // as it stood on the face (its tip hooks outwards)
+    const a = a0 + e * (hn.aimA - a0 + hn.spin * Math.PI * 2 * S.turns);
+    const fore = 1 - (1 - S.fore) * e * e; // it turns its tip to you
+    const m0 = { x: hn.x + Math.sin(a0) * hn.len * 0.5, y: hn.y - Math.cos(a0) * hn.len * 0.5 }; // its middle on the face
+    const m1 = { x: hn.aimX - Math.sin(hn.aimA) * hn.len * G * S.fore * 0.5, y: hn.aimY + Math.cos(hn.aimA) * hn.len * G * S.fore * 0.5 };
+    const arc = Math.sin(Math.PI * u) * Math.hypot(m1.x - m0.x, m1.y - m0.y) * 0.18; // a little up-curve on the way
+    const mx = m0.x + (m1.x - m0.x) * e;
+    const my = m0.y + (m1.y - m0.y) * e - arc;
+    const half = hn.len * k * fore * 0.5;
+    return { x: mx - Math.sin(a) * half, y: my + Math.cos(a) * half, a, k, fore, alpha: 1, flying: t > S.launch * 0.5, hit: -1, done: false };
   }
   const hit = t - S.fly;
   if (t < S.stick) {
-    const q = Math.sin(hit * 42) * 0.32 * Math.exp(-hit * 4.5); // the dart's boing: it quivers about its tip
-    const a = hn.aimA + q;
-    const L = hn.len * 0.72;
-    return { x: hn.aimX - Math.sin(a) * L, y: hn.aimY + Math.cos(a) * L, a, alpha: 1, flying: false, hit, done: false };
+    const q = Math.exp(-hit * 4.5);
+    const a = hn.aimA + Math.sin(hit * 42) * 0.3 * q; // the dart's boing: it quivers about its tip
+    return { ...from(hn.aimX, hn.aimY, a, S.fore * (1 + Math.sin(hit * 42 + 1) * 0.12 * q)), alpha: 1, flying: false, hit, done: false };
   }
-  const f = t - S.stick; // it drops loose, tumbling, and fades
-  return {
-    x: bx + hn.spin * f * hn.len * 0.6, y: by + f * f * hn.len * 9, a: hn.aimA + hn.spin * f * 5,
-    alpha: clamp(1 - f / (S.gone - S.stick), 0, 1), flying: false, hit, done: t >= S.gone,
-  };
+  const aim = Math.atan2(Math.sin(hn.aimA), Math.cos(hn.aimA)); // its turn on the glass, -PI..PI
+  if (t < S.droop) { // it droops from its tip until it hangs full length straight down from it (0 = tip up, body below)
+    const u = smooth((t - S.stick) / (S.droop - S.stick));
+    const a = aim * (1 - u) + Math.sin(u * Math.PI) * 0.15 * -Math.sign(aim || 1);
+    return { ...from(hn.aimX, hn.aimY, a, S.fore + (1 - S.fore) * u), alpha: 1, flying: false, hit, done: false };
+  }
+  const f = t - S.droop; // it comes loose and falls off the bottom of the screen, tumbling
+  const span = S.gone - S.droop;
+  const drop = Math.max(0, (hn.H ?? hn.aimY * 2) - hn.aimY) + hn.len * G * 1.3; // past the bottom edge, its whole length
+  const tipY = hn.aimY + (drop * f * f) / (span * span);
+  const tipX = hn.aimX + hn.spin * f * hn.len * G * 0.5;
+  const a = hn.spin * f * 4;
+  return { ...from(tipX, tipY, a, 1), alpha: clamp((S.gone - t) / 0.08, 0, 1), flying: false, hit, done: t >= S.gone };
 }
 
 /**

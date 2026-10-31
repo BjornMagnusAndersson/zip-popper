@@ -76,7 +76,69 @@ export function paintGlint(c, w) {
 }
 
 /**
- * Make the sprite kit for one picture size and pixel ratio. Sprites are kept until clear().
+ * Sprites shared by every kit (B99(4), B119): the same name, size and resolution always paint the same picture, so a
+ * sprite painted once (or ahead, when the phone is idle: fx/warm.js) is reused by the next effect that asks for it
+ * instead of being painted again at its first frame. Newest last; the oldest go when the pixels pass SHARED_MAX_PX.
+ */
+const SHARED = new Map();
+/** How many sprite pixels the shared store keeps at most (about 6 MB). */
+const SHARED_MAX_PX = 1.5e6;
+let sharedPx = 0;
+
+/**
+ * A shared sprite by its full name, or null (a hit moves it to the newest end).
+ * @param {string} k the sprite's full name (key, size and resolution)
+ * @returns {HTMLCanvasElement|null} the sprite
+ */
+function sharedGet(k) {
+  const c = SHARED.get(k);
+  if (!c) return null;
+  SHARED.delete(k);
+  SHARED.set(k, c);
+  return c;
+}
+
+/**
+ * Keep a sprite in the shared store, letting the oldest go when it is full.
+ * @param {string} k the sprite's full name
+ * @param {HTMLCanvasElement} c the sprite
+ * @returns {void}
+ */
+function sharedPut(k, c) {
+  if (SHARED.has(k)) return;
+  SHARED.set(k, c);
+  sharedPx += c.width * c.height;
+  while (sharedPx > SHARED_MAX_PX && SHARED.size > 1) {
+    const [oldKey, old] = SHARED.entries().next().value;
+    SHARED.delete(oldKey);
+    sharedPx -= old.width * old.height;
+  }
+}
+
+let finishCanvas = null; // a 1 x 1 canvas (finishPaint)
+
+/**
+ * Make the browser really paint a new sprite now (it saves drawing up until a picture is first used), so a sprite made
+ * ahead at an idle moment (fx/warm.js) costs nothing at the effect's first frame. Same work, only earlier.
+ * @param {HTMLCanvasElement} c the sprite
+ * @returns {void}
+ */
+function finishPaint(c) {
+  try {
+    finishCanvas ??= document.createElement('canvas');
+    finishCanvas.width = 1;
+    finishCanvas.height = 1;
+    finishCanvas.getContext('2d')?.drawImage?.(c, 0, 0, 1, 1);
+  } catch { /* no canvas here (tests): nothing to finish */ }
+}
+
+/** For checks: how many sprites and pixels the shared store holds now. @returns {{n: number, px: number}} the size */
+export function sharedSprites() {
+  return { n: SHARED.size, px: sharedPx };
+}
+
+/**
+ * Make the sprite kit for one picture size and pixel ratio. Sprites are kept until clear() (and in the shared store).
  * @param {() => number} getDpr the pixel ratio now
  * @returns {object} sprite, dot, glow, glint, buffer, noise, clear, size
  */
@@ -95,15 +157,17 @@ export function makeSprites(getDpr) {
   function sprite(key, w, h, paint, res) {
     const r = res ?? getDpr();
     const k = `${key}|${w}x${h}@${r}`;
-    let c = cache.get(k);
-    if (c) return c;
+    let c = cache.get(k) ?? sharedGet(k); // painted before, by this kit or another (B99(4))
+    if (c) { cache.set(k, c); return c; }
     c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(w * r));
     c.height = Math.max(1, Math.round(h * r));
     const x = c.getContext('2d');
     x.setTransform(r, 0, 0, r, 0, 0);
     paint(x, w, h);
+    finishPaint(c);
     cache.set(k, c);
+    sharedPut(k, c);
     return c;
   }
   /**

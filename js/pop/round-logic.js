@@ -5,7 +5,7 @@
 // No DOM, no audio, no timers here, so Node can test it.
 import { FACE_BUMPS, holdTime, faceGeometry, layoutFace } from './logic.js';
 import { toolBarIds, START_TOOL, bestToolFor, effectiveHold } from './tool-logic.js';
-import { isImplemented } from '../data/bumps.js';
+import { isImplemented, bumpInfo } from '../data/bumps.js';
 import { makeRng } from '../data/customers.js';
 import { ROUND_IRRITATION } from '../data/economy-data.js';
 import { describeRequest, requestProgress, requestResult } from '../game/requests.js';
@@ -79,6 +79,26 @@ export function roughMultiplier(type, roughReductions = {}) {
  */
 export function applyMastery(pimples, holdFactors = {}, roughReductions = {}) {
   return pimples.map((p) => ({ ...p, hold: scaledHold(p.type, holdFactors), roughMul: roughMultiplier(p.type, roughReductions) }));
+}
+
+/**
+ * The Big Evil Horn boss's horns made harder while cold (SPEC D49, data/bosses.js coldHorn): every horn of the face gets
+ * coldRough (its cold Ow chance as a multiple of the horn's usual rough, so coldHorn.rough 0.5 / 0.18), coldHold (the
+ * cold hold multiplier) and fullCold (its cold pop counts at the full difficulty). The engine fades the first two out
+ * as the warm cloth warms the horn (tool-logic.js coldFactor). Other kinds, and any face without coldHorn, are
+ * returned as they are. Returns new objects for the horns; the list given is not changed.
+ * @param {object[]} pimples bumps (after applyMastery)
+ * @param {{rough?: number, holdScale?: number, fullCold?: boolean}|null|undefined} coldHorn the setup's coldHorn
+ *   (roundFaceSetup), or null for an ordinary face
+ * @returns {object[]} the bumps
+ */
+export function applyColdHorn(pimples, coldHorn) {
+  if (!coldHorn || typeof coldHorn !== 'object') return pimples;
+  const base = bumpInfo('horn')?.rough ?? 0;
+  const rough = base > 0 && Number.isFinite(coldHorn.rough) && coldHorn.rough > 0 ? coldHorn.rough / base : 1;
+  const hold = positive(coldHorn.holdScale, 1);
+  const full = coldHorn.fullCold === true;
+  return pimples.map((p) => (p.type === 'horn' ? { ...p, coldRough: rough, coldHold: hold, fullCold: full } : p));
 }
 
 /**
@@ -175,12 +195,13 @@ export function allowedKinds(allowedTypes) {
  * A boss or event customer (T8.4, data/bosses.js bossSpec `boss`) brings its own bump mix (exactly those bumps; the
  * setup then has `mix`, and the count is its sum), may have the nose strip always on (stripAlways, not over a clown
  * nose) and grown Evil Horns (the setup's `grown` = their size factor). Those two fields are only there for a boss.
+ * The Big Evil Horn's coldHorn (SPEC D49) is passed on as the setup's `coldHorn` (for applyColdHorn), only for it.
  * @param {{customer?: {face?: object}, bumpCount?: number, allowedTypes?: string[], unlockedTools?: string[]|null,
  *   decoys?: boolean, seed?: number, request?: {type: string}|null, boss?: {mix?: Object<string, number>,
- *   stripAlways?: boolean, grownHorns?: number}|null}} o the customer (customerSpec customer), bump
+ *   stripAlways?: boolean, grownHorns?: number, coldHorn?: object}|null}} o the customer (customerSpec customer), bump
  *   count, allowed kinds, owned tools, decoys allowed, the face seed (no seed = no strip), the request and the boss
  * @returns {{spec: object, count: number, allowed: string[], strip: boolean, decoys: boolean,
- *   mix?: Object<string, number>, grown?: number}} the layout setup
+ *   mix?: Object<string, number>, grown?: number, coldHorn?: object}} the layout setup
  */
 export function roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTools = null, decoys = true, seed, request = null, boss = null } = {}) {
   const spec = customer?.face && typeof customer.face === 'object' ? customer.face : {};
@@ -196,6 +217,7 @@ export function roundFaceSetup({ customer, bumpCount, allowedTypes, unlockedTool
   const out = { spec, count, allowed, strip, decoys: decoys !== false };
   if (mix) out.mix = mix;
   if (Number.isFinite(boss?.grownHorns) && boss.grownHorns > 0) out.grown = boss.grownHorns;
+  if (boss?.coldHorn && typeof boss.coldHorn === 'object') out.coldHorn = { ...boss.coldHorn }; // D49: hand to applyColdHorn
   return out;
 }
 
@@ -227,16 +249,18 @@ export function stripHintKey({ stripOnFace, stuck = false, owned, toolInHand }) 
  * The hint line during the wipe step (B55: the nose strip stays usable until the cream starts, and so does its hint).
  * While the strip is still on: stuck on = 'peel it for the bonus'; not stuck, owned and not in hand = the strip bonus
  * tip; the nose strip in hand = its own hint. Otherwise the wipe hint (with the cotton pad tip when she owns the pad
- * but holds something else, B13 round 2b).
- * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string, padOwned?: boolean}} o the face
- *   and the tool bar now (owned = she owns the nose strip)
+ * but holds something else, B13 round 2b). With no goo to wipe (goo false: the step only waits for the strip,
+ * B110(7)) nothing says "wipe": a stuck strip gets the peel tip without "then wipe", else the cream line.
+ * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string, padOwned?: boolean, goo?: boolean}} o
+ *   the face and the tool bar now (owned = she owns the nose strip; goo = there is goo to wipe)
  * @returns {string} the string key
  */
-export function wipeHintKey({ stripOnFace, stuck = false, owned, toolInHand, padOwned = false }) {
-  if (stripOnFace && stuck) return 'pop.hint.stripPeel';
+export function wipeHintKey({ stripOnFace, stuck = false, owned, toolInHand, padOwned = false, goo = true }) {
+  if (stripOnFace && stuck) return goo ? 'pop.hint.stripPeel' : 'pop.hint.stripPeelLast';
   if (stripOnFace && owned && toolInHand === 'noseStrip') return 'tool.noseStrip.hint';
   const strip = stripHintKey({ stripOnFace, stuck, owned, toolInHand });
   if (strip) return strip;
+  if (!goo) return 'pop.hint.cream';
   return padOwned && toolInHand !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe';
 }
 

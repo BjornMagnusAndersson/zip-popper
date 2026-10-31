@@ -25,8 +25,6 @@ import { createSaveStore } from '../core/save.js';
 import { createSound } from '../core/sound.js';
 import { createMusic } from '../core/music.js';
 import { createPopMode } from '../pop/pop-mode.js';
-import { faceGeometry } from '../pop/logic.js';
-import { makeFaceTexture } from '../pop/face.js';
 import { playComic } from './comic.js';
 import { ARTS, dressHeroine, studioKit } from './comic-art.js';
 import { describeRequest } from './requests.js';
@@ -63,6 +61,7 @@ import { describeBoss } from '../data/bosses.js';
 import { isPartyDay } from '../fx/stage-logic.js';
 import { withPartyLights } from './customer-lines.js';
 import { startPartyConfetti, partyConfettiNeeded } from '../fx/party-confetti.js';
+import { warmEffects } from '../fx/warm.js';
 import * as L from './app-logic.js';
 import {
   today, dailyState, dailyFor, dailyStep, describeGoal, judgeDaily, dailyResult, settleDaily, msToMidnight, addDays,
@@ -263,13 +262,31 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   globalThis.addEventListener?.('pagehide', onPageVisibility);
   globalThis.addEventListener?.('pageshow', onPageVisibility);
 
-  /** Take the screen or the pop scene that is on show away. @returns {void} */
+  /** Take the screen or the pop scene that is on show away (and a round scene built ahead that was not used). @returns {void} */
   function clear() {
     closeGuideOverlay(false);
     screen?.dispose();
     screen = null;
     pop?.dispose();
     pop = null;
+    dropAhead();
+    stopWarm?.(); // the effects' warm-up belongs to the screen that started it (never during a round)
+    stopWarm = null;
+    stopIntroWatch?.(); // the intro's watch for a turned phone
+    stopIntroWatch = null;
+  }
+
+  // The next customer's round scene, built ahead while the intro card shows (B99(4)): {step, args, scene}, or null.
+  // Only one; it goes when anything else is shown (clear) or is taken over by playRound.
+  let ahead = null;
+  let stopWarm = null; // stops the effects' warm-up of the screen on show (warmSoon), or null
+  let stopIntroWatch = null; // stops the customer intro's watch for a turned phone (showIntro), or null
+
+  /** Throw the round scene built ahead away, if there is one. @returns {void} */
+  function dropAhead() {
+    const a = ahead;
+    ahead = null;
+    a?.scene.pop.dispose();
   }
 
   // The phone's Back button (B87): while a screen other than the menu, title or name screen is on show, one extra page
@@ -398,24 +415,26 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   /**
    * Put a "Menu" button into the pop scene's top bar (the pop scene has none of its own).
    * @param {() => void} onClick what it does
+   * @param {object|null} [scene] the pop scene to put it in (the one on show when left out)
    * @returns {void}
    */
-  function addPopMenuButton(onClick) {
+  function addPopMenuButton(onClick, scene = pop) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'pop-btn pop-menu';
     b.textContent = t('ui.pop.menu');
     // Ignored in the short pause after a finished customer (the button is hidden then too), so the pay is never lost.
     b.addEventListener('click', () => { if (!pop?.ending?.()) onClick(); });
-    pop?.addHeadButton(b);
+    scene?.addHeadButton(b);
   }
 
   /**
    * Put the daily challenge's goal into the pop scene's header (T8.5): a small gold chip under the customer's name.
    * @param {{id: string, n?: number, timeLimit?: number}} goal the day's goal
+   * @param {object|null} [scene] the pop scene to put it in (the one on show when left out)
    * @returns {(missed: boolean) => void} repaints the chip (true = the goal can no longer be reached this try)
    */
-  function addPopGoalChip(goal) {
+  function addPopGoalChip(goal, scene = pop) {
     const chip = document.createElement('p');
     chip.className = 'pop-goal';
     const name = t(describeGoal(goal).nameKey);
@@ -425,26 +444,22 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       chip.classList.toggle('pop-goal--missed', missed);
     };
     paint(false);
-    pop?.addTitleLine(chip);
+    scene?.addTitleLine(chip);
     return paint;
   }
 
   /**
-   * Draw a customer's face for the intro portrait (the same face renderer as the pop scene, a bit worried).
-   * @param {object} spec the face parts (customer.face)
-   * @param {number} seed the face seed
+   * Draw a customer's face for the intro portrait (the same face renderer as the pop scene, a bit worried) with the
+   * round's own bumps, nose dots and moles at the round's spots (B59): laid out on the stage size the round will have
+   * (measured by the scene built ahead; the default size when there is none). A boss or event keeps the head and
+   * shoulders framing, everyone else the plain intro framing (screens/reveal.js bumpPortrait).
+   * @param {object} args the round's startRound arguments (app-logic.js roundArgs)
+   * @param {{w: number, h: number}|null} stage the round's stage size, or null
    * @param {string} label what screen readers say
    * @returns {HTMLCanvasElement} the picture
    */
-  function facePortrait(spec, seed, label) {
-    const w = 220;
-    const h = 240;
-    const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
-    const canvas = makeFaceTexture(w, h, dpr, faceGeometry(w, h, spec), spec, { mood: 'grim', redness: 0.6, seed });
-    canvas.className = 'app-intro__face';
-    canvas.setAttribute('role', 'img');
-    canvas.setAttribute('aria-label', label);
-    return canvas;
+  function introPortrait(args, stage, label) {
+    return bumpPortrait(faceSetup(args, stage), label, 220, 240, { plain: !args.boss });
   }
 
   /** First start: ask for the name, then the menu. @returns {void} */
@@ -490,8 +505,26 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     }
   }
 
+  /**
+   * Paint the effects' sprites ahead at the phone's idle moments while this screen shows (fx/warm.js; B99(4), B119):
+   * each set once; it stops when the screen goes (clear).
+   * @param {{bossId?: string|null, holdWhile?: () => boolean}} [o] the next intro's boss (its stage first), when to wait
+   * @returns {void}
+   */
+  function warmSoon(o = {}) {
+    stopWarm?.();
+    stopWarm = warmEffects({ reduced: still(), lite: Boolean(save.settings.lowDetail), juicy: !save.settings.gentlePops, ...o });
+  }
+
   /** Build and show the main menu screen. @returns {object} the screen */
   function showMenuScreen() {
+    const shown = showMenuScreenNow();
+    warmSoon(); // the menu is a quiet moment: the effects' sprites get painted ahead (B119)
+    return shown;
+  }
+
+  /** Build and show the main menu screen itself. @returns {object} the screen */
+  function showMenuScreenNow() {
     return show(createMenuScreen({
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
       // A round paused with its Menu button (D48) comes back through its own button, labelled "Back to the face".
@@ -820,7 +853,12 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     // The daily challenge (T8.5): "Daily challenge: Combo master" in the step pill, the goal's line in the note box.
     const goal = args.daily ? describeGoal(args.daily.goal) : null;
     const note = goal ? { key: goal.lineKey, vars: goal.vars, labelKey: 'ui.daily.label' } : hurry ? null : req;
-    show(createCustomerIntroScreen({
+    // The portrait shows the round's own bumps at the round's spots (B59), so it is drawn once the round scene built
+    // ahead has measured the stage (just below, before the screen is first painted); until then a blank stand-in.
+    const label = t(args.customer.nameKey);
+    const holder = document.createElement('canvas');
+    holder.className = 'app-intro__face';
+    const intro = show(createCustomerIntroScreen({
       t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: note,
       // a boss or event's stage moment (D45): fewer particles with Lighter graphics, the spotlight's clunk
       lowDetail: Boolean(save.settings.lowDetail), playSound: (name, o) => sound.play(name, o),
@@ -828,25 +866,73 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       boss: describeBoss(args.boss?.id ?? null), // a boss or event customer's gold pill (T8.4)
       step: goal ? { key: 'ui.daily.pill', vars: { goal: t(goal.nameKey) } }
         : step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
-      // A boss or event face shows its own bumps on the intro (B59); everyone else the plain, bump-free portrait.
-      portrait: args.boss ? bumpPortrait(faceSetup(args), t(args.customer.nameKey)) : facePortrait(args.customer.face, args.seed, t(args.customer.nameKey)),
+      portrait: holder,
       hintKey: L.introHintKey(save, step), onStart: () => playRound(step, args), onMenu: showMenu,
     }), { back: showMenu });
+    // B99(4): the round's scene is built now, hidden behind the intro; its face is painted while the intro shows (not
+    // during a boss's stage moment). Start then shows it at once.
+    const holdWhile = () => intro.stageBusy?.() === true;
+    const stage = buildAhead(step, args, holdWhile);
+    let portrait = introPortrait(args, stage, label);
+    holder.replaceWith(portrait);
+    // The phone turned (or the window changed size) on the intro: the round's stage is another size now, so the face
+    // is built ahead again for it and the portrait follows (its bumps stay the round's own, B59).
+    let size = stage ? `${stage.w}x${stage.h}` : '';
+    let turnTimer = 0;
+    /** Lay the face out again for the new stage, a moment after the size settled. @returns {void} */
+    const onTurn = () => {
+      clearTimeout(turnTimer);
+      turnTimer = setTimeout(() => {
+        if (screen !== intro || ahead?.args !== args) return;
+        const now = ahead.scene.pop.prepare({ ...args, customerName: args.customerNameKey ? t(args.customerNameKey) : null }, { holdWhile });
+        const k = now ? `${now.w}x${now.h}` : '';
+        if (!now || k === size) return;
+        size = k;
+        const fresh = introPortrait(args, now, label);
+        portrait.replaceWith(fresh);
+        portrait = fresh;
+      }, 150);
+    };
+    globalThis.addEventListener?.('resize', onTurn);
+    stopIntroWatch = () => { clearTimeout(turnTimer); globalThis.removeEventListener?.('resize', onTurn); };
+    // Then the effects' sprites, once the face is painted (and not during the stage moment) (B119).
+    warmSoon({ bossId: args.boss?.id ?? null, holdWhile: () => intro.stageBusy?.() === true || ahead?.scene.pop.aheadState?.()?.ready === false });
   }
 
   /**
-   * Play one customer in the pop scene; when it ends, pay, save and show the result.
+   * Build the round's pop scene ahead, hidden behind the customer intro (B99(4)): the same scene, header and tools
+   * playRound would make, mounted hidden so it can measure the stage, then pop-mode.js prepare lays the face out and
+   * paints it at idle moments. Kept in `ahead` until Start (playRound takes it) or another screen (clear drops it).
    * @param {{chapter: number, n: number}} step the customer step
    * @param {object} args the startRound arguments (app-logic.js roundArgs)
-   * @returns {void}
+   * @param {() => boolean} holdWhile wait with the painting while this says true (the boss intro's stage moment)
+   * @returns {{w: number, h: number}|null} the round's stage size (for the portrait), or null when nothing was built
    */
-  function playRound(step, args) {
-    clear();
-    dropParked(); // never two rounds (D48)
-    if (args.twist) persist(addSeenTwists(save, [args.twist])); // she has met this twist: its guide card opens (T8.3)
-    if (args.boss) persist(addSeenBosses(save, [args.boss.id])); // ... and this boss or event: its Events card (T8.4)
-    pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...detailOptions(), ...guideOptions() });
-    pop.mount(root);
+  function buildAhead(step, args, holdWhile) {
+    dropAhead();
+    try {
+      const scene = roundScene(step, args, true);
+      ahead = { step, args, scene };
+      return scene.pop.prepare({ ...args, customerName: args.customerNameKey ? t(args.customerNameKey) : null }, { holdWhile });
+    } catch (e) {
+      console.warn('building the round ahead failed:', e);
+      dropAhead();
+      return null;
+    }
+  }
+
+  /**
+   * Make a customer round's pop scene with the game's parts in its header (the Menu button, the daily goal chip),
+   * mounted in the page (hidden = behind the screen on show, for buildAhead).
+   * @param {{chapter: number, n: number}} step the customer step
+   * @param {object} args the startRound arguments (app-logic.js roundArgs)
+   * @param {boolean} hidden mount it hidden
+   * @returns {{pop: object, leave: () => void, paintGoal: ((missed: boolean) => void)|null, goalHooks: object}} the scene
+   *   and its Menu action, goal chip painter and goal listeners
+   */
+  function roundScene(step, args, hidden) {
+    const p = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...detailOptions(), ...guideOptions() });
+    p.mount(root, { hidden });
     let toolsNow = [...(args.unlockedTools ?? [])]; // the tools on the bar (a tool bought while paused is added on return, D48)
     /** On return from the menu (D48): tools bought meanwhile on the bar, the studio's upgrades in the room. @returns {void} */
     const refresh = () => {
@@ -856,11 +942,32 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     };
     /** Menu (D48): the round stands still and waits; its menu button brings it back. @returns {void} */
     const leave = () => parkPop(L.roundPath(step), leave, refresh);
-    addPopMenuButton(leave);
-    screenChanged({ back: leave }); // Back = the scene's Menu button (not in the end pause, B87)
-    const paintGoal = args.daily ? addPopGoalChip(args.daily.goal) : null; // the daily goal in the header (T8.5)
+    addPopMenuButton(leave, p);
+    const paintGoal = args.daily ? addPopGoalChip(args.daily.goal, p) : null; // the daily goal in the header (T8.5)
     // An Ow spoils a "3 stars" or "No Ows" day at once: the chip says so (Try again starts it fresh).
     const goalHooks = paintGoal && OW_GOALS.includes(args.daily.goal.id) ? { onOw: () => paintGoal(true) } : {};
+    return { pop: p, leave, paintGoal, goalHooks };
+  }
+
+  /**
+   * Play one customer in the pop scene; when it ends, pay, save and show the result.
+   * @param {{chapter: number, n: number}} step the customer step
+   * @param {object} args the startRound arguments (app-logic.js roundArgs)
+   * @returns {void}
+   */
+  function playRound(step, args) {
+    // The scene built ahead during this customer's intro (B99(4)) is taken over (it shows at once); else a fresh one.
+    const built = ahead && ahead.step === step && ahead.args === args ? ahead.scene : null;
+    if (built) ahead = null;
+    clear();
+    dropParked(); // never two rounds (D48)
+    if (args.twist) persist(addSeenTwists(save, [args.twist])); // she has met this twist: its guide card opens (T8.3)
+    if (args.boss) persist(addSeenBosses(save, [args.boss.id])); // ... and this boss or event: its Events card (T8.4)
+    const scene = built ?? roundScene(step, args, false);
+    pop = scene.pop;
+    pop.show();
+    const { leave, paintGoal, goalHooks } = scene;
+    screenChanged({ back: leave }); // Back = the scene's Menu button (not in the end pause, B87)
     sound.unlock();
     pop.unlock();
     /** The request was done or missed: back to the calm music (B14). @returns {void} */

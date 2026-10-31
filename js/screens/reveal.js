@@ -5,12 +5,14 @@
 // faces with faceCanvas from here.
 // Every face is drawn from its saved recipe (album-logic.js faceSetup: seed, face parts, layout settings, stage size)
 // with the REAL face and bump drawing code. Only its public calls are used, all in this file: logic.js faceGeometry
-// and layoutFace, face.js drawFace, art.js makeCanvas, drawPimple, drawDecoy and drawStripDots. No screenshots of the
-// pop scene and no stored pixels. All text comes from the string table.
+// and faceMap, prep-logic.js faceLayout (the round's own way to lay a face out), face.js drawFace, art.js makeCanvas,
+// drawPimple, drawDecoy and drawStripDots. No screenshots of the pop scene and no stored pixels. All text comes from
+// the string table. The customer intro's portrait (bumpPortrait) is drawn here too, with the round's bumps (B59).
 
 import { el, svg, INK } from './dom.js';
 import { revealFaces, sliderKey, autoWipe, SLIDER_REST } from './album-logic.js';
-import { faceGeometry, layoutFace } from '../pop/logic.js';
+import { faceGeometry, faceMap } from '../pop/logic.js';
+import { faceLayout, recipeInputs } from '../pop/prep-logic.js';
 import { drawFace } from '../pop/face.js';
 import { makeCanvas, drawPimple, drawDecoy, drawStripDots } from '../pop/art.js';
 import { makeFxLayer } from '../fx/fx-layer.js';
@@ -64,12 +66,9 @@ export function revealFaceBox(look) {
  */
 export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelRatio || 1)) {
   const { canvas, ctx } = makeCanvas(w, h, dpr);
-  // The face is laid out on the stage size the round had, so the bumps and moles sit exactly where they were.
-  const face = faceGeometry(look.w, look.h, look.spec);
-  const lay = layoutFace({
-    seed: look.seed, face, count: look.count, strip: look.strip, allowed: look.kinds, decoys: look.decoys,
-    mix: look.mix ?? null, grown: look.grown ?? 0, // a boss face's own bumps (T8.4)
-  });
+  // The face is laid out on the stage size the round had, the same way the round does (prep-logic.js faceLayout: a
+  // boss face's own bumps, T8.4; no nose strip over a clown nose), so the bumps and moles sit exactly where they were.
+  const { face, lay } = faceLayout(recipeInputs(look));
   const { x0, y0, x1, y1, k, ox, oy } = pictureFit(face, w, h);
   ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
   ctx.lineCap = 'butt';
@@ -88,21 +87,63 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
     // standing still, fully grown in (as the round began); the Big Evil Horn boss's horns (its face grows them) keep their spooky violet light
     for (const p of lay.pimples) drawPimple(ctx, p, 0, 1, 0.4, false, look.grown > 0);
   }
+  canvas.bumpSpots = spotsOf(lay); // for browser checks (B59)
   return canvas;
 }
 
 /**
- * The customer intro's portrait WITH the round's bumps (B59: an event or boss face shows its own bumps on the intro, so
- * the player sees what the event is about). The same face drawing as the reveal's BEFORE picture, with the intro's
- * grim, a bit red look; every face part and bump comes from the saved recipe (album-logic.js faceSetup).
+ * The bumps of a layout as plain spots on the round's stage (CSS px), for browser checks (B59: the intro portrait shows
+ * the round's own bumps).
+ * @param {{pimples: object[]}} lay the layout
+ * @returns {{x: number, y: number, r: number, type: string}[]} the spots
+ */
+function spotsOf(lay) {
+  return lay.pimples.map((p) => ({ x: p.x, y: p.y, r: p.r, type: p.type }));
+}
+
+/**
+ * The customer intro's plain portrait framing (a head and shoulders picture with the plain wall, the face laid out for
+ * the picture's own size, as the intro always drew it) with the round's own bumps, nose dots and moles moved onto it:
+ * the face is laid out on the round's stage and every spot keeps its place on the face (logic.js faceMap) (B59).
+ * @param {ReturnType<typeof import('./album-logic.js').faceSetup>} setup the face recipe of this round (with its stage size)
+ * @param {number} w picture width in CSS px
+ * @param {number} h picture height in CSS px
+ * @param {number} dpr device pixels per CSS pixel
+ * @returns {HTMLCanvasElement} the picture
+ */
+function plainPortrait(setup, w, h, dpr) {
+  const { canvas, ctx } = makeCanvas(w, h, dpr);
+  const round = faceLayout(recipeInputs(setup)); // where the round puts everything
+  const face = faceGeometry(w, h, setup.spec);
+  drawFace(ctx, face, setup.spec, { mood: 'grim', redness: 0.6, seed: setup.seed, dpr });
+  const m = faceMap(round.face, face);
+  ctx.save();
+  ctx.transform(m.s, 0, 0, m.s, m.tx, m.ty);
+  ctx.lineCap = 'butt';
+  for (const d of round.lay.decoys ?? []) drawDecoy(ctx, d);
+  if (round.lay.strip) drawStripDots(ctx, round.lay.strip.dots, -Infinity);
+  for (const p of round.lay.pimples) drawPimple(ctx, p, 0, 1, 0.4, false, (setup.grown ?? 0) > 0); // as faceCanvas
+  ctx.restore();
+  canvas.bumpSpots = spotsOf(round.lay); // for browser checks (B59)
+  return canvas;
+}
+
+/**
+ * The customer intro's portrait WITH the round's bumps (B59): every customer shows the bumps, nose dots and moles the
+ * round will have, at the same spots (the recipe carries the round's stage size; album-logic.js faceSetup). A boss or
+ * event keeps the reveal's BEFORE framing (head and shoulders filling the picture); everyone else the intro's plain
+ * framing (plain: true). Both with the intro's grim, a bit red look.
  * @param {ReturnType<typeof import('./album-logic.js').faceSetup>} setup the face recipe of this round
  * @param {string} label what screen readers say
  * @param {number} [w] picture width in CSS px
  * @param {number} [h] picture height in CSS px
+ * @param {{plain?: boolean}} [o] plain = the plain intro framing (a normal customer)
  * @returns {HTMLCanvasElement} the picture (class app-intro__face, as the plain intro portrait)
  */
-export function bumpPortrait(setup, label, w = 220, h = 240) {
-  const canvas = faceCanvas({ ...revealFaces(setup).before, mood: 'grim', redness: 0.6 }, w, h);
+export function bumpPortrait(setup, label, w = 220, h = 240, o = {}) {
+  const canvas = o.plain === true
+    ? plainPortrait(setup, w, h, Math.min(2, globalThis.devicePixelRatio || 1))
+    : faceCanvas({ ...revealFaces(setup).before, mood: 'grim', redness: 0.6 }, w, h);
   canvas.className = 'app-intro__face';
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-label', label);

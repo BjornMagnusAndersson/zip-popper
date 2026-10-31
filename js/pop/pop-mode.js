@@ -37,11 +37,18 @@
 // she meets for the first time (onSeenKinds), and the hint line says "New: ...!" for them, one at a time.
 // Twists (T8.3): startRound's twist goes to the engine (fidgety sway, ticklish giggle, sensitive skin), shows as a
 // small label beside the meter, and its tip sits on the hint line until the first pop; a giggle shows "Hehehe!".
-import { faceGeometry, faceMap, layoutFace, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
+// The face built ahead (B99(4), SPEC D40): the game may mount the scene hidden while the customer intro shows
+// (mount(host, {hidden: true})) and call prepare(o) with the round's arguments; the face is then laid out at once and
+// painted in small steps when the phone is idle (the room, the face's still layers, the first picture). startRound
+// with the same face uses it (finishing any steps left, never starting over); if anything changed (stage size, pixel
+// ratio, Lighter graphics, another face) it builds fresh as before. After a face starts, its layout and first picture
+// stay for Try again (D15). At most that one kept face plus the face in play.
+import { faceGeometry, faceMap, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
-import { drawFace, randomFaceSpec } from './face.js';
+import { drawFace, randomFaceSpec, faceLayerCanvases, renewFaceLife } from './face.js';
 import { makeCanvas } from './art.js';
+import { faceLayout, roundInputs, buildKey, copyLayout } from './prep-logic.js';
 import { sceneRatio } from './perf-logic.js';
 import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding, bulbOff } from './backdrop.js';
 import { syncRoomFx } from '../fx/room-fx.js';
@@ -52,7 +59,7 @@ import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
 import { canSqueeze } from './squeeze-logic.js';
 import { createRound, registerPop, registerOw, registerCleanup, registerFail, allHandled } from '../game/scoring.js';
 import {
-  applyMastery, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
+  applyMastery, applyColdHorn, irritationScales, roundTools, roundFaceSetup, requestView, finishPayload, END_PAUSE, END_PAUSE_REDUCED,
   stripChance, stripHintKey, wipeHintKey, clockSeconds, startPause, endPause, isPaused, comboClock,
 } from './round-logic.js';
 import { kindsOnFace, newKindQueue, hintQueueAfterPop, newKindHintKey } from '../screens/guide-logic.js';
@@ -404,7 +411,7 @@ export function createPopMode({
       return t(wipeHintKey({
         stripOnFace: Boolean(current?.hasStrip && !current.stripPeeled && current.scene?.stripOn?.()),
         stuck: Boolean(current?.scene?.stripStuck?.()), owned: toolIds.includes('noseStrip'), toolInHand: toolId,
-        padOwned: toolIds.includes('cottonPad'),
+        padOwned: toolIds.includes('cottonPad'), goo: !current?.scene?.wipeEmpty?.(), // no goo: never "wipe" (B110(7))
       }));
     }
     if (step === 'cream' || step === 'done') return t('pop.hint.cream');
@@ -740,6 +747,61 @@ export function createPopMode({
   }
 
   /**
+   * Show the request banner as a new face starts, before the stage is measured (B99(4)): the banner makes the header
+   * taller, so the face is laid out for the stage it really gets (it was laid out first and shrunk a moment later, and
+   * the before and after reveal measured the smaller stage). drawRequest takes over once the face is there.
+   * @returns {void}
+   */
+  function previewRequest() {
+    const v = cfg.kind === 'round' && cfg.request ? requestView(cfg.request, createRound(1), 0) : null;
+    reqBox.hidden = !v;
+    if (!v) return;
+    reqText.textContent = t(v.key, v.vars);
+    reqTime.textContent = v.secondsLeft === null ? '' : t('round.request.timeLeft', { seconds: v.secondsLeft });
+    reqBox.classList.remove('pop-req--done', 'pop-req--missed');
+  }
+
+  /**
+   * Put the hint line and the bump counter a new face will start with on show before the stage is measured (B99(4)): a
+   * long hint (a twist's tip, "New: ..." for a first-time kind) makes the foot taller and the counter beside a boss's
+   * name chip the header, and the face was laid out first and then shrunk a moment later (a full repaint right after
+   * Start). The kinds and the nose strip do not depend on the stage size, so a layout at any size tells which hint it
+   * will be. Only the texts and the hint's mark; paintHint and drawCount do the rest later.
+   * @param {{pimples: object[], strip: object|null, decoys: object[]}} lay the face's layout (at any stage size)
+   * @returns {void}
+   */
+  function previewHint(lay) {
+    const real = current;
+    current = { // the new face as hintFor sees it at its start
+      twistHint: cfg.kind === 'round' ? cfg.twistHint : null,
+      newQueue: seenSet && cfg.kind !== 'demo' ? newKindQueue(kindsOnFace(lay), [...seenSet]) : [],
+      hasStrip: Boolean(lay.strip), stripPeeled: false,
+      scene: { stripOn: () => Boolean(lay.strip), stripStuck: () => false },
+    };
+    try {
+      hint.textContent = hintFor('pop');
+      hint.classList.toggle('pop-hint--new', Boolean(twistHintKey()) || Boolean(newHintKind()));
+    } finally {
+      current = real;
+    }
+    count_.textContent = t('pop.left', { n: lay.pimples.length }); // the counter line too (drawCount puts the real one; same height)
+  }
+
+  /**
+   * The stage size a new face is laid out for: measured with the request banner and the hint line it will start with
+   * (previewRequest, previewHint), so the face is not laid out again a moment after it shows.
+   * @param {number} s the face seed
+   * @param {object} spec the face spec
+   * @returns {{w: number, h: number}} the stage size in CSS px
+   */
+  function measureFor(s, spec) {
+    previewRequest();
+    const first = stageSize();
+    previewHint(faceLayout(faceInputs(s, spec, first.w, first.h)).lay);
+    return stageSize();
+  }
+
+  /**
    * End a customer round (round mode only) and tell the game, once: after the cleanup, or after a storm-off when the
    * player picked Try again ('again') or Next customer ('next'). The face stays on screen; the game decides what next.
    * @param {object|null} c the face of the round
@@ -816,12 +878,15 @@ export function createPopMode({
   /**
    * Paint the studio room behind the face for this moment, and plan the next repaint (only while something moves: the
    * lamp's flicker, the drip, the sparkles, the room's dust and shine at about 16 frames a second; never with reduced
-   * motion). Repaints the whole room when the stage size changed.
+   * motion). Repaints the whole room when the stage size changed. While the scene is hidden (built ahead, B99(4)) it
+   * paints only when asked with prepOnly, and then plans no repaint and plays no drip.
+   * @param {boolean} [prepOnly] true = one paint for the face built ahead (no timer, no sound)
    * @returns {void}
    */
-  function paintBackdrop() {
+  function paintBackdrop(prepOnly = false) {
     clearTimeout(back.timer);
-    if (disposed) return;
+    const once = prepOnly === true; // (a frame's timestamp, from requestAnimationFrame, is not a true)
+    if (disposed || (hiddenNow && !once)) return;
     const { w, h } = stageSize();
     const dpr = sceneRatio(globalThis.devicePixelRatio, lighter);
     if (w !== back.w || h !== back.h || dpr !== back.dpr) {
@@ -838,10 +903,11 @@ export function createPopMode({
     // The room's light and particle effects (SPEC D45: dust in the light, the moth, the mood, shine, petals), behind
     // the face; still with reduced motion or lighter graphics, so they then cost no extra repaints.
     // The shine glints keep clear of the zoom buttons (A5).
-    back.fx = syncRoomFx(back.fx, { w, h, dpr, kind: backdropKind(room, tier), layers, where: 'pop', reduced, lite: lighter, avoid: zoomClear() });
+    syncFx(w, h, dpr);
     drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins, twinkle: !lighter, fx: back.fx }); // lighter graphics: still sparkles (B33d)
     back.party = syncPartyFx(back.party, { on: party, w, h, dpr, reduced, lite: lighter }); // Prom Penny's day: fairy lights (D45)
     back.party?.frame(ctx, time);
+    if (once) return;
     const leak = roomLeaks(backdropKind(room, tier), layers);
     // The leak plinks into the bucket now and then (owner 2026-10-28: a little annoying, so she wants it fixed); the
     // sound switch decides, so it also plinks with reduced motion (the drop then just hangs still).
@@ -853,18 +919,25 @@ export function createPopMode({
   }
 
   /**
+   * Keep the room's effects for this stage size and pixel ratio, or make them fresh (fx/room-fx.js syncRoomFx). The
+   * shine glints keep clear of the zoom buttons (A5).
+   * @param {number} w stage width in CSS px
+   * @param {number} h stage height in CSS px
+   * @param {number} dpr pixel ratio
+   * @returns {void}
+   */
+  function syncFx(w, h, dpr) {
+    back.fx = syncRoomFx(back.fx, { w, h, dpr, kind: backdropKind(room, tier), layers, where: 'pop', reduced: still(), lite: lighter, avoid: zoomClear() });
+  }
+
+  /**
    * Paint the face picture for its present state (redder and sadder with more bumps left). Only the person is
    * painted; around them the picture is see-through so the studio room behind shows.
    * @param {object} c the current face
    * @returns {HTMLCanvasElement} the texture
    */
   function faceTexture(c) {
-    const cleared = c.scene ? c.scene.all().filter((p) => p.popped).length : 0;
-    // a short wince after an Ow; a short happy face after a giggle (ticklish, T8.3)
-    // a reluctant customer (the chapter 0 husband) keeps the stern face even as his skin clears up
-    const usual = cfg.kind === 'round' && cfg.reluctant ? 'grim' : faceMood(cleared, c.total, c.healed);
-    const mood = c.wince && !c.healed ? 'ow' : c.giggle && !c.healed ? 'happy' : moodOverride ?? usual;
-    const redness = c.healed ? 0 : 1 - cleared / Math.max(1, c.total);
+    const { mood, redness } = textureLook(c);
     const { canvas, ctx } = makeCanvas(c.w, c.h, c.dpr);
     ctx.lineCap = 'butt';
     // Only the person: the room behind comes from backdrop.js, so face.js skips its own plain wall (B19).
@@ -873,12 +946,167 @@ export function createPopMode({
   }
 
   /**
+   * The first picture of a new face: the one built ahead (or kept from the last try of the same face), with a fresh
+   * idle life, or painted now. Remembered on the face (c.firstTexture) for Try again.
+   * @param {object} c the new face (no scene yet)
+   * @param {HTMLCanvasElement|null} ready the picture built ahead, or null
+   * @returns {HTMLCanvasElement} the picture
+   */
+  function firstTexture(c, ready) {
+    const tex = ready ? renewFaceLife(ready, c.face, c.spec, { mood: textureLook(c).mood, seed: c.seed, dpr: c.dpr }) : faceTexture(c);
+    c.firstTexture = tex;
+    return tex;
+  }
+
+  /**
+   * The mood and redness of a face picture for the face's present state.
+   * @param {object} c the face
+   * @returns {{mood: string, redness: number}} the look
+   */
+  function textureLook(c) {
+    const cleared = c.scene ? c.scene.all().filter((p) => p.popped).length : 0;
+    // a short wince after an Ow; a short happy face after a giggle (ticklish, T8.3)
+    // a reluctant customer (the chapter 0 husband) keeps the stern face even as his skin clears up
+    const usual = cfg.kind === 'round' && cfg.reluctant ? 'grim' : faceMood(cleared, c.total, c.healed);
+    const mood = c.wince && !c.healed ? 'ow' : c.giggle && !c.healed ? 'happy' : moodOverride ?? usual;
+    const redness = c.healed ? 0 : 1 - cleared / Math.max(1, c.total);
+    return { mood, redness };
+  }
+
+  // ---- The face built ahead (B99(4)) and kept for Try again ----
+  // ahead = {key, face, lay, texture, steps, cancel, holdWhile, kept}: one face only. key = buildKey of its settings;
+  // lay = an untouched copy of its layout; texture = its first picture once painted (null until then); steps = the
+  // painting still to do, one per idle moment; kept = it is the face just played, kept for Try again.
+  let ahead = null;
+  let hiddenNow = false; // mounted hidden (built ahead while the customer intro shows): no repaints, no layout watching
+  let flushCanvas = null; // a 1 x 1 canvas: drawing a picture onto it makes the browser really paint that picture now
+
+  /**
+   * Make the browser paint a canvas's drawing now (it saves drawing up until the picture is first used), so the work
+   * happens in this idle moment and not in the round's first frame.
+   * @param {HTMLCanvasElement|null} cv the canvas
+   * @returns {void}
+   */
+  function flush(cv) {
+    if (!cv?.width || !cv.height) return;
+    flushCanvas ??= el('canvas');
+    flushCanvas.width = 1;
+    flushCanvas.height = 1;
+    flushCanvas.getContext('2d')?.drawImage(cv, 0, 0, 1, 1);
+  }
+
+  /**
+   * Wait for an idle moment of the phone (requestIdleCallback where it exists, else the next turn of the event loop).
+   * @param {() => void} fn what to run then
+   * @param {number} [ms] wait at least this long first (ms)
+   * @returns {() => void} cancels the wait
+   */
+  function whenIdle(fn, ms = 0) {
+    let id = 0;
+    let gone = false;
+    /** Run it, unless cancelled. @returns {void} */
+    const run = () => { if (!gone) fn(); };
+    /** Ask the phone for its next idle moment. @returns {void} */
+    const ask = () => {
+      if (gone) return;
+      if (typeof globalThis.requestIdleCallback === 'function') id = globalThis.requestIdleCallback(run, { timeout: 600 });
+      else id = setTimeout(run, 0);
+    };
+    const pre = ms > 0 ? setTimeout(ask, ms) : 0;
+    if (!pre) ask();
+    return () => {
+      gone = true;
+      clearTimeout(pre);
+      if (typeof globalThis.cancelIdleCallback === 'function') globalThis.cancelIdleCallback(id);
+      clearTimeout(id);
+    };
+  }
+
+  /**
+   * The face settings of the next face (what layoutFace gets), as newFace lays it out: a round's setup, or free play's
+   * and the demo's own rules.
+   * @param {number} s the face seed
+   * @param {object} spec the face spec
+   * @param {number} w stage width
+   * @param {number} h stage height
+   * @returns {object} the settings (prep-logic.js faceLayout)
+   */
+  function faceInputs(s, spec, w, h) {
+    if (cfg.kind === 'round') return roundInputs(cfg.setup, s, w, h);
+    const wantStrip = cfg.kind === 'free' ? toolIds.includes('noseStrip') && stripChance(s) : strip;
+    return { seed: s, spec, w, h, count: cfg.kind === 'free' ? FACE_BUMPS : count, strip: Boolean(wantStrip), allowed: null, decoys: true, mix: null, grown: 0 };
+  }
+
+  /**
+   * The name of a face build: its settings plus what else its first picture depends on.
+   * @param {object} inputs the face settings (faceInputs)
+   * @param {number} dpr the pixel ratio
+   * @returns {string} the name
+   */
+  function faceKey(inputs, dpr) {
+    return buildKey(inputs, { dpr, lighter, mood: moodOverride, reluctant: cfg.kind === 'round' && cfg.reluctant === true });
+  }
+
+  /** Forget the face built ahead or kept (and stop painting it). @returns {void} */
+  function dropAhead() {
+    ahead?.cancel?.();
+    ahead = null;
+  }
+
+  /**
+   * Run the next painting step of the face built ahead, then wait for the next idle moment. While holdWhile says so
+   * (the boss intro's stage moment is playing) it waits instead.
+   * @returns {void}
+   */
+  function aheadStep() {
+    const a = ahead;
+    if (!a || disposed) return;
+    a.cancel = null;
+    let hold = false;
+    try { hold = Boolean(a.holdWhile?.()); } catch { hold = false; }
+    if (hold) { a.cancel = whenIdle(aheadStep, 150); return; }
+    runStep(a);
+    if (a.steps.length) a.cancel = whenIdle(aheadStep);
+  }
+
+  /**
+   * Run one painting step of a face built ahead; a step that fails stops the rest (the round then paints fresh).
+   * @param {object} a the face built ahead
+   * @returns {void}
+   */
+  function runStep(a) {
+    const step = a.steps.shift();
+    try { step?.(); } catch (e) {
+      console.warn('building the face ahead failed:', e);
+      a.steps.length = 0;
+      a.texture = null;
+    }
+  }
+
+  /**
+   * The face built ahead or kept, if it is the face asked for (same name): its painting is finished now (never started
+   * over), and it comes back with a fresh copy of its layout. Anything else is dropped.
+   * @param {string} key the name of the face asked for (faceKey)
+   * @returns {{face: object, lay: object, texture: HTMLCanvasElement|null}|null} the face, or null = build fresh
+   */
+  function takeAhead(key) {
+    const a = ahead;
+    if (!a || a.key !== key) { dropAhead(); return null; }
+    a.cancel?.();
+    a.cancel = null;
+    while (a.steps.length) runStep(a);
+    const lay = copyLayout(a.lay);
+    if (!lay) { dropAhead(); return null; }
+    return { face: a.face, lay, texture: a.texture };
+  }
+
+  /**
    * The stage changed size (window resized, phone turned): repaint the room and move the round in progress to the
    * new size. The face is laid out again for the new size and every bump, mark and bit of goo keeps its place on it.
    * @returns {void}
    */
   function relayout() {
-    if (disposed || away) return; // away (D48): off the page, nothing to measure; setAway(false) lays it out again
+    if (disposed || away || hiddenNow) return; // away (D48): off the page, nothing to measure; setAway(false) lays it out again; hidden: built ahead, no face yet
     paintBackdrop();
     const c = current;
     if (!c?.scene) return;
@@ -928,18 +1156,20 @@ export function createPopMode({
     if (again && prev) spec = prev.spec;
     else if (round) spec = cfg.setup.spec;
     else spec = (cfg.kind === 'demo' ? fixedSpec : null) ?? randomFaceSpec(s);
-    const { w, h } = stageSize();
+    const { w, h } = measureFor(s, spec); // with the request banner and the hint line as they will be
     const dpr = sceneRatio(globalThis.devicePixelRatio, lighter); // 1 with lighter graphics
-    const face = faceGeometry(w, h, spec);
-    const clownNose = (spec.accessories ?? []).includes('clown-nose'); // no nose strip over a clown nose
-    const wantStrip = round ? cfg.setup.strip : cfg.kind === 'free' ? toolIds.includes('noseStrip') && stripChance(s) : strip;
-    const lay = layoutFace({
-      seed: s, face, count: round ? cfg.setup.count : cfg.kind === 'free' ? FACE_BUMPS : count, strip: wantStrip && !clownNose,
-      allowed: round ? cfg.setup.allowed : null, decoys: round ? cfg.setup.decoys : true,
-      mix: round ? cfg.setup.mix : null, grown: round ? cfg.setup.grown : 0, // a boss face's own bumps (T8.4)
-    });
+    // The face: a round's setup or free play's and the demo's rules (no nose strip over a clown nose; a boss face's own
+    // bumps, T8.4). Built ahead during the intro, or kept from the last try of this same face, when nothing changed
+    // since (B99(4)); else laid out fresh.
+    const inputs = faceInputs(s, spec, w, h);
+    const key = faceKey(inputs, dpr);
+    const built = takeAhead(key);
+    const { face, lay } = built ?? faceLayout(inputs);
+    const keepLay = built ? ahead.lay : copyLayout(lay); // an untouched copy for Try again
     // Skill by use (ECONOMY.md section 4): faster holds and fewer rough presses for kinds the player has mastered.
-    const pimples = cfg.kind === 'demo' ? lay.pimples : applyMastery(lay.pimples, cfg.holdFactors, cfg.roughReductions);
+    // The Big Evil Horn boss's horns are harder while cold (SPEC D49, data/bosses.js coldHorn; only that boss has one).
+    const pimples = cfg.kind === 'demo' ? lay.pimples
+      : applyColdHorn(applyMastery(lay.pimples, cfg.holdFactors, cfg.roughReductions), round ? cfg.setup.coldHorn : null);
     const canvas = el('canvas', 'pop-canvas');
     canvas.tabIndex = 0;
     canvas.setAttribute('role', 'img');
@@ -963,7 +1193,7 @@ export function createPopMode({
     c.scene = createPopScene(canvas, {
       width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze, zoom: zoom !== false,
       juicy: !gentlePops, lite: lighter, grandFirst: round && cfg.grandFirst === true, // the juicy pop (SPEC D45); Hubby's first pop in chapter 0 is the big show (D46-26)
-      texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
+      texture: firstTexture(c, built?.texture ?? null), pimples, strip: lay.strip, decoys: lay.decoys,
       boss: round && cfg.setup.grown > 0, // the Big Evil Horn boss (the only face whose horns grow, data/bosses.js grownHorns): its horns glow spooky violet
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
@@ -1064,7 +1294,11 @@ export function createPopMode({
     canvas.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') { if (c.scene.keyPress()) e.preventDefault(); }
     });
+    // Kept for Try again (D15, B99(4)): this face's untouched layout and first picture (the one face kept besides the
+    // face in play; a different next face drops it).
+    ahead = keepLay ? { key, face, lay: keepLay, texture: c.firstTexture, steps: [], cancel: null, kept: true } : null;
     if (isPaused(pause)) c.scene.setPaused(true); // a new face made while the guide is open (or the page hidden) starts frozen
+    hint.textContent = ''; // (the preview put the same text there: this way a first-time hint still flashes)
     paintHint('pop');
     drawCount();
     drawRequest(c);
@@ -1088,22 +1322,97 @@ export function createPopMode({
   const onResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(relayout, 120); };
   const watcher = typeof ResizeObserver === 'function' ? new ResizeObserver(onResize) : null; // also catches bar size changes
 
-  return {
+  /**
+   * Set a customer round up without starting it (prepare(), B99(4)): startRound's own setting up.
+   * @param {object} o the startRound arguments
+   * @returns {void}
+   */
+  const configureRound = (o) => api.startRound(o, true);
+
+  const api = {
     node: root,
     /**
      * Put the scene into a page element and show the first face (it needs to be in the page to measure its size).
+     * hidden = true (B99(4)): the scene goes in hidden and untouchable behind the screen on show (pop.css .pop-prep, at
+     * the very same size), with no face, so prepare() can measure the stage and build the next face ahead; show()
+     * makes it the visible scene.
      * @param {HTMLElement} host the element to fill
+     * @param {{hidden?: boolean}} [opts] hidden = mount it hidden for prepare()
      * @returns {void}
      */
-    mount(host) {
+    mount(host, opts = {}) {
+      if (opts.hidden === true) {
+        hiddenNow = true;
+        root.classList.replace('pop-game', 'pop-prep');
+        root.inert = true;
+        root.setAttribute('aria-hidden', 'true');
+      }
       host.append(root);
       globalThis.addEventListener?.('resize', onResize);
       globalThis.document?.addEventListener?.('visibilitychange', onVisibility); // the round clock pauses while hidden (B83)
       globalThis.addEventListener?.('pagehide', onVisibility);
       globalThis.addEventListener?.('pageshow', onVisibility);
       watcher?.observe(stage);
+      if (hiddenNow) { ready = true; return; } // in the page and measurable now; the face comes with prepare() or startRound()
       requestAnimationFrame(() => { ready = true; newFace(wantFocus); wantFocus = false; }); // the demo face, or a round/free play asked for before
     },
+    /**
+     * Make a scene mounted hidden the visible scene (B99(4)): call it before startRound. Nothing for a visible scene.
+     * @returns {void}
+     */
+    show() {
+      if (!hiddenNow || disposed) return;
+      hiddenNow = false;
+      root.classList.replace('pop-prep', 'pop-game');
+      root.inert = false;
+      root.removeAttribute('aria-hidden');
+    },
+    /**
+     * Build the next customer's face ahead while the scene is mounted hidden (B99(4)): sets the round up as startRound
+     * does (header, tools, room) without starting it, lays the face out at once for the stage as it is now, and paints
+     * the room, the face's still layers and the first picture in small steps at idle moments. startRound with the same
+     * face then uses it. holdWhile = wait while this says true (the boss intro's stage moment must not stutter).
+     * @param {object} o the startRound arguments (as startRound; listeners are not needed yet)
+     * @param {{holdWhile?: () => boolean}} [opts] when to wait
+     * @returns {{w: number, h: number}|null} the stage size the face is laid out for (the intro portrait uses it, B59),
+     *   or null when nothing could be built (not mounted)
+     */
+    prepare(o = {}, opts = {}) {
+      if (disposed || !ready) return null;
+      configureRound(o);
+      newBtn.hidden = true; // as newFace does for a round, before measuring (the header's width decides its height)
+      stage.replaceChildren(backdrop, zoomBox);
+      zoomBox.hidden = zoom === false;
+      showView({ z: 1, x: 0, y: 0 });
+      const { w, h } = measureFor(cfg.seed, cfg.setup.spec); // as newFace does
+      const dpr = sceneRatio(globalThis.devicePixelRatio, lighter);
+      const inputs = faceInputs(cfg.seed, cfg.setup.spec, w, h);
+      const { face, lay } = faceLayout(inputs);
+      const keep = copyLayout(lay);
+      dropAhead();
+      if (!keep) return { w, h };
+      const a = { key: faceKey(inputs, dpr), face, lay: keep, texture: null, steps: [], cancel: null, holdWhile: opts.holdWhile ?? null };
+      const c = { w, h, dpr, face, spec: cfg.setup.spec, seed: cfg.seed, total: lay.pimples.length, healed: false, scene: null, wince: false, giggle: false };
+      let layers = [];
+      a.steps.push(
+        () => syncFx(w, h, dpr), // the room's light and dust effects (their sprites)
+        () => paintBackdrop(true), // the still room and the effects' still parts
+        () => flush(backdrop),
+        () => { layers = faceLayerCanvases(face, c.spec, c.seed, dpr); }, // the face's still layers
+        () => flush(layers[0]),
+        () => flush(layers[1]),
+        () => { a.texture = faceTexture(c); }, // the first picture
+        () => flush(a.texture),
+      );
+      ahead = a;
+      a.cancel = whenIdle(aheadStep);
+      return { w, h };
+    },
+    /**
+     * For checks: the face built ahead or kept now (B99(4)).
+     * @returns {{ready: boolean, kept: boolean, stepsLeft: number, painted: boolean}|null} its state, or null
+     */
+    aheadState: () => (ahead ? { ready: !ahead.steps.length, kept: Boolean(ahead.kept), stepsLeft: ahead.steps.length, painted: Boolean(ahead.texture) } : null),
     /**
      * Play ONE customer (T3.1b). Their face, exactly bumpCount bumps of the allowed kinds (decoys and the Evil Horn
      * and ingrown-hair rules as usual), only the owned tools (fingers always), mastery hold times and rough chances,
@@ -1129,9 +1438,10 @@ export function createPopMode({
      *   For a special mode (T4.5): mood = a fixed face mood ('sleep'; an Ow still winces), onPop(bump, left) after
      *   every pop and onOw(at) after every Ow. onRequestEnd(status) runs once when the request is done or missed
      *   ('done' or 'failed'), so the game can end the hectic music (B14).
+     * @param {boolean} [setupOnly] true = only set the round up, do not start it (prepare(), B99(4))
      * @returns {void}
      */
-    startRound(o = {}) {
+    startRound(o = {}, setupOnly = false) {
       const tools = roundTools(o.unlockedTools ?? [START_TOOL]);
       const seed0 = Number.isFinite(o.seed) && o.seed > 0 ? Math.floor(o.seed) : 1 + Math.floor(Math.random() * 2e9);
       cfg = {
@@ -1171,6 +1481,7 @@ export function createPopMode({
       if (Number.isFinite(o.tier)) tier = o.tier;
       if (Array.isArray(o.layers)) layers = [...o.layers];
       pins = Number(o.pins) || 0;
+      if (setupOnly === true) return; // prepare(): set up, not started (B99(4))
       paintBackdrop();
       startNow(true);
     },
@@ -1364,6 +1675,7 @@ export function createPopMode({
       clearInterval(current?.reqTimer);
       current?.scene?.dispose();
       current = null;
+      dropAhead(); // the face built ahead or kept for Try again goes too (B99(4))
       globalThis.removeEventListener?.('resize', onResize);
       globalThis.document?.removeEventListener?.('visibilitychange', onVisibility);
       globalThis.removeEventListener?.('pagehide', onVisibility);
@@ -1372,4 +1684,5 @@ export function createPopMode({
       sound.dispose();
     },
   };
+  return api;
 }

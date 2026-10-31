@@ -28,6 +28,13 @@ export const FALLBACK_BOSS = 'golden';
  *   exactly these, in the zones each kind likes (pop/logic.js layoutFace mix).
  * - stripAlways: the nose strip (the dotty nose) is always on, whatever the coin toss says.
  * - grownHorns: Evil Horns start fully grown and this many times their usual size (0 = as usual).
+ * - coldHorn: (only the Big Evil Horn, SPEC D49) how its horns behave while cold (not warmed by the warm cloth):
+ *   rough = the Ow chance of a squeeze start on a cold horn at a calm meter (the horn's usual rough is in data/bumps.js);
+ *   holdScale = how many times longer a cold horn takes to squeeze out; both fade to the horn's usual values as the warm
+ *   cloth warms it (tool-logic.js coldFactor), then the warm cloth's usual cut applies. fullCold = a cold horn's pop
+ *   counts on the irritation meter at the boss's full difficulty (not capped by ROUND_IRRITATION.coldPopMax, D27c);
+ *   off for the horn since the owner picked the softer step (D49), kept as a knob.
+ *   Left out = horns as on any other face.
  * - accessory: one face accessory she wears for the day (left out when that spot is taken, see ACCESSORY_SLOTS).
  * - difficulty: the irritation difficulty for this face (null = the slot's own, see data/chapters.js CAREER_BANDS).
  * - difficultyScale: when difficulty is null, the slot's own difficulty is multiplied by this (R7: bosses felt too easy),
@@ -54,6 +61,9 @@ export const BOSSES = {
   horn: { // Big Evil Horn: two horns grown big plus reds; the warm cloth is the way in, so it needs one (D27c, B75)
     kind: 'boss', needs: ['warmCloth'], mix: { horn: 2, red: 4, whitehead: 2 }, stripAlways: false, grownHorns: 1.2,
     accessory: 'sunglasses', difficulty: null, difficultyScale: 1.3, reward: { flat: 15, payScale: null, popScale: 1 },
+    // D49: a little harder without the warm cloth. rough 0.4 at a calm meter: the meter's own boost (IRRITATION.boost)
+    // lifts it to about half of the cold squeeze starts in play (bot sweep: 0.48 for a careful player; 0.5 gave 0.61).
+    coldHorn: { rough: 0.4, holdScale: 1.4, fullCold: false }, // owner 2026-10-31: the softer step (D49)
   },
 };
 
@@ -182,7 +192,7 @@ export function bossAccessories(accessories, id) {
 /**
  * A customer spec (game/chapter-logic.js customerSpec shape) turned into an event customer: the same person, with the
  * event's bumps (bossMix), its accessory, its difficulty (or the slot's), no request, and a `boss` field the pop
- * scene's face setup reads (round-logic.js roundFaceSetup: mix, stripAlways, grownHorns).
+ * scene's face setup reads (round-logic.js roundFaceSetup: mix, stripAlways, grownHorns, and coldHorn when the event has one).
  * @param {object} spec the normal spec
  * @param {string} id an event id
  * @param {number} seed the face seed
@@ -198,7 +208,7 @@ export function bossSpec(spec, id, seed) {
   const customer = { ...spec.customer, face, bumps: count, bumpTypes: [...types] };
   return {
     ...spec, customer, bumpCount: count, allowedTypes: [...types], difficulty: b.difficulty ?? Math.min(BOSS_MAX_DIFFICULTY, spec.difficulty * (b.difficultyScale ?? 1)), requestAllowed: false,
-    boss: { id, kind: b.kind, mix: { ...mix }, stripAlways: b.stripAlways, grownHorns: b.grownHorns },
+    boss: { id, kind: b.kind, mix: { ...mix }, stripAlways: b.stripAlways, grownHorns: b.grownHorns, ...(b.coldHorn ? { coldHorn: { ...b.coldHorn } } : {}) },
   };
 }
 
