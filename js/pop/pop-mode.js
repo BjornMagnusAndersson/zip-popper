@@ -964,6 +964,7 @@ export function createPopMode({
       width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze, zoom: zoom !== false,
       juicy: !gentlePops, lite: lighter, grandFirst: round && cfg.grandFirst === true, // the juicy pop (SPEC D45); Hubby's first pop in chapter 0 is the big show (D46-26)
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
+      boss: round && cfg.setup.grown > 0, // the Big Evil Horn boss (the only face whose horns grow, data/bosses.js grownHorns): its horns glow spooky violet
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
       twist: round ? cfg.twist : null, // the customer's twist (T8.3; the hurry twist is the request banner)

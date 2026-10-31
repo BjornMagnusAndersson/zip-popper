@@ -85,7 +85,8 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
   for (const d of lay.decoys ?? []) drawDecoy(ctx, d);
   if (lay.strip && (!look.clean || look.stripLeft)) drawStripDots(ctx, lay.strip.dots, -Infinity); // left on: still there
   if (!look.clean) {
-    for (const p of lay.pimples) drawPimple(ctx, p, 0, 1, 0.4); // standing still, fully grown in (as the round began)
+    // standing still, fully grown in (as the round began); the Big Evil Horn boss's horns (its face grows them) keep their spooky violet light
+    for (const p of lay.pimples) drawPimple(ctx, p, 0, 1, 0.4, false, look.grown > 0);
   }
   return canvas;
 }

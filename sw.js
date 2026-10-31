@@ -187,7 +187,7 @@ const PRECACHE = [
   './assets/audio/sizzle.wav',
 ];
 
-const CACHE_VERSION = 'v107';
+const CACHE_VERSION = 'v108';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

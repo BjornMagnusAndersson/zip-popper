@@ -121,17 +121,20 @@ export function paintSkin(ctx, w, h, dpr, seed, o = {}) {
  * @param {number} appear growth
  * @param {number} time seconds (for the golden twinkle and the horn's tremble)
  * @param {boolean} [tense] the Evil Horn's tense build-up while squeezed (the juicy pop on)
+ * @param {boolean} [boss] a horn of the Big Evil Horn boss (data/bosses.js 'horn'): a spooky violet light breathes
+ *   round it (owner 2026-10-31 on v107); other horns are natural angry bumps
  * @returns {void}
  */
-export function drawPimple(ctx, p, amt, appear, time, tense = false) {
+export function drawPimple(ctx, p, amt, appear, time, tense = false, boss = false) {
   const s = p.r * appear * (1 + 0.45 * amt);
   if (s <= 0.3) return;
   const { x, y, type } = p;
   const halo = {
     red: ['rgba(232,104,104,0.55)', 2.5], whitehead: ['rgba(232,128,116,0.36)', 1.9], big: ['rgba(226,96,96,0.58)', 2.3],
-    blackhead: ['rgba(170,110,90,0.16)', 1.6], gold: ['rgba(255,196,70,0.5)', 2.3], horn: ['rgba(214,104,140,0.45)', 2.1],
+    blackhead: ['rgba(170,110,90,0.16)', 1.6], gold: ['rgba(255,196,70,0.5)', 2.3], horn: ['rgba(228,98,96,0.55)', 2.3],
     hair: ['rgba(232,104,104,0.5)', 2.2],
-  }[type] ?? ['rgba(232,128,116,0.36)', 1.9];
+    bossHorn: ['rgba(200,110,140,0.2)', 1.8], // the boss's horn: less red round it, its violet light does the rest
+  }[boss && type === 'horn' ? 'bossHorn' : type] ?? ['rgba(232,128,116,0.36)', 1.9];
   const hr = s * halo[1];
   const g = ctx.createRadialGradient(x, y, s * 0.4, x, y, hr);
   g.addColorStop(0, halo[0]);
@@ -157,54 +160,47 @@ export function drawPimple(ctx, p, amt, appear, time, tense = false) {
     ctx.beginPath(); ctx.arc(x - s * 0.18, y - s * 0.18, s * 0.14, 0, Math.PI * 2); ctx.fill();
     return;
   }
-  if (type === 'horn') { // the Evil Horn: an angry swollen bump, a glossy pink-purple dome with a soft glow, and a fat cartoon horn growing out of it (it rises and wiggles as it is squeezed)
-    // tense (the juicy pop, owner 2026-10-31): the build-up to its crack: the base swells, strain marks show round it
-    // and the horn trembles harder and faster as the pressure rises (time 0 = no tremble, for reduced motion)
+  if (type === 'horn') { // the Evil Horn: an angry swollen bump (the pink-red dome of the other bumps, a bit flatter and glossy) with a fat cartoon horn growing out of it (it rises and wiggles as it is squeezed)
+    // tense (the juicy pop, owner 2026-10-31): the build-up to its crack: the base swells, its skin stretches tight and
+    // shines brighter, and the horn trembles harder and faster as the pressure rises (time 0 = no tremble, for reduced
+    // motion). No strain marks and no dark rings (owner on v107). boss: a spooky violet light breathes round it.
     const k = tense ? Math.min(1, amt) : 0;
+    const sq = Math.min(1, Math.max(0, amt)); // how hard it is squeezed (with Gentle pops too)
     const sw = 1 + 0.22 * k * k;
     const by = y + s * 0.3;
     const rx = s * 1.0 * sw;
     const ry = s * 0.66 * sw;
-    const glow = ctx.createRadialGradient(x, by, ry * 0.6, x, by, rx * 1.7); // a soft purple glow round it
-    glow.addColorStop(0, `rgba(190,80,170,${0.32 + 0.25 * k})`);
-    glow.addColorStop(1, 'rgba(190,80,170,0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.ellipse(x, by, rx * 1.7, ry * 1.9, 0, 0, Math.PI * 2); ctx.fill();
-    const base = ctx.createRadialGradient(x - s * 0.35, by - ry * 0.45, s * 0.05, x, by, rx);
-    base.addColorStop(0, '#ffdcea'); base.addColorStop(0.45, k > 0.5 ? '#ee86b6' : '#e895bd'); base.addColorStop(1, '#b45d9c');
+    const base = ctx.createRadialGradient(x - rx * 0.32, by - ry * 0.5, s * 0.08, x, by, rx * 1.04); // paler and tighter as it stretches
+    base.addColorStop(0, `rgb(255,${Math.round(201 + 26 * k)},${Math.round(191 + 28 * k)})`);
+    base.addColorStop(0.55, boss ? `rgb(${Math.round(226 + 8 * k)},${Math.round(138 + 16 * k)},${Math.round(144 + 10 * k)})` // the boss: a dusky rose, so its violet light reads
+      : `rgb(${Math.round(234 + 8 * k)},${Math.round(124 + 16 * k)},${Math.round(120 + 10 * k)})`);
+    base.addColorStop(1, 'rgba(206,92,88,0.15)');
     ctx.fillStyle = base;
     ctx.beginPath(); ctx.ellipse(x, by, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = Math.max(1.5, s * 0.1); // a pale rim, so the base reads on dark skin too
-    ctx.strokeStyle = 'rgba(255,232,240,0.75)';
-    ctx.stroke();
-    ctx.lineWidth = Math.max(0.9, s * 0.05); // and a soft ink line, like the horn's
-    ctx.strokeStyle = 'rgba(120,44,96,0.6)';
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.7)'; // its gloss
-    ctx.beginPath(); ctx.ellipse(x - rx * 0.52, by - ry * 0.3, rx * 0.2, ry * 0.12, -0.5, 0, Math.PI * 2); ctx.fill();
-    if (k > 0.45) { // comic strain marks round the base, pulsing
-      const a0 = Math.min(1, (k - 0.45) / 0.3);
-      const pulse = 1 + 0.18 * Math.sin(time * 22);
-      ctx.strokeStyle = `rgba(150,52,120,${0.65 * a0})`;
-      ctx.lineWidth = Math.max(1.2, s * 0.07);
-      ctx.lineCap = 'round';
-      for (const a of [-2.75, -2.25, -0.89, -0.39, 0.5, 2.64]) {
-        const d0 = s * 1.18 * sw;
-        const d1 = d0 + s * 0.26 * pulse;
-        ctx.beginPath();
-        ctx.moveTo(x + Math.cos(a) * d0, by + Math.sin(a) * d0 * 0.75);
-        ctx.lineTo(x + Math.cos(a) * d1, by + Math.sin(a) * d1 * 0.75);
-        ctx.stroke();
-      }
-      ctx.lineCap = 'butt';
+    if (k > 0) { // stretched skin: a soft wide sheen spreads over the top of the dome
+      const st = ctx.createRadialGradient(x - rx * 0.2, by - ry * 0.45, 0, x - rx * 0.2, by - ry * 0.45, rx * 0.8);
+      st.addColorStop(0, `rgba(255,250,246,${0.4 * k})`);
+      st.addColorStop(1, 'rgba(255,250,246,0)');
+      ctx.fillStyle = st;
+      ctx.beginPath(); ctx.ellipse(x, by, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.fillStyle = `rgba(255,255,255,${0.45 + 0.4 * sq})`; // its shine: stretched skin shines more, as on the other bumps
+    ctx.beginPath(); ctx.ellipse(x - rx * 0.52, by - ry * 0.32, rx * (0.22 + 0.06 * k), ry * (0.13 + 0.04 * k), -0.5, 0, Math.PI * 2); ctx.fill();
+    if (boss) drawSpookyLight(ctx, x, by - ry * 0.3, rx, time, sq); // over the bump too: it glows out of the root
     const wiggle = amt > 0.05 ? Math.sin(time * (26 + 34 * k)) * (0.07 + 0.09 * k * k) * Math.min(1, amt) : 0;
     const jx = Math.sin(time * 61) * s * 0.045 * k * k; // and it shivers sideways
     const hy = y + s * 0.42 - s * 0.2 * Math.min(1, amt) - s * 0.1 * k * k;
     const hs = s * 1.65 * (1 + 0.06 * k); // big enough to read on a phone
-    ctx.fillStyle = 'rgba(110,30,90,0.4)'; // the dark collar it grows out of
-    ctx.beginPath(); ctx.ellipse(x + jx, hy + hs * 0.06, hs * 0.46, hs * 0.15, 0, 0, Math.PI * 2); ctx.fill();
-    drawHorn(ctx, x + jx, hy, hs, wiggle, { time, flip: /L$/.test(p.zone ?? '') ? -1 : 1 }); // left of the face: it hooks outwards
+    ctx.save(); // a soft warm shadow where it grows out (no edge: a round fade, squashed flat)
+    ctx.translate(x + jx, hy + hs * 0.06);
+    ctx.scale(1, 0.34);
+    const sh = ctx.createRadialGradient(0, 0, 0, 0, 0, hs * 0.5);
+    sh.addColorStop(0, 'rgba(150,52,48,0.34)');
+    sh.addColorStop(1, 'rgba(150,52,48,0)');
+    ctx.fillStyle = sh;
+    ctx.beginPath(); ctx.arc(0, 0, hs * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    drawHorn(ctx, x + jx, hy, hs, wiggle, { time, flip: /L$/.test(p.zone ?? '') ? -1 : 1, boss }); // left of the face: it hooks outwards
     return;
   }
   const dome = ctx.createRadialGradient(x - s * 0.3, y - s * 0.35, s * 0.1, x, y, s * 1.05);
@@ -248,10 +244,44 @@ export function drawPimple(ctx, p, amt, appear, time, tense = false) {
 }
 
 /**
+ * The Big Evil Horn boss's spooky light (owner 2026-10-31 on v107): a soft, eerie violet glow that breathes slowly
+ * out of the horn's root and swells a little while it is squeezed. It is light, not paint: added with 'screen', so it
+ * only brightens the skin towards violet, and it fades out to nothing (no ring, no edge).
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} x middle of the light
+ * @param {number} y middle of the light
+ * @param {number} r the bump's base radius
+ * @param {number} time seconds (0 = no breathing, for reduced motion and still pictures)
+ * @param {number} sq how hard it is squeezed, 0..1
+ * @returns {void}
+ */
+function drawSpookyLight(ctx, x, y, r, time, sq) {
+  const breathe = time > 0 ? 0.5 + 0.5 * Math.sin(time * 1.9) : 0.5; // a slow breath, about every 3 seconds
+  const R = r * (2.6 + 0.3 * breathe + 0.6 * sq);
+  const a = 0.5 + 0.14 * breathe + 0.2 * sq;
+  ctx.save();
+  const tint = ctx.createRadialGradient(x, y, 0, x, y, R * 0.85); // a faint violet wash first, so it shows on pale skin too
+  tint.addColorStop(0, `rgba(118,88,236,${a * 0.42})`);
+  tint.addColorStop(0.45, `rgba(118,88,236,${a * 0.16})`);
+  tint.addColorStop(1, 'rgba(118,88,236,0)');
+  ctx.fillStyle = tint;
+  ctx.beginPath(); ctx.arc(x, y, R * 0.85, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'screen'; // then the light itself
+  const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+  g.addColorStop(0, `rgba(146,116,255,${a})`);
+  g.addColorStop(0.28, `rgba(124,96,246,${a * 0.62})`);
+  g.addColorStop(0.6, `rgba(104,76,228,${a * 0.22})`);
+  g.addColorStop(1, 'rgba(96,64,216,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
  * The Evil Horn (owner 2026-10-31 on v106: "the effects are better than the object"): a fat, curved cartoon horn,
  * thick at the base and tapering to a slightly hooked tip, ivory to warm cream with soft shading, curved ridges that
- * follow its bend (each with a light edge under it), a glossy streak and a rim light, a purple-pink tint where it grows
- * out of the bump, a clear ink outline over a pale halo (so it reads on dark skin), and, given a time, a tiny glint
+ * follow its bend (each with a light edge under it), a glossy streak and a rim light, a warm pink-red tint where it
+ * grows out of the bump (lit violet on the boss), a clear ink outline over a pale halo (so it reads on dark skin), and, given a time, a tiny glint
  * winking near the tip. Its base sits on (x, y) and it points up (turned by angle); it is about 1.3 times size tall and
  * a size wide at the base. Used on the face, in the flying and stuck horn of its show, the intro portrait and the face
  * album. No goo, no blood: just a silly, slightly smug horn.
@@ -260,8 +290,10 @@ export function drawPimple(ctx, p, amt, appear, time, tense = false) {
  * @param {number} y base centre y
  * @param {number} size about the bump's radius
  * @param {number} [angle] turn in radians (0 = straight up)
- * @param {{time?: number, flip?: number}} [o] time = seconds for the glint (left out or 0 = no glint); flip = -1 for
- *   a mirrored horn (its tip hooks to the left: horns on the left of the face hook outwards)
+ * @param {{time?: number, flip?: number, boss?: boolean}} [o] time = seconds for the glint (left out or 0 = no glint);
+ *   flip = -1 for a mirrored horn (its tip hooks to the left: horns on the left of the face hook outwards); boss = the
+ *   Big Evil Horn boss's horn: its root is lit violet and a faint violet rim light runs up its outer edge (others get
+ *   a warm pink-red root, like the bump)
  * @returns {void}
  */
 export function drawHorn(ctx, x, y, size, angle = 0, o = {}) {
@@ -308,8 +340,8 @@ export function drawHorn(ctx, x, y, size, angle = 0, o = {}) {
   side.addColorStop(0.72, 'rgba(176,118,62,0.12)'); side.addColorStop(1, 'rgba(150,92,48,0.5)');
   ctx.fillStyle = side;
   ctx.fillRect(-bw, -hh * 1.1, bw * 2, hh * 1.3);
-  const root = ctx.createLinearGradient(0, bw * 0.15, 0, -hh * 0.3); // the purple-pink root where it grows out
-  root.addColorStop(0, 'rgba(170,64,132,0.7)'); root.addColorStop(0.45, 'rgba(206,104,160,0.3)'); root.addColorStop(1, 'rgba(220,130,180,0)');
+  const root = ctx.createLinearGradient(0, bw * 0.15, 0, -hh * 0.3); // the root where it grows out: warm pink-red like the bump (the boss: lit violet)
+  if (o.boss) { root.addColorStop(0, 'rgba(150,100,236,0.62)'); root.addColorStop(0.45, 'rgba(178,136,255,0.26)'); root.addColorStop(1, 'rgba(190,150,255,0)'); } else { root.addColorStop(0, 'rgba(214,100,94,0.6)'); root.addColorStop(0.45, 'rgba(234,134,122,0.26)'); root.addColorStop(1, 'rgba(240,150,140,0)'); }
   ctx.fillStyle = root;
   ctx.fillRect(-bw, -hh * 0.35, bw * 2, hh * 0.5);
   ctx.lineCap = 'round';
@@ -330,6 +362,13 @@ export function drawHorn(ctx, x, y, size, angle = 0, o = {}) {
   ctx.beginPath();
   for (let i = 0; i <= 8; i += 1) { const p = across(0.08 + i * 0.09, 0.86); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
   ctx.stroke();
+  if (o.boss) { // the boss: a faint violet rim light from its spooky glow, along the outer edge (half of it clipped, so soft)
+    ctx.strokeStyle = 'rgba(190,150,255,0.5)';
+    ctx.lineWidth = Math.max(1.2, size * 0.14);
+    ctx.beginPath();
+    for (let i = 0; i <= 8; i += 1) { const p = at(L, i * 0.09); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+    ctx.stroke();
+  }
   ctx.restore();
   outline();
   ctx.lineWidth = Math.max(1.2, size * 0.07); // the ink outline, like the rest of the game's art

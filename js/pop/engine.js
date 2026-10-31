@@ -1698,7 +1698,7 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) {
       if (p.popped) continue;
       if (juicyBump(p)) drawJuicyBump(p); // the juicy dome while squeezed (SPEC D45)
-      else if (horned(p)) drawPimple(ctx, p, p.pressure, p.appear, reduced ? 0 : time, juicy); // its tense build-up (juicy pops)
+      else if (horned(p)) drawPimple(ctx, p, p.pressure, p.appear, reduced ? 0 : time, juicy, o.boss === true); // its tense build-up (juicy pops); the boss's spooky violet light
       else drawPimple(ctx, p, p.pressure, p.appear, time);
     }
     for (const p of pimples) { // a juicy bump just popped: the split dome sinking into a crater that heals (about 2 s)
