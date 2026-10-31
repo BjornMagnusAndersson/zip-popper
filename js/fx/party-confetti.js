@@ -1,20 +1,21 @@
 // The confetti when Prom Penny's party-day round is finished (SPEC D45 item 6), on the result screen. It reuses the
 // result moment's own confetti (confetti-fx.js on an effects layer, fx-layer.js), so it looks the same as a 3-star
-// burst; the result screen already celebrates 3 stars (confetti, or petals in the spa), so then nothing extra is
-// added (never two bursts at once). Reduced motion: a few still pieces at the edges, as the result screen does. Lighter
+// burst; on her party day the result screen throws its own confetti for 3 stars (in the spa too, not petals: R2), so
+// then nothing extra is added (never two bursts at once). Reduced motion: a few still pieces at the edges, as the result screen does. Lighter
 // graphics: about half the pieces. The layer never takes a tap and is gone when the burst is over or the screen closes.
 import { makeFxLayer } from './fx-layer.js';
 import { makeConfetti } from './confetti-fx.js';
 import { celebration, CONFETTI_FX, RESULT_FX } from './celebrate-logic.js';
 
 /**
- * Whether Penny's party day needs its own confetti on this result: yes, unless the result screen celebrates itself
- * (3 stars: confetti, or petals in the spa), and never for a customer who stormed off.
+ * Whether Penny's party day needs its own confetti on this result: yes, unless the result screen already throws
+ * confetti (3 stars, in any studio: on her party day the spa's petals become confetti, R2), and never for a customer
+ * who stormed off. So her party day always ends in confetti, and only one burst.
  * @param {{stars?: number, failed?: boolean, tier?: number}} o the result and the studio tier
  * @returns {boolean} true = start the party confetti
  */
 export function partyConfettiNeeded(o = {}) {
-  return !o.failed && !celebration(o);
+  return !o.failed && celebration({ ...o, party: true }) !== 'confetti';
 }
 
 /**

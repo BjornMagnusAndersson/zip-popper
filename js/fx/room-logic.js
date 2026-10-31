@@ -3,7 +3,8 @@
 // The drawing is in room-fx.js (and room-dust.js, room-lamps.js, room-shine.js, room-mood.js).
 //   tier 0 (dingy and dank): fine dust drifting in a soft shaft of light, the cheap bulb's halo flickering with the
 //     room's flicker and a little cartoon moth circling it, a dim and slightly green mood. Once the ring light (the
-//     'lamp' studio layer) is bought the moth is gone and the shaft falls from the ring light.
+//     'lamp' studio layer) is bought the old bulb is off for good (the mlamp strip: "The old bulb has given up": no
+//     halo, no flicker), the moth is gone and the shaft falls from the ring light.
 //   tier 1: fewer dust motes, a neutral light mood, now and then a soft shine sweeps over shiny things with glints.
 //   tier 2 (spa): shine sweeps, floating sparkle motes, a few rose petals, the candle's glow and the diffuser's light,
 //     a warm golden mood at the edges.
@@ -30,10 +31,11 @@ export const POP_SHARE = 0.6;
  * @param {string[]} [layers] owned studio layer ids
  * @param {{reduced?: boolean, lite?: boolean, where?: 'pop'|'view'|'scrub'}} [o] reduced motion; lighter graphics;
  *   where the room is shown (the pop scene behind the face, the studio view, or the scrub job's close-up)
- * @returns {{on: boolean, tier: number, dust: number, moth: boolean, ring: boolean, flicker: boolean, mood: number|null,
- *   sweeps: boolean, sparkles: boolean, petals: boolean, candle: boolean, diffuser: boolean, share: number,
- *   moving: boolean, step: number}} the plan: dust = share of the full dust (0 = none); share = particle count factor;
- *   moving = whether it needs repaints; step = seconds between them while moving
+ * @returns {{on: boolean, tier: number, dust: number, moth: boolean, ring: boolean, bulbOff: boolean, flicker: boolean,
+ *   mood: number|null, sweeps: boolean, sparkles: boolean, petals: boolean, candle: boolean, diffuser: boolean,
+ *   share: number, moving: boolean, step: number}} the plan: dust = share of the full dust (0 = none); bulbOff = the
+ *   old ceiling bulb is off (tier 0 with the ring light); share = particle count factor; moving = whether it needs
+ *   repaints; step = seconds between them while moving
  */
 export function roomFxPlan(kind, layers = [], o = {}) {
   const where = o.where ?? 'pop';
@@ -41,7 +43,7 @@ export function roomFxPlan(kind, layers = [], o = {}) {
   const reduced = Boolean(o.reduced);
   const list = Array.isArray(layers) ? layers : [];
   const none = {
-    on: false, tier: 0, dust: 0, moth: false, ring: false, flicker: false, mood: null, sweeps: false, sparkles: false,
+    on: false, tier: 0, dust: 0, moth: false, ring: false, bulbOff: false, flicker: false, mood: null, sweeps: false, sparkles: false,
     petals: false, candle: false, diffuser: false, share: 0, moving: false, step: Infinity,
   };
   if (kind === 'home' || ![0, 1, 2].includes(kind)) return none;
@@ -55,7 +57,8 @@ export function roomFxPlan(kind, layers = [], o = {}) {
     dust: DUST_BY_TIER[tier],
     moth: tier === 0 && !ring, // the moth loves the cheap bulb; the new ring light sends it away
     ring,
-    flicker: tier === 0,
+    bulbOff: tier === 0 && ring, // the old bulb has given up once the ring light is here (audit A3)
+    flicker: tier === 0 && !ring,
     mood: tier,
     sweeps: tier >= 1,
     sparkles: tier === 2,

@@ -57,11 +57,15 @@ export function roomSpots(W, H, tier, layers, view) {
 /**
  * Make the room's effects for one picture.
  * @param {{w: number, h: number, dpr: number, kind: number|string, layers?: string[], where?: 'pop'|'view',
- *   reduced?: boolean, lite?: boolean}} o picture size in CSS px and pixel ratio, the backdrop kind (0..2 or 'home'),
- *   the owned studio layers, where it is shown, reduced motion, lighter graphics
+ *   reduced?: boolean, lite?: boolean, avoid?: {x: number, y: number, w: number, h: number}[]}} o picture size in CSS
+ *   px and pixel ratio, the backdrop kind (0..2 or 'home'), the owned studio layers, where it is shown, reduced
+ *   motion, lighter graphics, avoid = boxes over the picture where no shine glints may pop (the pop scene's zoom
+ *   buttons, audit A5)
  * @returns {{key: string, plan: object, frame: (ctx: CanvasRenderingContext2D, time: number) => void,
+ *   under: (ctx: CanvasRenderingContext2D, time: number) => void,
  *   bake: (ctx: CanvasRenderingContext2D) => void, base: (room: HTMLCanvasElement) => HTMLCanvasElement,
  *   next: () => number, state: () => object}} the effects: frame draws the moving parts for a moment (ctx in CSS px),
+ *   under draws the glows that lie under the room's lamp (the pop scene, before its bulb),
  *   bake paints the still parts once (the studio view's still room), base gives the pop scene's still room with them
  *   baked in, next = seconds until the next frame is due
  */
@@ -86,7 +90,12 @@ export function makeRoomFx(o) {
     // costs on an old phone (measured with tools/perf.mjs, D40).
     const base = { W, H, sc, kit, tier: plan.tier, still, baked: true };
     parts.push(makeMood({ ...base }));
-    parts.push(makeLamps({ ...base, lamp: room.lamp, ring: room.ring, candle: plan.candle ? room.candle : null, diffuser: plan.diffuser ? room.diffuser : null, moth: plan.moth, dim: where === 'view', calm: Boolean(o.reduced) }));
+    parts.push(makeLamps({
+      ...base, lamp: room.lamp, ring: room.ring, candle: plan.candle ? room.candle : null, diffuser: plan.diffuser ? room.diffuser : null,
+      moth: plan.moth, dim: where === 'view', calm: Boolean(o.reduced), off: plan.bulbOff,
+      softRing: where === 'pop', // the pop scene: no bright ring halo behind the zoom buttons (audit A5)
+      under: where === 'pop', // the pop scene draws the dingy bulb's halo under its bulb (under), the bulb stays crisp
+    }));
     if (plan.dust > 0) {
       parts.push(makeDust({
         ...base, rand: rand('dust'), amount: plan.dust, share: plan.share, shaft: shaftSpot(room), ring: room.ring, pool: room.pool,
@@ -94,7 +103,7 @@ export function makeRoomFx(o) {
       }));
     }
     if (plan.sweeps || plan.sparkles || plan.petals) {
-      parts.push(makeShine({ ...base, rand: rand('shine'), share: plan.share, room, sweeps: plan.sweeps, sparkles: plan.sparkles, petals: plan.petals }));
+      parts.push(makeShine({ ...base, rand: rand('shine'), share: plan.share, room, sweeps: plan.sweeps, sparkles: plan.sparkles, petals: plan.petals, avoid: o.avoid ?? [] }));
     }
   }
   let baseCanvas = null; // the still room with the still effects baked in (base)
@@ -135,6 +144,21 @@ export function makeRoomFx(o) {
       baseFrom = room;
       return baseCanvas;
     },
+    /**
+     * The glows that lie under the room's lamp (the pop scene draws them before its bulb): the dingy bulb's halo for
+     * this moment, so it dips with the flicker (audit A4).
+     * @param {CanvasRenderingContext2D} ctx where (CSS px)
+     * @param {number} time seconds (the room's own clock)
+     * @returns {void}
+     */
+    under(ctx, time) {
+      for (const p of parts) {
+        if (!p.under) continue;
+        ctx.save();
+        try { p.under(ctx, time); } catch (e) { console.warn('room effect failed:', e); }
+        ctx.restore();
+      }
+    },
     /** Move the effects on to a moment and draw them. @param {CanvasRenderingContext2D} ctx where (CSS px) @param {number} time seconds @returns {void} */
     frame(ctx, time) {
       if (!parts.length) return;
@@ -157,11 +181,12 @@ export function makeRoomFx(o) {
 /**
  * The text that names one set of room effects (same text = the same effects can be kept).
  * @param {{w: number, h: number, dpr: number, kind: number|string, layers?: string[], where?: string, reduced?: boolean,
- *   lite?: boolean}} o as makeRoomFx
+ *   lite?: boolean, avoid?: {x: number, y: number, w: number, h: number}[]}} o as makeRoomFx
  * @returns {string} the key
  */
 export function roomFxKey(o) {
-  return `${Math.round(o.w)}x${Math.round(o.h)}@${o.dpr}:${studioKey(o.kind, o.kind === 'home' ? [] : o.layers ?? [])}:${o.where ?? 'pop'}:${Boolean(o.reduced)}:${Boolean(o.lite)}`;
+  const avoid = (o.avoid ?? []).map((b) => [b.x, b.y, b.w, b.h].map(Math.round).join(',')).join(';');
+  return `${Math.round(o.w)}x${Math.round(o.h)}@${o.dpr}:${studioKey(o.kind, o.kind === 'home' ? [] : o.layers ?? [])}:${o.where ?? 'pop'}:${Boolean(o.reduced)}:${Boolean(o.lite)}:${avoid}`;
 }
 
 /**

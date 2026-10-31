@@ -1172,7 +1172,7 @@
   "ui.settings.gentlePops": "Gentle pops",
   "ui.settings.gentlePopsHint": "A calmer pop: less goo, no splash on the screen and no ripple.",
   "ui.settings.lowDetail": "Lighter graphics",
-  "ui.settings.lowDetailHint": "For older phones: a little less sharp, smoother popping. It turns on by itself if the game runs slowly.",
+  "ui.settings.lowDetailHint": "For older phones: a little less sharp, fewer effects, smoother popping. It turns on by itself if the game runs slowly.",
   "ui.settings.musicVolume": "Music volume",
   "ui.settings.sfxVolume": "Sound effects volume",
   "ui.settings.percent": "{value}%",

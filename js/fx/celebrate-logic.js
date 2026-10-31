@@ -7,15 +7,48 @@ import { AUTO_WIPE } from '../screens/album-logic.js';
 
 /**
  * When the result screen's effects start, in seconds after the screen opens. The stars pop in from 0.15 s (CSS
- * app-star-pop, 0.2 s apart), so the confetti goes off with the third star; the tip coins burst out of the customer's chin
- * once the slide has uncovered it (the clean face). sparkleAt counts from the start of the reveal's automatic slide (a frame after the screen opens): the
- * shine glides over the clean face while the slide is almost all the way across (album-logic.js AUTO_WIPE).
+ * app-star-pop, 0.2 s apart), so the confetti goes off with the third star; the tip coins hop out from under the reveal
+ * picture (its bottom edge, so they never cover the shine on the face) and are all in the Total by about 2 s (R6).
+ * sparkleAt counts from the start of the reveal's automatic slide (a frame after the screen opens): the shine glides
+ * over the clean face while the slide is almost all the way across (album-logic.js AUTO_WIPE). pinAfterBurst: on a pin
+ * visit with a 3-star burst, the pin drops into the jar this long after the screen opens, when the burst has thinned out
+ * (R9; without a burst it drops after pinWait).
  */
 export const RESULT_FX = {
   confettiAt: 0.62,
-  coinsAt: 1.4,
+  coinsAt: 0.9,
   sparkleAt: AUTO_WIPE.wait + AUTO_WIPE.sweep * 0.8,
+  pinWait: 0.5,
+  pinAfterBurst: 2.2,
 };
+
+/**
+ * The tip coins' flight times in seconds (coins-fx.js): each coin leaves `stagger` after the one before, hops for
+ * fly + up to flyRand, then swoops into the counter in home + up to homeRand.
+ */
+export const COIN_FLIGHT = { stagger: 0.04, fly: 0.24, flyRand: 0.08, home: 0.28, homeRand: 0.06 };
+
+/**
+ * The longest a tip coin burst can take, from its start to the last landing.
+ * @param {number} n how many coins fly
+ * @returns {number} seconds (0 for no coins)
+ */
+export function coinFlightEnd(n) {
+  const count = Math.max(0, Math.floor(n) || 0);
+  if (!count) return 0;
+  const f = COIN_FLIGHT;
+  return (count - 1) * f.stagger + f.fly + f.flyRand + f.home + f.homeRand;
+}
+
+/**
+ * When the pin of a pin visit starts to drop into the jar on the result card, in seconds after the screen opens: after
+ * the 3-star burst (confetti or petals) when there is one, so both can be seen (R9), else soon.
+ * @param {'confetti'|'petals'|null} kind the result's celebration
+ * @returns {number} seconds
+ */
+export function pinDropWait(kind) {
+  return kind ? RESULT_FX.pinAfterBurst : RESULT_FX.pinWait;
+}
 
 /** The light confetti and petals (not the test page's three-wave version): how long a piece lives, how many pieces. */
 export const CONFETTI_FX = { life: 2.2, fade: 0.45, pieces: 120, petals: 70, still: 12 };
@@ -69,13 +102,14 @@ export function coinCounter(rows, o = {}) {
 
 /**
  * Which celebration a result gets: confetti for 3 stars, petals instead when the studio is the spa (tier 2), nothing
- * for fewer stars or a customer who stormed off.
- * @param {{stars?: number, failed?: boolean, tier?: number}} o the result and the studio tier
+ * for fewer stars or a customer who stormed off. On Prom Penny's party day it is always confetti, in the spa too (R2).
+ * @param {{stars?: number, failed?: boolean, tier?: number, party?: boolean}} o the result, the studio tier and whether
+ *   it is Penny's party day
  * @returns {'confetti'|'petals'|null} the celebration
  */
-export function celebration({ stars = 0, failed = false, tier = 0 } = {}) {
+export function celebration({ stars = 0, failed = false, tier = 0, party = false } = {}) {
   if (failed || stars < 3) return null;
-  return tier === 2 ? 'petals' : 'confetti';
+  return tier === 2 && !party ? 'petals' : 'confetti';
 }
 
 /**

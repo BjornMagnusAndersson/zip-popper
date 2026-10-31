@@ -12,10 +12,10 @@ import { pinsDrawn } from '../game/pin-jar.js';
 import { makeFxLayer } from '../fx/fx-layer.js';
 import { makeConfetti } from '../fx/confetti-fx.js';
 import { makeCoinFlight } from '../fx/coins-fx.js';
-import { RESULT_FX, celebration, coinCounter } from '../fx/celebrate-logic.js';
+import { RESULT_FX, celebration, coinCounter, pinDropWait } from '../fx/celebrate-logic.js';
 
-/** How the pin drops into the jar on the result card (owner 2026-10-29): a short wait, then the fall, in ms. */
-const PIN_DROP = { wait: 500, fall: 650 };
+/** How the pin drops into the jar on the result card (owner 2026-10-29): the fall, in ms (the wait before it: celebrate-logic.js pinDropWait). */
+const PIN_DROP = { fall: 650 };
 /** The running pin-drop animation frame (one result screen at a time), so dispose can stop it. */
 let jarFrame = 0;
 
@@ -24,9 +24,10 @@ let jarFrame = 0;
  * while the lid hovers (reduced motion: the jar as it ends up, no fall).
  * @param {number} count pins in the jar now (the new one included)
  * @param {boolean} still true = reduced motion
+ * @param {number} [waitMs] how long the pin waits before it drops (after a 3-star burst it waits for the burst, R9)
  * @returns {HTMLCanvasElement} the picture (decorative: the line beside it says it in words)
  */
-function pinJarPicture(count, still) {
+function pinJarPicture(count, still, waitMs = RESULT_FX.pinWait * 1000) {
   const W = 34;
   const H = 52;
   const dpr = Math.min(3, window.devicePixelRatio || 1);
@@ -47,7 +48,7 @@ function pinJarPicture(count, still) {
   const start = performance.now();
   /** One animation step. @param {number} now time in ms @returns {void} */
   const step = (now) => {
-    const drop = Math.min(1, Math.max(0, (now - start - PIN_DROP.wait) / PIN_DROP.fall));
+    const drop = Math.min(1, Math.max(0, (now - start - waitMs) / PIN_DROP.fall));
     draw(drop);
     if (drop < 1) jarFrame = requestAnimationFrame(step);
   };
@@ -69,15 +70,18 @@ function spotIn(r, base, share = 1) {
 }
 
 /**
- * The customer's chin in the reveal card, inside the effects layer: the tip coins burst out from there (below the
- * mouth, so they never fly over the eyes).
- * @param {DOMRect|null|undefined} face the box round the face on the page (reveal.js faceCentre)
+ * The bottom edge of the reveal picture under the customer's face, inside the effects layer: the tip coins hop out
+ * from there (R7: off the mouth and chin, where the reveal's shine and chin glint play, and never near the eyes).
+ * @param {DOMRect|null|undefined} card the reveal card's box on the page
+ * @param {DOMRect|null|undefined} face the box round the face on the page (reveal.js faceCentre), for the middle
  * @param {DOMRect} base the layer's box on the page
  * @returns {{x: number, y: number, r: number}|null} the spot in layer px, or null
  */
-function chinIn(face, base) {
-  if (!face || !face.width) return null;
-  return { x: face.left + face.width / 2 - base.left, y: face.top + face.height * 0.93 - base.top, r: face.width * 0.22 };
+function belowReveal(card, face, base) {
+  if (!card || !card.width) return null;
+  const x = face?.width ? face.left + face.width / 2 : card.left + card.width / 2;
+  const w = face?.width || card.width * 0.6;
+  return { x: x - base.left, y: card.bottom + 6 - base.top, r: w * 0.22 }; // just under the edge: the hop's top stays below the chin
 }
 
 /**
@@ -85,14 +89,15 @@ function chinIn(face, base) {
  * spa), and the tip coins flying from the customer's face into the Total line's coin, which bumps and counts up to the
  * true total as each lands. Reduced motion: no coins fly (the total shows at once with a still glint) and only a few
  * still confetti pieces at the edges. Lighter graphics: about half the pieces and coins. Taps go through the layer.
- * @param {{node: HTMLElement, stars: number, failed: boolean, tier: number, rows: object[]|null, totalPill: HTMLElement|null,
- *   fromNode: HTMLElement|null, reveal: object|null, still: boolean, lite: boolean}} o the screen, its result and the parts
- *   the coins fly between (fromNode = where they start without a reveal card)
+ * @param {{node: HTMLElement, kind: 'confetti'|'petals'|null, failed: boolean, rows: object[]|null, totalPill: HTMLElement|null,
+ *   fromNode: HTMLElement|null, reveal: object|null, still: boolean, lite: boolean}} o the screen, its celebration
+ *   (celebrate-logic.js celebration), its result and the parts the coins fly between (fromNode = where they start
+ *   without a reveal card)
  * @returns {{dispose: () => void, state: () => object}} the effects
  */
 function startEffects(o) {
   const layer = makeFxLayer(o.node, { lite: o.lite, className: 'app-fx app-result__fx' });
-  const kind = celebration({ stars: o.stars, failed: o.failed, tier: o.tier });
+  const kind = o.kind;
   let confetti = null;
   let coins = null;
   const counter = o.rows && o.totalPill && !o.failed ? coinCounter(o.rows, { lite: o.lite, still: o.still }) : null;
@@ -112,7 +117,7 @@ function startEffects(o) {
       const base = () => o.node.getBoundingClientRect();
       layer.add((W, H) => (coins = makeCoinFlight({
         kit: layer.kit, n: counter.coins, W, H,
-        from: () => chinIn(o.reveal?.faceCentre?.(), base()) ?? spotIn(o.fromNode?.getBoundingClientRect(), base(), 0.5) ?? { x: W / 2, y: H * 0.3, r: 20 },
+        from: () => belowReveal(o.reveal?.node?.getBoundingClientRect(), o.reveal?.faceCentre?.(), base()) ?? spotIn(o.fromNode?.getBoundingClientRect(), base(), 0.5) ?? { x: W / 2, y: H * 0.3, r: 20 },
         to: () => spotIn(o.totalPill.querySelector('.app-icon')?.getBoundingClientRect(), base()) ?? { x: W / 2, y: H / 2, r: 10 },
         onLand: (i) => {
           text.textContent = String(counter.steps[i] ?? counter.total);
@@ -162,14 +167,15 @@ function kindList(keys, t) {
  *   skills = the skill lines (app-logic.js skillNews, D34): level ups, or how many clean pops the next level needs;
  *   pinCount = after a pin visit (game/pin-jar.js), the pins now in the jar: a "Pin taken away!" line; null = none;
  *   tier = the studio tier 0..2 (the spa, 2, gets petals instead of confetti, D45); lowDetail = Lighter graphics (about
- *   half the confetti and coins)
+ *   half the confetti and coins); party = Prom Penny's party day (3 stars: confetti, in the spa too, R2)
  * @returns {{node: HTMLElement, dispose: () => void, fxState: () => object}} the screen; fxState = the effects, for checks
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
   onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null, stampKey = null,
-  skills = [], pinCount = null, tier = 0, lowDetail = false,
+  skills = [], pinCount = null, tier = 0, lowDetail = false, party = false,
 }) {
+  const kind = celebration({ stars, failed, tier, party }); // the 3-star burst (D45), or null
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
   const body = el('div', `app-body app-result${reveal ? ' app-result--reveal' : ''}`);
@@ -221,7 +227,7 @@ export function createResultScreen({
     }
     if (pinCount) { // a pin visit (owner 2026-10-28): she took the customer's pin from home away, into the jar
       const pin = el('p', 'app-result__stamp app-result__pin');
-      pin.append(pinJarPicture(pinCount, reducedMotion), el('span', '', t('ui.pin.taken', { n: pinCount })));
+      pin.append(pinJarPicture(pinCount, reducedMotion, pinDropWait(kind) * 1000), el('span', '', t('ui.pin.taken', { n: pinCount })));
       main.append(pin);
     }
     if (reactionKey) main.append(el('p', 'app-result__quote', t(reactionKey, { name: playerName })));
@@ -270,7 +276,7 @@ export function createResultScreen({
   shell.node.append(body);
   // The result moment's effects (D45): confetti on 3 stars (petals in the spa), the tip coins to the Total line.
   const fx = startEffects({
-    node: shell.node, stars, failed, tier, rows, totalPill, fromNode: tipPill, reveal, still: reducedMotion, lite: lowDetail,
+    node: shell.node, kind, failed, rows, totalPill, fromNode: tipPill, reveal, still: reducedMotion, lite: lowDetail,
   });
   /** Stop the effects and the reveal (if any) and remove the screen. @returns {void} */
   const dispose = () => { fx.dispose(); reveal?.dispose?.(); cancelAnimationFrame(jarFrame); shell.dispose(); };

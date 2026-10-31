@@ -43,7 +43,7 @@ import { createSound } from '../core/sound.js';
 import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
 import { sceneRatio } from './perf-logic.js';
-import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding } from './backdrop.js';
+import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding, bulbOff } from './backdrop.js';
 import { syncRoomFx } from '../fx/room-fx.js';
 import { syncPartyFx } from '../fx/party-fx.js';
 import { isPartyDay } from '../fx/stage-logic.js';
@@ -785,6 +785,19 @@ export function createPopMode({
   }
 
   /**
+   * Where the zoom buttons sit over the room (stage CSS px, rounded), so the room's shine glints keep clear of them
+   * (audit A5). Empty when they are hidden.
+   * @returns {{x: number, y: number, w: number, h: number}[]} at most one box
+   */
+  function zoomClear() {
+    if (zoomBox.hidden || !zoomBox.isConnected) return [];
+    const s = stage.getBoundingClientRect();
+    const r = zoomBox.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return [];
+    return [{ x: Math.round(r.left - s.left), y: Math.round(r.top - s.top), w: Math.round(r.width), h: Math.round(r.height) }];
+  }
+
+  /**
    * Give a canvas its on-screen size in CSS px.
    * @param {HTMLCanvasElement} cv the canvas
    * @param {number} w width
@@ -820,7 +833,8 @@ export function createPopMode({
     const time = ((frozen ? pause.since : performance.now()) - back.start) / 1000;
     // The room's light and particle effects (SPEC D45: dust in the light, the moth, the mood, shine, petals), behind
     // the face; still with reduced motion or lighter graphics, so they then cost no extra repaints.
-    back.fx = syncRoomFx(back.fx, { w, h, dpr, kind: backdropKind(room, tier), layers, where: 'pop', reduced, lite: lighter });
+    // The shine glints keep clear of the zoom buttons (A5).
+    back.fx = syncRoomFx(back.fx, { w, h, dpr, kind: backdropKind(room, tier), layers, where: 'pop', reduced, lite: lighter, avoid: zoomClear() });
     drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins, twinkle: !lighter, fx: back.fx }); // lighter graphics: still sparkles (B33d)
     back.party = syncPartyFx(back.party, { on: party, w, h, dpr, reduced, lite: lighter }); // Prom Penny's day: fairy lights (D45)
     back.party?.frame(ctx, time);
@@ -829,7 +843,8 @@ export function createPopMode({
     // sound switch decides, so it also plinks with reduced motion (the drop then just hangs still).
     if (leak && !frozen && dripLands(back.last ?? time, time)) sound.play('drip');
     back.last = time;
-    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak, !lighter), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity, back.fx.next(), back.party?.next() ?? Infinity);
+    const off = bulbOff(backdropKind(room, tier), layers); // the old bulb is off with the ring light: no flicker repaints (A3)
+    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak, !lighter, off), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity, back.fx.next(), back.party?.next() ?? Infinity);
     if (!frozen && Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
   }
 

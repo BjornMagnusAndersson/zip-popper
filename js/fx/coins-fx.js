@@ -1,5 +1,6 @@
 // The tip coins on the result screen (SPEC D45 item 2), from the effects test page's coins (js/dev/fx/coins.js): a
-// handful of little cartoon gold coins burst out of the customer's clean face, spinning (each squashes as it turns and
+// handful of little cartoon gold coins hop out from under the customer's reveal picture (its bottom edge, so they never
+// cover the shine on her face; result.js says where), spinning (each squashes as it turns and
 // shows its darker rim edge-on, with a flash when it faces us), arc up, then swoop one after the other into the coin
 // counter (the Total line's coin). Each landing gives a tiny glint on the counter's coin and calls onLand, so the
 // screen can bump the counter and count it up (result.js; celebrate-logic.js coinSteps makes it end at the true total).
@@ -8,6 +9,7 @@
 // scrolled screen or a turned phone still sends the coins to the right place.
 import { clamp, smooth, lerp, TAU } from './sprites.js';
 import { rng } from '../pop/logic.js';
+import { COIN_FLIGHT } from './celebrate-logic.js';
 
 const INK = '#2a211d';
 const GOLD = '#ffd23f';
@@ -105,7 +107,7 @@ export function makeCoinFlight(o) {
     const v = S * (0.42 + rand() * 0.2);
     coins.push({
       i, x: src.x + (rand() - 0.5) * src.r * 0.8, y: src.y + (rand() - 0.5) * src.r * 0.3,
-      vx: Math.cos(a) * v * 0.8, vy: Math.sin(a) * v, age: -i * 0.05, fly: 0.3 + rand() * 0.1,
+      vx: Math.cos(a) * v * 0.8, vy: Math.sin(a) * v, age: -i * COIN_FLIGHT.stagger, fly: COIN_FLIGHT.fly + rand() * COIN_FLIGHT.flyRand,
       home: null, spin: rand() * TAU, vs: (9 + rand() * 7) * (rand() < 0.5 ? -1 : 1),
     });
   }
@@ -121,7 +123,7 @@ export function makeCoinFlight(o) {
       p.y += p.vy * dt;
       return false;
     }
-    if (!p.home) p.home = { x0: p.x, y0: p.y, cx: p.x + p.vx * 0.22, cy: p.y + p.vy * 0.22 - S * 0.06, u: 0, dur: 0.36 + rand() * 0.08 };
+    if (!p.home) p.home = { x0: p.x, y0: p.y, cx: p.x + p.vx * 0.22, cy: p.y + p.vy * 0.22 - S * 0.06, u: 0, dur: COIN_FLIGHT.home + rand() * COIN_FLIGHT.homeRand };
     const h = p.home;
     h.u += dt / h.dur;
     const u = Math.min(1, h.u) ** 1.6;

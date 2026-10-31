@@ -109,7 +109,7 @@ export function createStudioScreen({
     const h = stage.clientHeight;
     if (w < 2 || h < 2 || `${w}x${h}` === size) return;
     size = `${w}x${h}`;
-    const dpr = Math.min(2, globalThis.devicePixelRatio || 1);
+    const dpr = lowDetail ? 1 : Math.min(2, globalThis.devicePixelRatio || 1); // Lighter graphics: pixel ratio 1 (R11; the frame shine too)
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext('2d');

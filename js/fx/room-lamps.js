@@ -5,7 +5,10 @@
 // with the room's own flicker (pop/backdrop.js lampLevel) and a little cartoon moth loops round the bulb, now and then
 // diving in and bumping into it (a tiny glint). The ring light sends the moth away; the scrub job of the ring light
 // blows it off for good (makeMoth leave). Still: steady halos and the moth resting on the cord.
-import { lampLevel } from '../pop/backdrop.js';
+// Once the ring light is bought in the dingy studio the old bulb is off (no glow, no flicker: the mlamp strip). The
+// dingy bulb's halo is drawn every frame (one small sprite), so it dips with the bulb when it flickers. In the pop
+// scene the ring light only gets a faint glow, no bright ring halo (it sat behind the zoom buttons, audit A5).
+import { lampLevel, drawBulbDip } from '../pop/backdrop.js';
 import { clamp, smooth, TAU, hash } from './sprites.js';
 
 const INK = '#2a211d';
@@ -54,6 +57,29 @@ function paintCone(c, w, h, rgb) {
     }
   }
   c.putImageData(img, 0, 0);
+}
+
+/**
+ * Paint the dingy bulb's whole glow into one sprite (the wide halo, the inner halo and the bright core, as added
+ * light), so it can be drawn every frame with one copy and dip with the bulb. The sprite spans 9 bulb radii each way.
+ * @param {CanvasRenderingContext2D} c the sprite's context
+ * @param {number} w the sprite's size
+ * @param {HTMLCanvasElement} halo the soft halo sprite
+ * @param {HTMLCanvasElement} core the bright core sprite
+ * @returns {void}
+ */
+function paintBulbGlow(c, w, halo, core) {
+  const m = w / 2;
+  const r = w / 18; // one bulb radius in the sprite
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = 0.5;
+  c.drawImage(halo, 0, 0, w, w);
+  c.globalAlpha = 0.65;
+  c.drawImage(halo, m - r * 3.4, m - r * 3.4, r * 6.8, r * 6.8);
+  c.globalAlpha = 0.55;
+  c.drawImage(core, m - r * 1.7, m - r * 1.7, r * 3.4, r * 3.4);
+  c.globalAlpha = 1;
+  c.globalCompositeOperation = 'source-over';
 }
 
 /**
@@ -233,13 +259,19 @@ export function makeMoth(o) {
  * Make the lamp glows for the room.
  * @param {{W: number, H: number, sc: number, kit: object, tier: number, still: boolean, lamp: {x: number, y: number,
  *   r: number}, ring: {x: number, y: number, r: number}|null, candle: {x: number, y: number, k: number}|null,
- *   diffuser: {x: number, y: number, s: number}|null, moth: boolean, dim: boolean, calm?: boolean, baked?: boolean}} o
- *   (baked = the still glows are painted once into the still room by bake, not every frame) picture size
+ *   diffuser: {x: number, y: number, s: number}|null, moth: boolean, dim: boolean, calm?: boolean, baked?: boolean,
+ *   off?: boolean, softRing?: boolean, under?: boolean}} o
+ *   (baked = the still glows are painted once into the still room by bake, not every frame, except the dingy bulb's,
+ *   which dips with its flicker; under = the caller draws that halo under the bulb with under() (the pop scene);
+ *   off = the old bulb is off for good, tier 0 with the ring light: no glow, no flicker;
+ *   softRing = the pop scene: only a faint glow round the ring light, no bright ring halo) picture size
  *   and size factor, the sprite kit, the studio tier, still (nothing moves: reduced motion, or the pop scene with
  *   lighter graphics), calm = reduced motion (the bulb never flickers), the ceiling bulb, the ring light (or null), the spa's
  *   candle flame and diffuser (or null), whether the moth flies here, dim = also draw the room dipping while the bulb
  *   flickers (the studio view, whose still room has the light baked in; the pop scene's room dips by itself)
- * @returns {{step: (dt: number, t: number) => void, draw: (c: CanvasRenderingContext2D) => void, state: () => object}} hooks
+ * @returns {{step: (dt: number, t: number) => void, draw: (c: CanvasRenderingContext2D) => void,
+ *   under: (c: CanvasRenderingContext2D, t: number) => void, bake: (c: CanvasRenderingContext2D) => void,
+ *   state: () => object}} hooks
  */
 export function makeLamps(o) {
   const { W, H, kit, tier, still } = o;
@@ -254,18 +286,27 @@ export function makeLamps(o) {
   const flameGlow = kit.glow('255,196,110', 64);
   const pinkGlow = kit.glow('255,200,226', 64);
   const spa = tier === 2;
+  const off = Boolean(o.off) && tier === 0;
+  // the dingy bulb's glow in one small sprite, drawn every frame so it dips with the flicker (audit A4)
+  const bulbGlow = tier === 0 && !off ? kit.sprite(`lamps-bulbglow:${warm}`, 160, 160, (c, w) => paintBulbGlow(c, w, halo, core), 1) : null;
   const moth = o.moth ? makeMoth({
     lamp: L, sc: o.sc, size: Math.max(9, L.r * 1.1), orbit: [L.r * 3.1, L.r * 2.0], still, kit, W, H,
   }) : null;
   let T = 0;
 
-  /** How bright the ceiling lamp is now (the room's own flicker in tier 0; steady with reduced motion). @returns {number} 0..1 */
-  const level = () => lampLevel(T, tier, Boolean(o.calm));
+  /** How bright the ceiling lamp is now (the room's own flicker in tier 0; steady with reduced motion or off). @returns {number} 0..1 */
+  const level = () => (off ? 1 : lampLevel(T, tier, Boolean(o.calm)));
 
-  /** Draw the ceiling lamp's glow for the tier (tier 1 also its cone of light). @param {CanvasRenderingContext2D} c context @param {number} lv brightness @returns {void} */
+  /** Draw the ceiling lamp's glow for the tier (tier 1 also its cone of light; none when the old bulb is off). @param {CanvasRenderingContext2D} c context @param {number} lv brightness @returns {void} */
   function drawLampGlow(c, lv) {
+    if (off) return;
     c.globalCompositeOperation = 'lighter';
     const a = clamp(lv, 0, 1.3);
+    if (bulbGlow) { // the dingy bulb: its whole glow in one copy
+      c.globalAlpha = clamp(a, 0, 1);
+      c.drawImage(bulbGlow, L.x - L.r * 9, L.y - L.r * 9, L.r * 18, L.r * 18);
+      return;
+    }
     if (tier === 1) { // under the shade: the light falls downwards
       const cy = L.y + L.r * 0.1;
       const cw = L.r * 9;
@@ -288,26 +329,26 @@ export function makeLamps(o) {
     c.drawImage(core, L.x - L.r * 1.7, gy - L.r * 1.7, L.r * 3.4, L.r * 3.4);
   }
 
-  /** The studio view while the bulb flickers: the room dips and the bulb shows dull (as the pop scene's room does). @param {CanvasRenderingContext2D} c context @param {number} lv brightness @returns {void} */
+  /** The studio view while the bulb flickers: the room round the bulb dips a little and the bulb shows dull (as the pop scene's room does, backdrop.js drawBulbDip). @param {CanvasRenderingContext2D} c context @param {number} lv brightness @returns {void} */
   function drawDim(c, lv) {
     if (!o.dim || lv >= 1) return;
     c.globalCompositeOperation = 'source-over';
     c.globalAlpha = 1;
-    c.fillStyle = `rgba(10,16,12,${((1 - lv) * 0.3).toFixed(3)})`;
-    c.fillRect(0, 0, W, H);
+    drawBulbDip(c, W, H, lv);
     if (lv <= 0.6) {
       c.fillStyle = '#9c9878';
       c.beginPath(); c.ellipse(L.x, L.y, L.r * 0.85, L.r, 0, 0, TAU); c.fill();
     }
   }
 
-  /** The ring light's glow (steady, it is the good new lamp). @param {CanvasRenderingContext2D} c context @returns {void} */
+  /** The ring light's glow (steady, it is the good new lamp); in the pop scene only a faint glow, no bright ring halo. @param {CanvasRenderingContext2D} c context @returns {void} */
   function drawRing(c) {
     const R = o.ring;
     if (!R) return;
     c.globalCompositeOperation = 'lighter';
-    c.globalAlpha = 0.24;
+    c.globalAlpha = o.softRing ? 0.14 : 0.24;
     c.drawImage(ringGlow, R.x - R.r * 5, R.y - R.r * 5, R.r * 10, R.r * 10);
+    if (o.softRing) return; // the pop scene: the halo sat behind the zoom buttons and washed out their icons (A5)
     c.globalAlpha = 0.42;
     const s = R.r * 2.8;
     c.drawImage(ringHalo, R.x - s, R.y - s, s * 2, s * 2);
@@ -379,21 +420,36 @@ export function makeLamps(o) {
         drawLampGlow(c, lv);
         drawRing(c);
         drawSpaGlows(c, still ? 0 : T);
+      } else if (bulbGlow && !o.under) {
+        drawLampGlow(c, lv); // the dingy bulb's halo every frame, so it dips with the bulb (A4)
       }
       drawSpaLights(c);
       c.restore();
       moth?.draw(c, lv);
     },
-    /** Paint the still glows once into the still room (baked; the room's own flicker dims them with it). @param {CanvasRenderingContext2D} c context @returns {void} */
+    /**
+     * The dingy bulb's halo for a moment, drawn under the bulb (the pop scene calls it before the room's bulb is
+     * painted, so the bulb stays crisp on top, as when the halo was baked in). Nothing in the other tiers or when off.
+     * @param {CanvasRenderingContext2D} c context
+     * @param {number} t the clock (the room's own time, so it flickers with the room)
+     * @returns {void}
+     */
+    under(c, t) {
+      if (!bulbGlow || !o.under) return;
+      c.save();
+      drawLampGlow(c, lampLevel(t, tier, Boolean(o.calm)));
+      c.restore();
+    },
+    /** Paint the still glows once into the still room (baked; the dingy bulb's halo is drawn every frame instead). @param {CanvasRenderingContext2D} c context @returns {void} */
     bake(c) {
       if (!o.baked) return;
       c.save();
-      drawLampGlow(c, 1);
+      if (!bulbGlow) drawLampGlow(c, 1);
       drawRing(c);
       drawSpaGlows(c, 0);
       c.restore();
     },
     /** For checks. @returns {object} state */
-    state: () => ({ level: Number(level().toFixed(2)), moth: moth ? moth.state() : null, ring: Boolean(o.ring), candle: Boolean(o.candle), diffuser: Boolean(o.diffuser) }),
+    state: () => ({ level: Number(level().toFixed(2)), off, bulbGlow: Boolean(bulbGlow), softRing: Boolean(o.softRing), moth: moth ? moth.state() : null, ring: Boolean(o.ring), candle: Boolean(o.candle), diffuser: Boolean(o.diffuser) }),
   };
 }

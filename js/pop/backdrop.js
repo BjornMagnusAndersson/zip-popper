@@ -13,8 +13,9 @@
 // living room in the comics' colours, with a floor lamp whose warm light breathes gently (steady with reduced motion).
 // Cartoon only: stains are olive and brown water marks, never anything like blood.
 // The still room is painted once per size, tier and set of layers into an offscreen canvas (cheap on phones); only the
-// lamp's light is drawn on top each time it changes. With reduced motion the lamp never flickers.
-// The pure parts (lampLevel, nextBackdropChange) need no DOM, so they can be tested in Node.
+// lamp's light is drawn on top each time it changes. With reduced motion the lamp never flickers. Once the ring light
+// is bought in the dingy studio the old bulb is off for good (bulbOff; the mlamp strip: "The old bulb has given up").
+// The pure parts (lampLevel, nextBackdropChange, bulbOff) need no DOM, so they can be tested in Node.
 import { rng } from './logic.js';
 import { drawPimple, drawHair, hairPoints } from './art.js';
 import { studioLayersShown, studioKey } from '../game/studio.js';
@@ -97,7 +98,7 @@ const paletteFor = backdropPalette;
 
 const BURST_EVERY = 4.5; // seconds: at most one flicker burst in each stretch this long
 const BURST_LEN = 0.6; // seconds a burst lasts
-const BURST_STEPS = 16; // light changes per second during a burst
+const BURST_STEPS = 6; // light changes per second during a burst (was 16: gentler on the eyes, audit A9)
 const PULSE_SPEED = (Math.PI * 2) / 4.2; // the home lamp breathes once every 4.2 seconds
 const PULSE_STEP = 0.1; // seconds between repaints of the home lamp's glow (small steps, so it looks smooth)
 
@@ -132,20 +133,33 @@ export function lampLevel(time, tier = 0, reduced = false) {
 }
 
 /**
+ * Whether the dingy studio's old ceiling bulb is off for good: once the ring light (the 'lamp' layer) is owned in
+ * tier 0, the old bulb "has given up" (the mlamp strip): no glow, no flicker, no moth (audit A3). The better tiers
+ * have a new lamp of their own, so it is never off there.
+ * @param {number|string} tier the backdrop kind (backdropKind: 0..2 or 'home')
+ * @param {string[]} [layers] owned studio layer ids
+ * @returns {boolean} true = draw the old bulb off
+ */
+export function bulbOff(tier, layers = []) {
+  return tier === 0 && studioLayersShown(layers).includes('lamp');
+}
+
+/**
  * How long until the backdrop looks different (so the page only redraws it when needed).
  * @param {number} time seconds since the scene started
  * @param {number|string} [tier] studio tier 0..2, or 'home' (see backdropKind)
  * @param {boolean} [reduced] reduced motion is on
  * @param {boolean} [leak] the room drips (roomLeaks): the drop moves too
  * @param {boolean} [twinkle] false = the spa's sparkles stand still (the lighter graphics switch), so they need no repaint
+ * @param {boolean} [off] the old bulb is off (bulbOff): it never flickers, so it needs no repaint
  * @returns {number} seconds (Infinity = it never changes)
  */
-export function nextBackdropChange(time, tier = 0, reduced = false, leak = false, twinkle = true) {
+export function nextBackdropChange(time, tier = 0, reduced = false, leak = false, twinkle = true, off = false) {
   if (reduced) return Infinity;
-  if (leak) return Math.min(nextDripChange(time), nextBackdropChange(time, tier, false, false, twinkle));
+  if (leak) return Math.min(nextDripChange(time), nextBackdropChange(time, tier, false, false, twinkle, off));
   if (paletteFor(tier).spa) return twinkle ? TWINKLE_STEP : Infinity; // the sparkles twinkle (B33d)
   if (paletteFor(tier).pulse) return PULSE_STEP;
-  if (!paletteFor(tier).flicker) return Infinity;
+  if (!paletteFor(tier).flicker || off) return Infinity;
   const k = Math.floor(time / BURST_EVERY);
   const start = burstStart(k);
   if (start !== null && time >= start && time < start + BURST_LEN) {
@@ -2116,24 +2130,53 @@ function drawRoom(ctx, w, h, tier, layers = [], view = false, masters = null) {
 }
 
 /**
+ * The room going darker while the dingy studio's bulb flickers dim (audit A9: gentle on the eyes): mostly a soft dark
+ * patch round the bulb, the whole room only a few percent. Nothing when the bulb is fully lit.
+ * The studio view's effects layer (js/fx/room-lamps.js) uses it too, so both look the same.
+ * @param {CanvasRenderingContext2D} ctx where to draw (CSS px)
+ * @param {number} w width
+ * @param {number} h height
+ * @param {number} level brightness 0..1 (lampLevel)
+ * @returns {void}
+ */
+export function drawBulbDip(ctx, w, h, level) {
+  if (!(level < 1)) return;
+  const d = Math.min(1, 1 - level);
+  const L = lampSpot(w, h);
+  ctx.fillStyle = `rgba(10,16,12,${(d * 0.04).toFixed(3)})`; // the whole room: at most about 3 percent
+  ctx.fillRect(0, 0, w, h);
+  const R = Math.min(w, h) * 0.5;
+  const g = ctx.createRadialGradient(L.x, L.y, L.r, L.x, L.y, R);
+  g.addColorStop(0, `rgba(10,16,12,${(d * 0.2).toFixed(3)})`);
+  g.addColorStop(1, 'rgba(10,16,12,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(L.x - R, L.y - R, R * 2, R * 2);
+}
+
+/**
  * The ceiling lamp's light: a warm pool of light on the wall and the lamp itself. Tier 0: a bare bulb (dimmer and
  * the room darker while it flickers). Tier 1: the bulb under a simple enamel shade. Tier 2: a glowing glass globe
- * with a big soft light.
+ * with a big soft light. off (tier 0 with the ring light owned, bulbOff): the old bulb hangs dead and grey, no light.
  * @param {CanvasRenderingContext2D} ctx where to draw (CSS px)
  * @param {number} w width
  * @param {number} h height
  * @param {number|string} tier 0..2, or 'home'
  * @param {number} level brightness 0..1 (lampLevel)
+ * @param {boolean} [off] the old bulb is off for good (bulbOff)
  * @returns {void}
  */
-function drawLight(ctx, w, h, tier, level) {
+function drawLight(ctx, w, h, tier, level, off = false) {
   const pal = paletteFor(tier);
   if (pal.pulse) { drawHomeLight(ctx, w, h, pal, level); return; }
   const L = lampSpot(w, h);
-  if (level < 1) {
-    ctx.fillStyle = `rgba(10,16,12,${(1 - level) * 0.3})`;
-    ctx.fillRect(0, 0, w, h);
+  if (off) { // the old bulb has given up: grey glass, a dull glassy spot, no light at all
+    ctx.fillStyle = '#9c9878';
+    ctx.beginPath(); ctx.ellipse(L.x, L.y, L.r * 0.85, L.r, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath(); ctx.arc(L.x - L.r * 0.3, L.y - L.r * 0.3, L.r * 0.22, 0, Math.PI * 2); ctx.fill();
+    return;
   }
+  drawBulbDip(ctx, w, h, level); // the room round the bulb dips while it flickers (gentle, audit A9)
   const R = Math.min(w, h) * (pal.spa ? 0.7 : 0.5);
   const g = ctx.createRadialGradient(L.x, L.y, L.r, L.x, L.y, R);
   g.addColorStop(0, `rgba(${pal.light},${(pal.spa ? 0.5 : 0.42) * level})`);
@@ -2192,7 +2235,7 @@ export function drawStudio(ctx, w, h, tier, layers = [], o = {}) {
   const view = o.view !== false;
   drawRoom(ctx, w, h, kind, layers, view, o.masters ?? null);
   if (!o.moving) drawTwinkles(ctx, w, h, kind, 0, true); // still sparkles
-  drawLight(ctx, w, h, kind, 1);
+  drawLight(ctx, w, h, kind, 1, bulbOff(kind, layers)); // the old bulb is off once the ring light is bought (A3)
   if (!o.moving && roomLeaks(kind, layers)) drawDrip(ctx, w, h, 0, true); // a still drop hanging from the joint
   drawPinJar(ctx, w, h, kind, pinsDrawn(o.pins), view ? 'view' : 'pop'); // the pin jar on the shelf (game/pin-jar.js)
 }
@@ -2357,9 +2400,10 @@ function roomCanvas(w, h, tier, dpr, layers = []) {
  * @param {number} h height in CSS px
  * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number, pins?: number,
  *   twinkle?: boolean, fx?: {frame: (ctx: CanvasRenderingContext2D, time: number) => void,
+ *   under?: (ctx: CanvasRenderingContext2D, time: number) => void,
  *   base?: (room: HTMLCanvasElement) => HTMLCanvasElement}|null}} [o] fx = the room's light and particle effects
- *   (js/fx/room-fx.js, SPEC D45): their still parts baked into the still room (base), the moving parts drawn last,
- *   over the room and behind the face;
+ *   (js/fx/room-fx.js, SPEC D45): their still parts baked into the still room (base), the lamp's halo under the
+ *   bulb (under), the moving parts drawn last, over the room and behind the face;
  *   twinkle = false keeps the spa's sparkles still (lighter graphics); pins =
  *   the pins in the jar on the shelf (game/pin-jar.js); room
  *   'studio' (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), the owned studio layers (save.studioLayers,
@@ -2373,7 +2417,9 @@ export function drawBackdrop(ctx, w, h, o = {}) {
   const still = roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []);
   ctx.drawImage(o.fx?.base?.(still) ?? still, 0, 0, w, h); // with the effects' still parts baked in (D45: mood, light shaft, glows)
   drawTwinkles(ctx, w, h, tier, o.time ?? 0, Boolean(o.reduced) || o.twinkle === false); // the spa's sparkles (B33d)
-  drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));
+  o.fx?.under?.(ctx, o.time ?? 0); // the dingy bulb's halo for this moment, under the bulb (dips with the flicker, A4)
+  const off = bulbOff(tier, o.layers ?? []); // the old bulb has given up once the ring light is bought (A3)
+  drawLight(ctx, w, h, tier, off ? 1 : lampLevel(o.time ?? 0, tier, Boolean(o.reduced)), off);
   if (roomLeaks(tier, o.layers)) drawDrip(ctx, w, h, o.time ?? 0, Boolean(o.reduced)); // drip... drip...
   if (tier !== 'home') drawPinJar(ctx, w, h, tier, pinsDrawn(o.pins)); // the pin jar on the shelf (game/pin-jar.js)
   o.fx?.frame(ctx, o.time ?? 0); // dust in the light, the moth, the mood, shine and petals (SPEC D45)

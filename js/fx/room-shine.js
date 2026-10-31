@@ -179,14 +179,20 @@ export function shinyThings(room) {
 /**
  * Make the clean shine for the room.
  * @param {{W: number, H: number, sc: number, kit: object, rand: () => number, tier: number, still: boolean,
- *   share: number, room: object, sweeps: boolean, sparkles: boolean, petals: boolean}} o picture size and size factor,
+ *   share: number, room: object, sweeps: boolean, sparkles: boolean, petals: boolean,
+ *   avoid?: {x: number, y: number, w: number, h: number}[]}} o picture size and size factor,
  *   the sprite kit, seeded random numbers, the studio tier, still (reduced motion), the particle share, the room's
- *   spots (room-fx.js), and which parts to show
+ *   spots (room-fx.js), which parts to show, and boxes where no glint pops and no sweep runs (the pop scene's zoom
+ *   buttons: glints there washed out their icons, audit A5)
  * @returns {{step: (dt: number, t: number) => void, draw: (c: CanvasRenderingContext2D) => void, state: () => object}} hooks
  */
 export function makeShine(o) {
   const { W, H, sc, kit, rand, tier, still, room } = o;
-  const things = o.sweeps ? shinyThings(room) : [];
+  const avoid = Array.isArray(o.avoid) ? o.avoid : [];
+  /** Whether a spot lies in or near a box kept clear (the zoom buttons). @param {number} x x @param {number} y y @param {number} pad margin in CSS px @returns {boolean} kept clear */
+  const blocked = (x, y, pad) => avoid.some((b) => x > b.x - pad && x < b.x + b.w + pad && y > b.y - pad && y < b.y + b.h + pad);
+  // things whose middle sits behind the zoom buttons get no sweep (in the pop scene upright: the ring light)
+  const things = (o.sweeps ? shinyThings(room) : []).filter((th) => !blocked(th.box[0] + th.box[2] / 2, th.box[1] + th.box[3] / 2, 0));
   const band = kit.sprite('shine-band', 64, 16, paintBand, 1);
   const gloss = kit.sprite('shine-gloss', 128, 16, (c, w, h) => paintGloss(c, w, h, '255,255,255'), 1);
   const goldGloss = kit.sprite('shine-gloss-gold', 128, 16, (c, w, h) => paintGloss(c, w, h, '250,222,150'), 1); // shows on white tiles
@@ -243,10 +249,12 @@ export function makeShine(o) {
     if (!pick.length && thing.hot.length) pick.push(thing.hot[0]);
     for (const [x, y] of pick) {
       const along = clamp((x - box[0]) / Math.max(1, box[2]), 0, 1); // the glint pops as the band passes it
-      glints.push({ x, y, at: t + dur * (0.15 + along * 0.7), life: 0.55 + rand() * 0.35, s: (9 + rand() * 6) * sc, rot: rand() * 0.5 - 0.25 });
+      const s = (9 + rand() * 6) * sc;
+      if (blocked(x, y, s * 1.2)) continue; // never behind the zoom buttons (its full drawn size round it)
+      glints.push({ x, y, at: t + dur * (0.15 + along * 0.7), life: 0.55 + rand() * 0.35, s, rot: rand() * 0.5 - 0.25 });
     }
   }
-  if (still) for (const th of things.slice(0, 3)) for (const [x, y] of th.hot.slice(0, 1)) glints.push({ x, y, at: 0, life: 1, s: 9 * sc, rot: 0 }); // a few calm glints
+  if (still) for (const th of things.slice(0, 3)) for (const [x, y] of th.hot.slice(0, 1)) if (!blocked(x, y, 9 * sc * 1.2)) glints.push({ x, y, at: 0, life: 1, s: 9 * sc, rot: 0 }); // a few calm glints
 
   /** Draw the sweeps going on (each cut to its thing's shape). @param {CanvasRenderingContext2D} c context @returns {void} */
   function drawSweeps(c) {
@@ -303,6 +311,7 @@ export function makeShine(o) {
       const k = tw * tw;
       if (k < 0.03) continue;
       const s = m.s * (m.near ? 1.4 : 1) * (0.6 + 0.6 * tw);
+      if (avoid.length && blocked(m.x, m.y, s * 1.6)) continue; // no sparkle behind the zoom buttons
       c.globalAlpha = clamp(k * 0.9, 0, 1);
       if (m.star && tw > 0.6) {
         const z = s * 3.2;

@@ -3,7 +3,7 @@
 // dark, the spotlight clunks on over the customer's portrait (spotlight-fx.js), floor smoke rolls in at the bottom
 // (smoke-fx.js), and the lights come back up into the normal intro, about 2.3 s in all. The portrait itself sits in
 // the dark (a shade over it) until the light hits it. A tap anywhere skips it (a quick fade); the intro's buttons work
-// at once all the time. Reduced motion: a still lit picture that stays until a tap. Lighter graphics: fewer specks, no
+// at once all the time. Reduced motion: a still lit picture (its clunk plays once) that stays until a tap. Lighter graphics: fewer specks, no
 // billows, pixel ratio 1. It stops when the screen closes. The timeline and the looks are in stage-logic.js.
 import { makeSprites, clamp } from './sprites.js';
 import { stagePlan, stageLevels, stillLevels, STAGE_TIMES } from './stage-logic.js';
@@ -42,7 +42,15 @@ export function startIntroStage(o) {
   let skipAt = null;
   let stopped = false;
   let clunked = false;
+  let watch = null; // reduced motion: the resize watcher that repaints the still picture (disconnected on stop, R12)
   const cost = { frames: 0, total: 0, max: 0 };
+
+  /** Play the spotlight's clunk once (the sound setting decides if it is heard, as everywhere). @returns {void} */
+  function clunk() {
+    if (clunked) return;
+    clunked = true;
+    try { o.playSound?.('clunk', { look: plan.id }); } catch { /* a sound must never break the intro */ }
+  }
 
   /** Make (or keep) the spotlight and smoke for the screen's size and the portrait's place now. @returns {object|null} parts */
   function layout() {
@@ -89,10 +97,7 @@ export function startIntroStage(o) {
     t0 ??= now;
     const t = (now - t0) / 1000;
     const L = stageLevels(t, plan.look, skipAt);
-    if (!clunked && skipAt === null && t >= STAGE_TIMES.T_ON) {
-      clunked = true;
-      try { o.playSound?.('clunk', { look: plan.id }); } catch { /* a sound must never break the intro */ }
-    }
+    if (!clunked && skipAt === null && t >= STAGE_TIMES.T_ON) clunk();
     const a = globalThis.performance?.now?.() ?? 0;
     try { paint(L, t); } catch (e) { console.warn('intro stage failed:', e); stop(); return; }
     const ms = (globalThis.performance?.now?.() ?? 0) - a;
@@ -109,6 +114,8 @@ export function startIntroStage(o) {
     stopped = true;
     if (raf) globalThis.cancelAnimationFrame?.(raf);
     raf = 0;
+    watch?.disconnect(); // R12: no resize watcher left running
+    watch = null;
     canvas.remove();
     shade.remove();
     o.host.classList.remove('app-screen--stage');
@@ -126,12 +133,15 @@ export function startIntroStage(o) {
   o.host.addEventListener('pointerdown', skip, { capture: true, passive: true });
   o.host.addEventListener('keydown', skip, { capture: true, passive: true });
   if (plan.still) {
-    // Reduced motion: one still lit picture, painted when the screen has its size (and again if it changes size).
+    // Reduced motion: one still lit picture, painted when the screen has its size (and again if it changes size); the
+    // clunk plays once as it first shows (R5).
     const still = stillLevels();
     /** Paint the still picture now (once the screen is in the page). @returns {void} */
     const draw = () => { if (!stopped && canvas.isConnected) { try { paint(still, 2); } catch (e) { console.warn('intro stage failed:', e); stop(); } } };
-    globalThis.requestAnimationFrame?.(draw);
-    const watch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (stopped) watch.disconnect(); else draw(); }) : null;
+    /** The first paint: the still picture and its clunk. @returns {void} */
+    const first = () => { draw(); if (!stopped && canvas.isConnected) clunk(); };
+    globalThis.requestAnimationFrame?.(first);
+    watch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (stopped) watch?.disconnect(); else draw(); }) : null;
     watch?.observe(o.host);
   } else raf = globalThis.requestAnimationFrame(frame);
 
