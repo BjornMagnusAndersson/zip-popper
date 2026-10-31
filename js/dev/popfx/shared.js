@@ -550,7 +550,7 @@ export function drawWorld(c) {
   for (const s of strands) drawStrand(c, s);
   for (const b of blobs) drawDrop(c, b);
   fx.mid?.(c, p);
-  drawFingertips(c, p, a + shake);
+  if (!bp.popped) drawFingertips(c, p, a + shake); // only while held: after the pop the skin's jiggle (wob) must not bring the fingers back for a flash (B114)
   for (const d of drops) drawDrop(c, d);
   fx.over?.(c, p);
 }
