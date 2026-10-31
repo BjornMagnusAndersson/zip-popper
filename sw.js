@@ -144,8 +144,32 @@ const PRECACHE = [
   './js/data/comics/strip-scare.js',
   './js/pop/art.js',
   './js/pop/backdrop.js',
+  './js/fx/sprites.js',
+  './js/fx/room-logic.js',
+  './js/fx/room-fx.js',
+  './js/fx/room-dust.js',
+  './js/fx/room-lamps.js',
+  './js/fx/room-shine.js',
+  './js/fx/room-mood.js',
+  './js/fx/scrub-fx.js',
+  './js/fx/stage-logic.js',
+  './js/fx/intro-stage.js',
+  './js/fx/spotlight-fx.js',
+  './js/fx/smoke-fx.js',
+  './js/fx/bokeh-fx.js',
+  './js/fx/party-fx.js',
+  './js/fx/party-confetti.js',
+  './js/fx/celebrate-logic.js',
+  './js/fx/fx-layer.js',
+  './js/fx/confetti-fx.js',
+  './js/fx/coins-fx.js',
+  './js/fx/reveal-fx.js',
+  './js/fx/frame-shine.js',
   './js/pop/characters.js',
   './js/pop/engine.js',
+  './js/pop/pop-fx.js',
+  './js/pop/pop-fx-art.js',
+  './js/pop/ripple.js',
   './js/pop/perf-logic.js',
   './js/pop/face.js',
   './js/pop/logic.js',
@@ -161,7 +185,7 @@ const PRECACHE = [
   './assets/audio/sizzle.wav',
 ];
 
-const CACHE_VERSION = 'v102';
+const CACHE_VERSION = 'v103';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

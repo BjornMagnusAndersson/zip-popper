@@ -44,6 +44,9 @@ import { drawFace, randomFaceSpec } from './face.js';
 import { makeCanvas } from './art.js';
 import { sceneRatio } from './perf-logic.js';
 import { drawBackdrop, nextBackdropChange, backdropKind, roomLeaks, dripLands, nextDripLanding } from './backdrop.js';
+import { syncRoomFx } from '../fx/room-fx.js';
+import { syncPartyFx } from '../fx/party-fx.js';
+import { isPartyDay } from '../fx/stage-logic.js';
 import { createPauseTimers } from './pause-timers.js';
 import { toolBarIds, START_TOOL, isFail } from './tool-logic.js';
 import { canSqueeze } from './squeeze-logic.js';
@@ -117,7 +120,7 @@ function buzz(pattern) {
  * @param {{t: (key: string, vars?: object) => string, storage?: Storage, seed?: number, spec?: object, strip?: boolean,
  *   count?: number, tier?: number, layers?: string[], career?: boolean, onReputationHit?: (amount: number) => void,
  *   reducedMotion?: boolean, squeeze?: boolean, squeezeHint?: boolean, onSqueezeHint?: () => void,
- *   sfxVolume?: number, lowDetail?: boolean, onSlow?: () => void, zoom?: boolean}} o the text lookup
+ *   sfxVolume?: number, lowDetail?: boolean, onSlow?: () => void, zoom?: boolean, gentlePops?: boolean}} o the text lookup
  *   (core/strings.js t), where the sound switch is remembered, the first face's seed (random when left out), a fixed
  *   face spec (a random one per face when left out), whether the face gets a blackhead strip on the nose, how many
  *   bumps per face, the studio tier for the room behind (0..2) and its owned upgrade layers (T5.1a), career = a Story/Career round that can fail (free play
@@ -127,7 +130,8 @@ function buzz(pattern) {
  *   onSeenKinds(kinds) = she just met these kinds on a new face. sfxVolume = the Settings effects volume, 0 to 1.
  *   lowDetail = the Settings switch "Lighter graphics" (the scene drawn at pixel ratio 1); onSlow = the frames stayed
  *   slow, so the scene switched to lighter graphics by itself (pop/perf-logic.js; the caller saves the switch);
- *   zoom = false turns zooming off (no buttons, pinch, wheel or keys; the torchlight dark, B28)
+ *   zoom = false turns zooming off (no buttons, pinch, wheel or keys; the torchlight dark, B28); gentlePops = the
+ *   Settings switch "Gentle pops" (SPEC D45: the calm pop instead of the juicy one)
  * @returns {{node: HTMLElement, mount: (host: HTMLElement) => void, newFace: () => void, unlock: () => void,
  *   setTier: (tier: number, layers?: string[]) => void, results: () => object[], startRound: (o: object) => void,
  *   startFree: (o?: object) => void, setUnlockedTools: (list: string[]) => void, dispose: () => void}} the scene's
@@ -136,7 +140,7 @@ function buzz(pattern) {
 export function createPopMode({
   t, storage, seed: firstSeed, spec: fixedSpec, strip = false, count = FACE_BUMPS, tier: firstTier = 0, layers: firstLayers = [], career = false,
   onReputationHit = () => {}, reducedMotion = false, squeeze = false, squeezeHint = false, onSqueezeHint = () => {},
-  onGuide = null, seenKinds = null, onSeenKinds = () => {}, lowDetail = false, onSlow = () => {}, zoom = true, sfxVolume = 1,
+  onGuide = null, seenKinds = null, onSeenKinds = () => {}, lowDetail = false, onSlow = () => {}, zoom = true, gentlePops = false, sfxVolume = 1,
 }) {
   let lighter = Boolean(lowDetail); // lighter graphics (owner 2026-10-28: older phones): the scene at pixel ratio 1
   const seenSet = Array.isArray(seenKinds) ? new Set(seenKinds) : null; // the kinds met so far (T6.5), null = no hints
@@ -157,6 +161,7 @@ export function createPopMode({
   let layers = Array.isArray(firstLayers) ? [...firstLayers] : []; // owned studio upgrades drawn in the room (T5.1a)
   let pins = 0; // home-popping pins in the jar on the shelf (game/pin-jar.js; startRound and startFree say how many)
   let room = 'studio'; // the room behind the face: 'studio' or 'home' (startRound's room, SPEC D19)
+  let party = false; // Prom Penny's party day (D45 item 6): fairy lights in the room behind her (fx/party-fx.js)
   let moodOverride = null; // a fixed face mood from startRound or setMood (e.g. 'sleep'), null = the usual moods
   // How faces are made now: 'demo' (the old path), 'round' (one customer, startRound) or 'free' (startFree).
   // round: {customer, setup, holdFactors, roughReductions, irritation, request, onFinish, failMode, seed}
@@ -792,8 +797,9 @@ export function createPopMode({
   }
 
   /**
-   * Paint the studio room behind the face for this moment, and plan the next repaint (only while the lamp flickers;
-   * never with reduced motion). Repaints the whole room when the stage size changed.
+   * Paint the studio room behind the face for this moment, and plan the next repaint (only while something moves: the
+   * lamp's flicker, the drip, the sparkles, the room's dust and shine at about 16 frames a second; never with reduced
+   * motion). Repaints the whole room when the stage size changed.
    * @returns {void}
    */
   function paintBackdrop() {
@@ -812,13 +818,18 @@ export function createPopMode({
     const reduced = still();
     const frozen = isPaused(pause); // the round is paused (Field guide, hidden page): the room stands still (B106(2))
     const time = ((frozen ? pause.since : performance.now()) - back.start) / 1000;
-    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins, twinkle: !lighter }); // lighter graphics: still sparkles (B33d)
+    // The room's light and particle effects (SPEC D45: dust in the light, the moth, the mood, shine, petals), behind
+    // the face; still with reduced motion or lighter graphics, so they then cost no extra repaints.
+    back.fx = syncRoomFx(back.fx, { w, h, dpr, kind: backdropKind(room, tier), layers, where: 'pop', reduced, lite: lighter });
+    drawBackdrop(ctx, w, h, { room, tier, layers, time, reduced, dpr, pins, twinkle: !lighter, fx: back.fx }); // lighter graphics: still sparkles (B33d)
+    back.party = syncPartyFx(back.party, { on: party, w, h, dpr, reduced, lite: lighter }); // Prom Penny's day: fairy lights (D45)
+    back.party?.frame(ctx, time);
     const leak = roomLeaks(backdropKind(room, tier), layers);
     // The leak plinks into the bucket now and then (owner 2026-10-28: a little annoying, so she wants it fixed); the
     // sound switch decides, so it also plinks with reduced motion (the drop then just hangs still).
     if (leak && !frozen && dripLands(back.last ?? time, time)) sound.play('drip');
     back.last = time;
-    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak, !lighter), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity);
+    const next = Math.min(nextBackdropChange(time, backdropKind(room, tier), reduced, leak, !lighter), leak && reduced ? nextDripLanding(time) + 0.01 : Infinity, back.fx.next(), back.party?.next() ?? Infinity);
     if (!frozen && Number.isFinite(next)) back.timer = setTimeout(() => requestAnimationFrame(paintBackdrop), next * 1000);
   }
 
@@ -932,6 +943,7 @@ export function createPopMode({
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
       width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze, zoom: zoom !== false,
+      juicy: !gentlePops, lite: lighter, grandFirst: round && cfg.reluctant === true, // the juicy pop (SPEC D45); Hubby's first pop is the big show
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
@@ -1133,6 +1145,7 @@ export function createPopMode({
       if (o.retryOnly === true) failNote.hidden = true;
       buildToolBar(tools);
       room = o.room === 'home' ? 'home' : 'studio';
+      party = isPartyDay(o); // Prom Penny's event day: fairy lights behind her (D45 item 6)
       if (Number.isFinite(o.tier)) tier = o.tier;
       if (Array.isArray(o.layers)) layers = [...o.layers];
       pins = Number(o.pins) || 0;
@@ -1158,6 +1171,7 @@ export function createPopMode({
       setRoundTexts(null, null);
       buildToolBar(roundTools(cfg.unlockedTools));
       room = 'studio'; // free play is always in the studio
+      party = false;
       if (Number.isFinite(o.tier)) tier = o.tier;
       if (Array.isArray(o.layers)) layers = [...o.layers];
       pins = Number(o.pins) || 0;

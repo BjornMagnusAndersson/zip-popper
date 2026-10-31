@@ -58,6 +58,8 @@ import { createAlbumScreen } from '../screens/album.js';
 import { faceSetup, recordFace, revealOn, stripFriendsMet } from '../screens/album-logic.js';
 import { describeTwist } from '../data/twists.js';
 import { describeBoss } from '../data/bosses.js';
+import { isPartyDay } from '../fx/stage-logic.js';
+import { startPartyConfetti, partyConfettiNeeded } from '../fx/party-confetti.js';
 import * as L from './app-logic.js';
 import {
   today, dailyState, dailyFor, dailyStep, describeGoal, judgeDaily, dailyResult, settleDaily, msToMidnight, addDays,
@@ -144,10 +146,11 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   });
   /**
    * The pop scene's lighter graphics (owner 2026-10-28, older phones): the Settings switch, and switching it on by itself
-   * (saved) when the scene finds its frames slow.
-   * @returns {{lowDetail: boolean, onSlow: () => void}} createPopMode options
+   * (saved) when the scene finds its frames slow. Also the "Gentle pops" switch (SPEC D45: the calm pop instead of the juicy one).
+   * @returns {{lowDetail: boolean, onSlow: () => void, gentlePops: boolean}} createPopMode options
    */
   const detailOptions = () => ({
+    gentlePops: Boolean(save.settings.gentlePops),
     lowDetail: Boolean(save.settings.lowDetail),
     onSlow: () => { if (!save.settings.lowDetail) persist(L.setSetting(save, 'lowDetail', true)); },
   });
@@ -621,6 +624,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const again = () => showStudio(back); // after reading a diploma again, back to the studio (no longer in hang mode)
     show(createStudioScreen({
       t, reducedMotion: still(), ...L.studioViewArgs(save), hang, onBack: back, onContinue: back, sound, // sound: the leak's plink (B97(2))
+      lowDetail: Boolean(save.settings.lowDetail), // Lighter graphics: half the room's dust and sparkle (D45)
       onDiploma: (type) => show(createDiplomaScreen({
         t, reducedMotion: still(), type, playerName: playerName(), buttonKey: 'ui.diploma.back', onContinue: again,
       }), { back: again }),
@@ -711,6 +715,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const note = goal ? { key: goal.lineKey, vars: goal.vars, labelKey: 'ui.daily.label' } : hurry ? null : req;
     show(createCustomerIntroScreen({
       t, reducedMotion: still(), customer: args.customer, playerName: playerName(), request: note,
+      // a boss or event's stage moment (D45): fewer particles with Lighter graphics, the spotlight's clunk
+      lowDetail: Boolean(save.settings.lowDetail), playSound: (name, o) => sound.play(name, o),
       twist: hurry ? { ...twist, lineKey: req.key, lineVars: req.vars, hintKey: null } : twist,
       boss: describeBoss(args.boss?.id ?? null), // a boss or event customer's gold pill (T8.4)
       step: goal ? { key: 'ui.daily.pill', vars: { goal: t(goal.nameKey) } }
@@ -778,18 +784,23 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     /** The Master diplomas of this round (D34) one after the other, then the waiting strips, then on. @param {() => void} then what comes after @returns {void} */
     const afterResult = (then) => showDiplomas(L.pendingDiplomas(save), () => playWaiting(then)); // the waiting list, kept in the save (B93)
     const tag = daily ? dailyTag(daily) : step.keepWorking ? { key: 'ui.keepWorking.pay', vars: { pct: L.KEEP_WORKING_PERCENT } } : null;
-    show(createResultScreen({
+    const shown = show(createResultScreen({
       t, reducedMotion: still(), stars: out.stars, payout: daily ? dailyPayout(out.payout, daily) : out.payout, reputationChange: out.reputationChange,
       factKey: out.factKey, reactionKey: out.reactionKey, playerName: playerName(),
       tagKey: tag?.key ?? null, tagVars: tag?.vars ?? {},
       // "New stamp!" for a boss (T8.4) or a streak milestone (T8.5; its name key is boss.<stamp>.name, as in the album).
       stampKey: stamp && face ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
-      reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '' }) : null,
+      reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '', lowDetail: Boolean(save.settings.lowDetail) }) : null,
+      tier: args?.tier ?? 0, lowDetail: Boolean(save.settings.lowDetail), // D45: petals in the spa; Lighter graphics = fewer pieces
       skills: L.skillNews(out.skills), // D34: "Level up!" or how many clean pops the next level needs
       pinCount: out.pinJar ?? null, // "Pin taken away! Pin jar: n" after a pin visit
       onContinue: () => afterResult(onward),
       onShop: L.shopOpen(save) ? () => afterResult(() => showShop(onward)) : undefined,
     }));
+    // Prom Penny's party day (D45 item 6): confetti when her round is finished (the screen's own 3-star celebration counts).
+    if (isPartyDay(args) && partyConfettiNeeded({ stars: out.stars, failed: out.failed, tier: args?.tier ?? 0 })) {
+      startPartyConfetti(shown.node, { reduced: still(), lite: Boolean(save.settings.lowDetail) });
+    }
   }
 
   /**
@@ -803,6 +814,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     // "Hang it up!": the studio view, where the new frame drops onto the wall of fame; its Continue goes on (R8j)
     show(createDiplomaScreen({
       t, reducedMotion: still(), type: types[0], playerName: playerName(), buttonKey: 'ui.diploma.hang',
+      celebrate: true, lowDetail: Boolean(save.settings.lowDetail), // D45: confetti for a new Master
       onContinue: () => { persist(L.clearPendingDiploma(save, types[0])); showStudio(() => showDiplomas(types.slice(1), then), types[0]); }, // seen: off the waiting list (B93)
     }));
     sound.play('cheer');
@@ -855,6 +867,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     sound.unlock();
     show(createScrubScreen({
       t, sound, reducedMotion: still(), itemId, itemNameKey: `ui.item.${itemId}.name`, tier: L.backdropTier(save),
+      lowDetail: Boolean(save.settings.lowDetail), // Lighter graphics: half the dust in the light (D45)
       onDone: () => {
         const out = L.scrubDone(save, itemId);
         persist(out.save);

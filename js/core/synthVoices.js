@@ -39,6 +39,23 @@ export const VOICES = {
     VOICES.pop(k, t);
     [2093, 2637, 3136].forEach((f, i) => k.tone(f, t + 0.05 + i * 0.05, 0.3, { type: 'triangle', vol: 0.08 }));
   },
+  /**
+   * The juicy pop (SPEC D45, from pop test G): the wet pop (the big one for big bumps), then a wet hiss sliding down and
+   * a soft deflating note; the grand show adds a few wet splats after.
+   * @param {object} k kit @param {number} t start @param {{big?: boolean, grand?: boolean}} [o] which show
+   */
+  juicypop(k, t, o) {
+    const big = Boolean(o?.big || o?.grand);
+    if (big) VOICES.bigpop(k, t); else VOICES.pop(k, t);
+    k.hiss(t + 0.02, big ? 0.55 : 0.42, { freq: big ? 1500 : 1800, to: 420, q: 0.7, vol: 0.12 });
+    k.tone(big ? 220 : 290, t + 0.08, 0.45, { type: 'triangle', vol: 0.08, slideTo: big ? 70 : 90 });
+    if (o?.grand) for (const d of [0.2, 0.31, 0.45]) k.hiss(t + d, 0.07, { type: 'lowpass', freq: 650, vol: 0.12 });
+  },
+  /** A soft low blub, one per throb of a juicy bump being squeezed (higher as it fills). @param {object} k kit @param {number} t start @param {{level?: number}} [o] pressure 0..1 */
+  blub(k, t, o) {
+    const lv = Math.max(0, Math.min(1, o?.level ?? 0.5));
+    k.tone(160 + 150 * lv, t, 0.09, { vol: 0.05, slideTo: 110 + 90 * lv });
+  },
   /** Tweezers: a tiny click and a quick pull. @param {object} k kit @param {number} t start */
   tweeze(k, t) {
     k.tone(3400, t, 0.025, { type: 'square', vol: 0.04 });
@@ -83,6 +100,20 @@ export const VOICES = {
     k.tone(780, t, 0.07, { type: 'sine', vol: 0.07, slideTo: 1500 });
     k.tone(2350, t + 0.01, 0.18, { type: 'triangle', vol: 0.018 });
     k.tone(820, t + 0.16, 0.05, { type: 'sine', vol: 0.025, slideTo: 1400 });
+  },
+  /**
+   * The stage spotlight switching on at a boss or event intro (SPEC D45): a heavy metal switch click, a low thump and a
+   * faint electric hum, then the smoke machine's soft whoosh. The Big Evil Horn's is deeper, with a low rumble; Golden
+   * Day adds a little sparkle. @param {object} k kit @param {number} t start @param {{look?: string}} [o] the event id
+   */
+  clunk(k, t, o) {
+    const deep = o?.look === 'horn';
+    k.hiss(t, 0.03, { freq: 2600, q: 2.5, vol: 0.22 }); // the click of the switch
+    k.tone(deep ? 78 : 110, t, deep ? 0.26 : 0.18, { type: 'triangle', vol: 0.3, slideTo: deep ? 42 : 60 }); // the thump
+    k.tone(1450, t + 0.004, 0.035, { type: 'square', vol: 0.035, slideTo: 900 }); // the metal of the can
+    k.tone(deep ? 98 : 120, t + 0.03, 0.42, { type: 'sawtooth', vol: 0.014 }); // the hum of the bulb
+    k.hiss(t + 0.06, deep ? 0.8 : 0.6, { type: 'lowpass', freq: deep ? 320 : 520, to: 160, vol: deep ? 0.09 : 0.06 }); // the smoke machine
+    if (o?.look === 'golden') [1568, 2093, 2637].forEach((f, i) => k.tone(f, t + 0.08 + i * 0.06, 0.3, { type: 'triangle', vol: 0.05 }));
   },
   /** The cotton pad's soft swish. @param {object} k kit @param {number} t start */
   wipe(k, t) {

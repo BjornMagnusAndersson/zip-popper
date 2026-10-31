@@ -1,5 +1,6 @@
 // The settings screen (T3.1a): the player's name (the same field as the first start), switches for sound, music,
-// vibration, reduced motion and the two-finger squeeze (T1.7, with a hint line), export and import of the save file, and "Start over" with a confirm step.
+// vibration, reduced motion and the two-finger squeeze (T1.7, with a hint line), Gentle pops (SPEC D45, the calm pop)
+// and Lighter graphics, export and import of the save file, and "Start over" with a confirm step.
 // Nothing is saved here: every change is reported (onName, onToggle, onExport, onImport, onReset) and the game saves.
 
 import { el, button, icon, header, screenShell } from './dom.js';
@@ -27,7 +28,7 @@ export function createSettingsScreen({
   canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function', osStill = false,
 }) {
   const shell = screenShell('settings', { label: t('ui.settings.title'), reducedMotion });
-  let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: true, lowDetail: false, ...settings };
+  let values = { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: true, lowDetail: false, gentlePops: false, ...settings };
   const head = header(t, t('ui.settings.title'), onBack, shell.signal);
   const body = el('div', 'app-body app-settings');
   const notice = el('p', 'app-notice');

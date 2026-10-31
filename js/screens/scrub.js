@@ -9,6 +9,10 @@
 // the sponge hops to the next dirty area); the arrow keys move the sponge. With reduced motion the suds and sparkles
 // still show but do not move or grow. The rules (grime map, progress, key steps) are in scrub-logic.js.
 // Cartoon only: grey dust, brown and olive stains, white suds. Nothing gross.
+// The light (SPEC D45, js/fx/scrub-fx.js): a dusty shaft of light with fine dust drifting in it falls across the
+// close-up (about 16 frames a second, thinning out as the item comes clean; in the dingy studio the ring light has the
+// old bulb's moth round it). When it is clean the dust whooshes out, the moth is blown away and the light turns clean
+// and warm with a shine and a few glints. Reduced motion: still dust, then straight to the clean look.
 
 import { el, button, screenShell, INK } from './dom.js';
 import { drawCloseup, backdropPalette, cobweb, stain, sparkle } from '../pop/backdrop.js';
@@ -16,6 +20,7 @@ import {
   grimeRecipe, grimeMap, rubMap, scrubProgress, scrubDoneNow, progressStep, keyScrub, moveSponge, firstSpongeCell,
   cellCenter, strokePoints, scrubTextKeys, KEY_REACH, KEY_AMOUNT,
 } from './scrub-logic.js';
+import { makeScrubFx } from '../fx/scrub-fx.js';
 
 const W = 480; // drawing size of the close-up (CSS scales it to fit)
 const H = 300;
@@ -457,10 +462,11 @@ function layer(cls, dpr) {
  *   reducedMotion?: boolean, sound?: {play: (name: string, o?: object) => void}, tier?: number}} opts
  *   t = string function; itemId = the bought studio item (lamp, plant, chair, wallPaint, sign); itemNameKey = its
  *   name key; onDone = it is clean and Continue was tapped; sound = the game's sound player (optional); tier = the
- *   studio's tier 0..2 (the wall and tiles take its colours; 1 = the warm wall when left out)
+ *   studio's tier 0..2 (the wall and tiles take its colours; 1 = the warm wall when left out); lowDetail = the
+ *   Settings switch "Lighter graphics" (half the dust, fewer frames)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
-export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reducedMotion = false, sound, tier = 1 }) {
+export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reducedMotion = false, sound, tier = 1, lowDetail = false }) {
   const item = t(itemNameKey);
   const keys = scrubTextKeys(itemId);
   const recipe = grimeRecipe(itemId);
@@ -519,6 +525,9 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
   const sparks = []; // sparkles {x, y, z, born, life, gold}
   const party = []; // the sparkles all over the item when it is clean {x, y, z, phase}
   const rand = seeded(29);
+  const light = makeScrubFx({ w: W, h: H, dpr, itemId, tier, reduced: reducedMotion, lite: lowDetail }); // the dusty light (D45)
+  let ambient = 0; // the timer for the next frame of the drifting dust (0 = none)
+  pad.scrubLight = () => light.state(); // for screenshot and touch checks (like the pop canvas's popTargets)
 
   /** Show the clean share on the bar, and finish when it is clean enough. @returns {void} */
   function update() {
@@ -530,6 +539,7 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
       meter.textContent = t('ui.scrub.progress', { n: step });
       bar.setAttribute('aria-valuenow', String(step));
     }
+    light.setDust(1 - p); // the air clears as the item does
     if (finished || !scrubDoneNow(map)) return;
     finish();
   }
@@ -552,8 +562,10 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
     how.hidden = true;
     keysLine.hidden = true;
     sound?.play('cheer');
+    light.finish(); // WHOOSH: the dust flies out, the light turns clean and warm
     go.focus({ preventScroll: true });
     redraw();
+    keepDrifting();
   }
 
   /**
@@ -656,6 +668,7 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
   function paintFx(now) {
     const c = fx.ctx;
     c.clearRect(0, 0, W, H);
+    light.frame(c, now / 1000); // the shaft of light and its dust, under the suds and the sponge
     let alive = false;
     for (let i = suds.length - 1; i >= 0; i -= 1) {
       const b = suds[i];
@@ -693,6 +706,20 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
       if (paintFx(now)) frameId = requestAnimationFrame(tick);
     });
   }
+
+  /**
+   * Plan the next frame of the drifting dust and the clean-light ending (about 16 a second), only while something
+   * moves and the page shows; with reduced motion there are none.
+   * @returns {void}
+   */
+  function keepDrifting() {
+    clearTimeout(ambient);
+    ambient = 0;
+    if (shell.signal.aborted || globalThis.document?.hidden || !light.moving()) return;
+    ambient = setTimeout(() => { ambient = 0; redraw(); keepDrifting(); }, light.step * 1000);
+  }
+  globalThis.document?.addEventListener?.('visibilitychange', keepDrifting, { signal: shell.signal }); // on again when shown
+  shell.signal.addEventListener?.('abort', () => clearTimeout(ambient));
 
   /** Put the drawn sponge on the keyboard sponge's cell. @returns {void} */
   function spongeToKeyCell() {
@@ -763,6 +790,8 @@ export function createScrubScreen({ t, itemId = '', itemNameKey, onDone, reduced
     redraw();
   }, opts);
   update();
+  redraw(); // the light shows from the start
+  keepDrifting();
   requestAnimationFrame(() => { if (!shell.signal.aborted && !finished) pad.focus({ preventScroll: true }); });
   return { node: shell.node, dispose: shell.dispose };
 }

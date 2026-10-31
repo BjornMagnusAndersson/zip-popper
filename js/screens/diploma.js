@@ -6,16 +6,25 @@
 
 import { el, button, screenShell } from './dom.js';
 import { drawPicture } from './guide.js';
+import { makeFxLayer } from '../fx/fx-layer.js';
+import { makeConfetti } from '../fx/confetti-fx.js';
+
+/** When the diploma's confetti goes off, in seconds after the screen opens (SPEC D45 item 7). */
+const DIPLOMA_CONFETTI_AT = 0.3;
 
 /**
  * Build the diploma screen.
  * @param {{t: (key: string, vars?: object) => string, type: string, playerName?: string, onContinue?: () => void,
- *   buttonKey?: string, reducedMotion?: boolean}} opts t = string function; type = the bump id she mastered;
- *   playerName = her name; onContinue = the button; buttonKey = its label ("Hang it up!" for a new Master, "Back to
- *   the studio" when read again from the wall of fame, R8j)
- * @returns {{node: HTMLElement, dispose: () => void}} the screen
+ *   buttonKey?: string, reducedMotion?: boolean, celebrate?: boolean, lowDetail?: boolean}} opts t = string function;
+ *   type = the bump id she mastered; playerName = her name; onContinue = the button; buttonKey = its label ("Hang it
+ *   up!" for a new Master, "Back to the studio" when read again from the wall of fame, R8j); celebrate = a new Master:
+ *   confetti over the screen (D45; a few still pieces at the edges with reduced motion); lowDetail = Lighter graphics
+ *   (about half the confetti)
+ * @returns {{node: HTMLElement, dispose: () => void, fxState: () => object|null}} the screen; fxState = for checks
  */
-export function createDiplomaScreen({ t, type, playerName = '', onContinue, buttonKey = 'ui.diploma.continue', reducedMotion = false }) {
+export function createDiplomaScreen({
+  t, type, playerName = '', onContinue, buttonKey = 'ui.diploma.continue', reducedMotion = false, celebrate = false, lowDetail = false,
+}) {
   const kind = t(`ui.guide.${type}.name`);
   const shell = screenShell('diploma', { label: t('ui.diploma.title', { kind }), reducedMotion });
   const body = el('div', 'app-body app-body--center app-diploma');
@@ -38,5 +47,19 @@ export function createDiplomaScreen({ t, type, playerName = '', onContinue, butt
   );
   body.append(card);
   shell.node.append(body);
-  return { node: shell.node, dispose: shell.dispose };
+  // A new Master: confetti over the screen (taps go through the layer); stopped when the screen closes.
+  const layer = celebrate ? makeFxLayer(shell.node, { lite: lowDetail, className: 'app-fx app-diploma__fx' }) : null;
+  let confetti = null;
+  if (layer && reducedMotion) {
+    requestAnimationFrame(() => layer.still((c, W, H) => makeConfetti({ kit: layer.kit, kind: 'confetti', W, H, lite: lowDetail, still: true, seed: 23 }).paintStill(c, W, H)));
+  } else if (layer) {
+    layer.add((W, H) => (confetti = makeConfetti({ kit: layer.kit, kind: 'confetti', W, H, lite: lowDetail, seed: 23 })), DIPLOMA_CONFETTI_AT);
+  }
+  return {
+    node: shell.node,
+    /** Stop the confetti and remove the screen. @returns {void} */
+    dispose() { layer?.dispose(); shell.dispose(); },
+    /** The confetti, for checks. @returns {object|null} state */
+    fxState: () => (layer ? { busy: layer.busy(), confetti: confetti?.state() ?? null } : null),
+  };
 }

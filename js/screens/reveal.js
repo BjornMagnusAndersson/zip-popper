@@ -13,9 +13,41 @@ import { revealFaces, sliderKey, autoWipe, SLIDER_REST } from './album-logic.js'
 import { faceGeometry, layoutFace } from '../pop/logic.js';
 import { drawFace } from '../pop/face.js';
 import { makeCanvas, drawPimple, drawDecoy, drawStripDots } from '../pop/art.js';
+import { makeFxLayer } from '../fx/fx-layer.js';
+import { makeRevealSparkle } from '../fx/reveal-fx.js';
+import { RESULT_FX } from '../fx/celebrate-logic.js';
 
 /** The reveal pictures' drawing size in CSS px (4:5, head and shoulders); CSS scales them to the frame. */
 export const REVEAL_SIZE = { w: 240, h: 300 };
+
+/**
+ * The part of the round's stage that holds the head, hair, sparkles and some shoulders, and how it is scaled to fill a
+ * picture: stage point (x, y) lands at (x * k + ox, y * k + oy) in the picture.
+ * @param {{cx: number, cy: number, rx: number, ry: number}} face the face geometry on the round's stage
+ * @param {number} w picture width @param {number} h picture height
+ * @returns {{x0: number, y0: number, x1: number, y1: number, k: number, ox: number, oy: number}} the part and the fit
+ */
+function pictureFit(face, w, h) {
+  const x0 = face.cx - face.rx * 1.5;
+  const x1 = face.cx + face.rx * 1.5;
+  const y0 = face.cy - face.ry * 1.56;
+  const y1 = face.cy + face.ry * 1.42;
+  const k = Math.min(w / (x1 - x0), h / (y1 - y0));
+  return { x0, y0, x1, y1, k, ox: (w - (x1 - x0) * k) / 2 - x0 * k, oy: (h - (y1 - y0) * k) / 2 - y0 * k };
+}
+
+/**
+ * Where the face sits in a reveal picture, as shares of the picture (any size of the same 4:5 shape), with its
+ * features (the eyes), for the reveal sparkle (fx/reveal-fx.js).
+ * @param {{w: number, h: number, spec: object}} look the face recipe (album-logic.js revealFaces)
+ * @returns {{cx: number, cy: number, rx: number, ry: number, features: object}} cx, rx in shares of the width; cy, ry of the height
+ */
+export function revealFaceBox(look) {
+  const { w, h } = REVEAL_SIZE;
+  const face = faceGeometry(look.w, look.h, look.spec);
+  const { k, ox, oy } = pictureFit(face, w, h);
+  return { cx: (face.cx * k + ox) / w, cy: (face.cy * k + oy) / h, rx: (face.rx * k) / w, ry: (face.ry * k) / h, features: face.features };
+}
 
 /**
  * Draw one look of a saved face onto a new canvas: the head and shoulders fill the picture (the room around them is
@@ -38,14 +70,7 @@ export function faceCanvas(look, w, h, dpr = Math.min(2, globalThis.devicePixelR
     seed: look.seed, face, count: look.count, strip: look.strip, allowed: look.kinds, decoys: look.decoys,
     mix: look.mix ?? null, grown: look.grown ?? 0, // a boss face's own bumps (T8.4)
   });
-  // The part of the stage that holds the head, hair, sparkles and some shoulders, scaled to fill the picture.
-  const x0 = face.cx - face.rx * 1.5;
-  const x1 = face.cx + face.rx * 1.5;
-  const y0 = face.cy - face.ry * 1.56;
-  const y1 = face.cy + face.ry * 1.42;
-  const k = Math.min(w / (x1 - x0), h / (y1 - y0));
-  const ox = (w - (x1 - x0) * k) / 2 - x0 * k;
-  const oy = (h - (y1 - y0) * k) / 2 - y0 * k;
+  const { x0, y0, x1, y1, k, ox, oy } = pictureFit(face, w, h);
   ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
   ctx.lineCap = 'butt';
   if (look.sparkles) { // a soft, warm glow behind the head
@@ -107,11 +132,15 @@ function knobIcon() {
 /**
  * Build the before and after reveal card.
  * @param {{t: (key: string, vars?: object) => string, setup: ReturnType<typeof import('./album-logic.js').faceSetup>,
- *   reducedMotion?: boolean, name?: string}} opts t = string function; setup = the customer's face recipe; reducedMotion
- *   = the game's switch (no automatic slide); name = the customer's name, for screen readers
- * @returns {{node: HTMLElement, value: () => number, dispose: () => void}} the card; value() = the slider now (0..1)
+ *   reducedMotion?: boolean, name?: string, lowDetail?: boolean, sparkle?: boolean}} opts t = string function; setup =
+ *   the customer's face recipe; reducedMotion = the game's switch (no automatic slide); name = the customer's name, for
+ *   screen readers; lowDetail = Lighter graphics (the sparkle at pixel ratio 1); sparkle = false leaves out the reveal
+ *   sparkle (SPEC D45: a light sweep and glints on the clean face while the slide is almost across)
+ * @returns {{node: HTMLElement, value: () => number, dispose: () => void, faceCentre: () => DOMRect|null,
+ *   sparkleState: () => object|null}} the card; value() = the slider now (0..1); faceCentre = where the face is on
+ *   the page now (for the tip coins, fx/coins-fx.js); sparkleState = for checks
  */
-export function createReveal({ t, setup, reducedMotion = false, name = '' }) {
+export function createReveal({ t, setup, reducedMotion = false, name = '', lowDetail = false, sparkle = true }) {
   const ac = new AbortController();
   const signal = ac.signal;
   const looks = revealFaces(setup);
@@ -197,6 +226,9 @@ export function createReveal({ t, setup, reducedMotion = false, name = '' }) {
   }, { signal });
 
   setValue(value);
+  const box = revealFaceBox(looks.after);
+  let layer = null; // the sparkle's effects layer inside the AFTER picture (D45)
+  let shine = null;
   // Draw a moment after the screen is in the page (drawing two faces takes a little time), then slide once.
   const drawRaf = requestAnimationFrame(() => {
     if (signal.aborted) return;
@@ -204,13 +236,26 @@ export function createReveal({ t, setup, reducedMotion = false, name = '' }) {
     before.append(faceCanvas(looks.before, w, h));
     after.append(faceCanvas(looks.after, w, h));
     if (!still && !touched) playAuto();
+    if (!sparkle) return;
+    layer = makeFxLayer(after, { lite: lowDetail, className: 'app-fx app-reveal__fx' });
+    shine = makeRevealSparkle({ kit: layer.kit, face: box, features: box.features });
+    if (still) layer.still((c, W, H) => shine.paintStill(c, W, H)); // a soft still glow, nothing moves
+    else layer.add(shine, RESULT_FX.sparkleAt); // as the slide is almost across
   });
 
   return {
     node,
     /** The slider now. @returns {number} 0 = all before, 1 = all after */
     value: () => value,
-    /** Stop the slide and remove the listeners. @returns {void} */
-    dispose() { cancelAnimationFrame(drawRaf); stopAuto(); ac.abort(); },
+    /** Where the face's middle is on the page now, and its size (the tip coins burst out of it). @returns {DOMRect|null} a box round the face */
+    faceCentre() {
+      const r = frame.getBoundingClientRect();
+      if (!r.width) return null;
+      return new DOMRect(r.left + (box.cx - box.rx) * r.width, r.top + (box.cy - box.ry) * r.height, box.rx * 2 * r.width, box.ry * 2 * r.height);
+    },
+    /** The sparkle's state, for checks. @returns {object|null} state */
+    sparkleState: () => (shine ? { ...shine.state(), busy: layer?.busy() ?? false } : null),
+    /** Stop the slide and the sparkle and remove the listeners. @returns {void} */
+    dispose() { cancelAnimationFrame(drawRaf); stopAuto(); layer?.dispose(); ac.abort(); },
   };
 }

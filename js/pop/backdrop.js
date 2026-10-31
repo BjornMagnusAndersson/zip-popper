@@ -160,12 +160,13 @@ export function nextBackdropChange(time, tier = 0, reduced = false, leak = false
 }
 
 /**
- * Where the lamp hangs: off to one side, clear of the head (and in landscape below the floating header).
+ * Where the lamp hangs: off to one side, clear of the head (and in landscape below the floating header). The room's
+ * light and particle effects (js/fx/room-fx.js) use it too: the moth loops round this bulb.
  * @param {number} w width
  * @param {number} h height
  * @returns {{x: number, y: number, r: number}} bulb centre and radius in CSS px
  */
-function lampSpot(w, h) {
+export function lampSpot(w, h) {
   const r = Math.max(8, Math.min(16, Math.min(w, h) * 0.028));
   return w > h ? { x: w * 0.2, y: h * 0.34, r } : { x: w * 0.17, y: h * 0.11, r };
 }
@@ -2355,7 +2356,11 @@ function roomCanvas(w, h, tier, dpr, layers = []) {
  * @param {number} w width in CSS px
  * @param {number} h height in CSS px
  * @param {{room?: string, tier?: number, layers?: string[], time?: number, reduced?: boolean, dpr?: number, pins?: number,
- *   twinkle?: boolean}} [o] twinkle = false keeps the spa's sparkles still (lighter graphics); pins =
+ *   twinkle?: boolean, fx?: {frame: (ctx: CanvasRenderingContext2D, time: number) => void,
+ *   base?: (room: HTMLCanvasElement) => HTMLCanvasElement}|null}} [o] fx = the room's light and particle effects
+ *   (js/fx/room-fx.js, SPEC D45): their still parts baked into the still room (base), the moving parts drawn last,
+ *   over the room and behind the face;
+ *   twinkle = false keeps the spa's sparkles still (lighter graphics); pins =
  *   the pins in the jar on the shelf (game/pin-jar.js); room
  *   'studio' (default) or 'home' (SPEC D19), studio tier 0..2 (SPEC D11), the owned studio layers (save.studioLayers,
  *   T5.1a; the home room ignores them), seconds since the scene started (for the flicker or the home lamp's
@@ -2365,9 +2370,11 @@ function roomCanvas(w, h, tier, dpr, layers = []) {
 export function drawBackdrop(ctx, w, h, o = {}) {
   const tier = backdropKind(o.room, o.tier);
   const dpr = o.dpr ?? (ctx.getTransform?.().a || 1);
-  ctx.drawImage(roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []), 0, 0, w, h);
+  const still = roomCanvas(Math.round(w), Math.round(h), tier, dpr, o.layers ?? []);
+  ctx.drawImage(o.fx?.base?.(still) ?? still, 0, 0, w, h); // with the effects' still parts baked in (D45: mood, light shaft, glows)
   drawTwinkles(ctx, w, h, tier, o.time ?? 0, Boolean(o.reduced) || o.twinkle === false); // the spa's sparkles (B33d)
   drawLight(ctx, w, h, tier, lampLevel(o.time ?? 0, tier, Boolean(o.reduced)));
   if (roomLeaks(tier, o.layers)) drawDrip(ctx, w, h, o.time ?? 0, Boolean(o.reduced)); // drip... drip...
   if (tier !== 'home') drawPinJar(ctx, w, h, tier, pinsDrawn(o.pins)); // the pin jar on the shelf (game/pin-jar.js)
+  o.fx?.frame(ctx, o.time ?? 0); // dust in the light, the moth, the mood, shine and petals (SPEC D45)
 }

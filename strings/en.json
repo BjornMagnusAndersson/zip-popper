@@ -1169,6 +1169,8 @@
   "ui.settings.reducedMotionPhone": "Your phone asks for less motion, so the game stays calm. Your own choice here: {choice}.",
   "ui.settings.squeeze": "Squeeze with two fingers",
   "ui.settings.squeezeHint": "Put two fingers near a bump and pinch a little to pop it. Works with the Fingers and the Cotton pad, not the other tools. To zoom, use the + and - buttons, or two fingers away from the bumps.",
+  "ui.settings.gentlePops": "Gentle pops",
+  "ui.settings.gentlePopsHint": "A calmer pop: less goo, no splash on the screen and no ripple.",
   "ui.settings.lowDetail": "Lighter graphics",
   "ui.settings.lowDetailHint": "For older phones: a little less sharp, smoother popping. It turns on by itself if the game runs slowly.",
   "ui.settings.musicVolume": "Music volume",

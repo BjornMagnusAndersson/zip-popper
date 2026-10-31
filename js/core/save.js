@@ -31,7 +31,8 @@ export function defaultSave(now = Date.now()) {
     stats: { pops: 0, stars: 0, bestCombo: 0 },
     // squeeze (T1.7): two fingers round a bump squeeze it (off by default; old saves load with it off)
     // squeeze true (owner 2026-10-28, SPEC D43): new players squeeze between two fingers, so the finger does not hide the pop
-    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: true, lowDetail: false, lang: 'en', musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME },
+    // gentlePops (SPEC D45): the calm pop instead of the juicy one (off by default; old saves load with it off)
+    settings: { sound: true, music: true, vibration: true, reducedMotion: false, squeeze: true, lowDetail: false, gentlePops: false, lang: 'en', musicVolume: DEFAULT_MUSIC_VOLUME, sfxVolume: DEFAULT_SFX_VOLUME },
     seenComics: [],
     squeezeHintSeen: false, // the one-time "squeeze between two fingers" hint was shown (T1.7)
     // Economy fields (T3.2, docs/ECONOMY.md section 8). Added without a version bump: older saves simply get these defaults.
@@ -166,6 +167,7 @@ export function normalizeSave(raw, now = Date.now()) {
       reducedMotion: flag(se.reducedMotion, d.settings.reducedMotion),
       squeeze: flag(se.squeeze, d.settings.squeeze),
       lowDetail: flag(se.lowDetail, d.settings.lowDetail), // lighter graphics for older phones (owner 2026-10-28)
+      gentlePops: flag(se.gentlePops, d.settings.gentlePops), // the calm pop (SPEC D45)
       lang: typeof se.lang === 'string' && se.lang.length <= 8 ? se.lang : d.settings.lang,
       musicVolume: clampVolume(se.musicVolume, d.settings.musicVolume),
       sfxVolume: clampVolume(se.sfxVolume, d.settings.sfxVolume),

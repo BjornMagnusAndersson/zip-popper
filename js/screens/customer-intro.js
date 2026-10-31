@@ -1,8 +1,12 @@
 // The customer intro (T3.1a): who is in the chair, their one-line story (with the player's name filled in), an optional
 // deadline joke, the request if they have one, and a Start button. The customer comes in as string keys (the same keys
 // data/customers.js and data/chapters.js hold); the request as {key, vars} (requests.js describeRequest).
+// A boss or event customer comes in as a stage moment (SPEC D45 item 4, fx/intro-stage.js): the room dims, a spotlight
+// clunks on over the portrait, floor smoke rolls in, then the lights come up. It sits behind the cards and buttons, so
+// it never covers a text or holds a tap back; a tap skips it.
 
 import { el, button, icon, screenShell } from './dom.js';
+import { startIntroStage } from '../fx/intro-stage.js';
 
 /**
  * Build the customer intro.
@@ -12,7 +16,8 @@ import { el, button, icon, screenShell } from './dom.js';
  *   portrait?: HTMLElement|null, hintKey?: string|null,
  *   twist?: {nameKey: string, lineKey: string, lineVars?: object, hintKey?: string|null}|null,
  *   boss?: {labelKey: string, nameKey: string, lineKey: string, rewardKey?: string, hintKey?: string|null}|null,
- *   onStart?: () => void, onMenu?: () => void, reducedMotion?: boolean}} opts
+ *   onStart?: () => void, onMenu?: () => void, reducedMotion?: boolean, lowDetail?: boolean,
+ *   playSound?: (name: string, o?: object) => void}} opts
  *   t = string function; customer = the customer's string keys; playerName = for the {name} in the story; request = what
  *   they ask for, or null; step = "customer n of total" or null (step.key + step.vars = another line in that pill,
  *   such as Keep working's "Keep working: customer n", T5.4); portrait = an optional picture (a canvas, say) the game
@@ -21,20 +26,23 @@ import { el, button, icon, screenShell } from './dom.js';
  *   customer's twist as string keys (data/twists.js describeTwist, T8.3), shown as a pill above the request, or null
  *   (lineVars = the {placeholders} of its line: the hurry twist shows the hurry request's line with its seconds);
  *   boss = a boss or event customer (data/bosses.js describeBoss, T8.4): a gold pill in the twist's place with
- *   "Event" or "Boss", its name, a funny line, the reward and a tip (a boss has no twist and no request)
+ *   "Event" or "Boss", its name, a funny line, the reward and a tip (a boss has no twist and no request), and the
+ *   stage moment (D45); lowDetail = Lighter graphics (fewer particles); playSound = the game's sound player (the
+ *   spotlight's clunk)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createCustomerIntroScreen({
   t, customer, playerName = '', request = null, step = null, portrait = null, hintKey = null, twist = null, boss = null, onStart, onMenu,
-  reducedMotion = false,
+  reducedMotion = false, lowDetail = false, playSound = null,
 }) {
   const name = t(customer.nameKey);
   const shell = screenShell('intro', { label: name, reducedMotion });
   const body = el('div', 'app-body app-intro');
   const left = el('div', 'app-intro__who');
   if (step) left.append(el('p', 'app-intro__step', t(step.key ?? 'ui.intro.step', { n: step.n, total: step.total, ...(step.vars ?? {}) })));
+  let frame = null; // the portrait's round frame (the spotlight aims at it)
   if (portrait) {
-    const frame = el('div', 'app-intro__portrait');
+    frame = el('div', 'app-intro__portrait');
     frame.append(portrait);
     left.append(frame);
   }
@@ -85,5 +93,9 @@ export function createCustomerIntroScreen({
   if (onMenu) right.append(button('app-btn app-btn--small app-intro__menu', t('ui.intro.menu'), () => onMenu(), shell.signal));
   body.append(left, right);
   shell.node.append(body);
-  return { node: shell.node, dispose: shell.dispose };
+  // A boss or event: the stage moment behind the cards (never for a normal customer; stops with the screen).
+  const stage = boss ? startIntroStage({ host: shell.node, portrait: frame, bossId: boss.id, reduced: reducedMotion, lite: lowDetail, playSound }) : null;
+  /** Stop the stage moment and take the screen away. @returns {void} */
+  const dispose = () => { stage?.stop(); shell.dispose(); };
+  return { node: shell.node, dispose };
 }

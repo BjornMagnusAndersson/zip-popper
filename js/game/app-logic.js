@@ -905,7 +905,7 @@ export function pendingScrub(save) {
 /**
  * Changes one Settings switch.
  * @param {object} save the save
- * @param {string} key sound, music, vibration, reducedMotion or squeeze (two-finger squeeze, T1.7); or musicVolume or
+ * @param {string} key sound, music, vibration, reducedMotion, squeeze (two-finger squeeze, T1.7), lowDetail or gentlePops (D45); or musicVolume or
  *   sfxVolume (a number from 0 to 1, kept inside that range)
  * @param {boolean|number} value on or off, or the volume
  * @returns {object} new save
@@ -914,7 +914,7 @@ export function setSetting(save, key, value) {
   if (key === 'musicVolume' || key === 'sfxVolume') {
     return { ...save, settings: { ...save.settings, [key]: clampVolume(value, save.settings?.[key]) } };
   }
-  if (!['sound', 'music', 'vibration', 'reducedMotion', 'squeeze', 'lowDetail'].includes(key)) return save;
+  if (!['sound', 'music', 'vibration', 'reducedMotion', 'squeeze', 'lowDetail', 'gentlePops'].includes(key)) return save;
   return { ...save, settings: { ...save.settings, [key]: Boolean(value) } };
 }
 

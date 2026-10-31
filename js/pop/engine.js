@@ -22,6 +22,15 @@
 // leaves the screen or slides under the tool bar); 'ticklish' = a squeeze held on a cheek, the jaw or near the ear
 // makes her giggle (the face jerks away, the press drops back and must be made again; onGiggle tells the controller);
 // 'sensitive' = cold squeezes give more Ows, each Ow irritates more, and her cheeks start a little red.
+// Juicy pop (SPEC D45 item 1, option juicy: true; from pop test G): whiteheads, pink and big bumps dome up tight while
+// squeezed and throb, then split open: a goo mound rises out, glossy drops fly and land with splatter specks, a small
+// soft crater heals in about 2 s, a see-through ripple bends the picture (ripple.js) and a few drops hit the screen
+// glass and slide down (the lens splats, splashLens). Scaled by size; the biggest show for the last bump of a face and
+// for the first pop with option grandFirst (Hubby, chapter 0). The golden bump and the Evil Horn keep their own pop
+// and get the ripple (gold also golden glass drops); blackheads and hairs are unchanged. pop-fx.js decides, pop-fx-art.js
+// draws. juicy false (the Settings switch "Gentle pops") = the calm pop as before. Reduced motion: no ripple, no glass,
+// no jolt, fewer drops; option lite (Lighter graphics, or the slow-phone switch): fewer drops, no ripple. The warm
+// cloth steams while it is on a bump (D45 item 5).
 import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius, grownHold, growStart } from './logic.js';
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
@@ -41,6 +50,9 @@ import {
   drawTweezers, drawFinger, drawCloth, drawWarmBump, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
   gooLook, capList,
 } from './art.js';
+import { popPlan, sprayDrops, glassSpots, stepGlass, throb, outDir, steamStep, steamWisps, CRATER, JUICY_KINDS } from './pop-fx.js';
+import { juicyGoo, drawDome, drawPopped, drawMound, drawFlyer, drawLanded, drawGlassDrop, drawClothSteam, warmGoo } from './pop-fx-art.js';
+import { makeRipple } from './ripple.js';
 import { SWAY, TICKLE, SENSITIVE } from '../data/twists.js';
 import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset, ticklishZone, swayView } from './twist-logic.js';
 
@@ -139,6 +151,9 @@ function affine(s, d) {
  *   onGiggle?: (at: {x: number, y: number}) => void (the ticklish customer giggled at this bump, scene px),
  *   refuse?: (p: object) => void (the husband in armor, ch 2: the first pop is NOT done, popping stops and this is told which bump),
  *   gloves?: boolean (she owns the gloves, SPEC D32e: the squeezing fingertips are drawn in blue rubber gloves),
+ *   juicy?: boolean (the juicy pop, SPEC D45; false or left out = the calm pop as before, the "Gentle pops" switch),
+ *   lite?: boolean (Lighter graphics: fewer juicy drops, no ripple; it also turns on by itself with onSlow),
+ *   grandFirst?: boolean (the first pop of this scene gets the biggest show: Hubby's first pop in chapter 0),
  *   random?: () => number}} o options; onIrritation = the irritation meter changed (T1.2b), random = for the rough-press roll; tool = the tool in hand at the
  *   start, face = the skin oval (the warm cloth goes on there), tools = the usable tools (for the keyboard),
  *   onOw = a wrong-tool press, onWarm = the warmest bump's warmth changed, onPatch = a patch went on, onNote = a press did nothing
@@ -158,7 +173,8 @@ export function createPopScene(canvas, o) {
   const rand = rng(Math.round(w * 13 + h * 7 + o.pimples.length));
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
-  const ctx = canvas.getContext('2d');
+  const shownCtx = canvas.getContext('2d'); // the canvas on the screen
+  let ctx = shownCtx; // where render() draws: the shown canvas, or the hidden frame while the ripple runs (B114)
   let texture = o.texture;
   let raf = 0;
   let last = 0;
@@ -218,6 +234,20 @@ export function createPopScene(canvas, o) {
   let giggleAt = -Infinity;
   let jerk = null; // {x, y}: the way the face jerks after a giggle (away from the pressed bump)
   const skin = twist === 'sensitive' ? SENSITIVE.roughScale : 1; // delicate skin: more rough presses when cold
+  // The juicy pop (SPEC D45). juicy = the new pop on (off = "Gentle pops", the calm pop as before); lite = Lighter
+  // graphics (fewer drops, no ripple; turns on by itself when the frames stay slow); pops = pops so far (the first may
+  // be the grand show); ripple = the see-through ripple; gooLayer = settled juicy goo painted once ({canvas, ctx,
+  // dirty}) so dozens of glossy dollops cost one picture a frame; hidden = the frame drawn off screen while the ripple
+  // runs; steamK = the warm cloth's steam (0..1).
+  const juicy = o.juicy === true;
+  let lite = Boolean(o.lite);
+  let pops = 0;
+  const ripple = makeRipple();
+  let gooLayer = null;
+  let hidden = null;
+  let steamK = 0;
+  let steamAt = null; // where the steam rises from: the cloth, or where it was lifted (the steam fades there)
+  if (juicy && !reduced && !lite) ripple.warmUp(); // set the ripple's drawing path up now, not at the first pop (B114)
 
   // Idle life (T8.1): the face picture carries a plan for blinks and glances (face.js makeFaceLife, texture.faceLife),
   // drawn over the picture each frame; while nothing else moves, a timer wakes the loop for the next blink or glance.
@@ -603,7 +633,9 @@ export function createPopScene(canvas, o) {
   const MAX_STRANDS = 12; // goo worms (one face makes about 10)
   const MAX_DROPS = 40; // drops in the air
   const MAX_BLOBS = 80; // landed drops
-  const MAX_SPLATS = 6; // splats on the lens (a super zit may raise this for its own splash)
+  const MAX_SPLATS = 8; // splats and glass drops on the lens (a super zit may raise this for its own splash)
+  const MAX_JUICY_DROPS = 70; // juicy drops in the air (a grand pop throws about 30)
+  const MAX_JUICY_BLOBS = 180; // juicy goo on the skin (settled goo is painted once into gooLayer, so it costs little)
 
   /**
    * Squirt the goo out of a pimple that just popped.
@@ -647,9 +679,23 @@ export function createPopScene(canvas, o) {
    * @param {string} goo the goo kind (colour)
    * @param {number} power the amount: 1 = a normal big pimple (2 or 3 splats, about 3 drips each). A later super zit
    *   can call this with a big power (say 4 to 8) for a whole-screen splash with many long drips.
+   * @param {{glass?: number}} [opt] glass = this many juicy goo drops on the glass instead of splats (SPEC D45, pop test
+   *   G: they hit round the bump, cling, then slide slowly down with a wet trail and fade); power makes them bigger
    * @returns {void}
    */
-  function splashLens(x, y, goo, power = 1) {
+  function splashLens(x, y, goo, power = 1, opt = {}) {
+    if (opt.glass > 0) {
+      const spots = glassSpots({ n: Math.round(opt.glass), x, y, w, h, scale, power, rand });
+      for (const s of spots) {
+        splats.push({
+          glass: true, x: s.x, y: s.y, x0: s.x, y0: s.y, r: s.r, r0: s.r, age: -s.delay, hold: 0.35 + rand() * 0.6, vy: 0,
+          life: 3 + rand() * 1.5, sway: rand() * 6, trail: [], goo, a: 1, born: time,
+          specks: Array.from({ length: 4 }, () => ({ a: rand() * Math.PI * 2, d: 1.5 + rand() * 1.3, k: 0.14 + rand() * 0.14 })),
+        });
+      }
+      capList(splats, Math.max(MAX_SPLATS, spots.length));
+      return;
+    }
     const look = gooLook(goo);
     const k = Math.round((2 + rand()) * Math.max(1, power));
     const spread = Math.min(1, 0.7 * power);
@@ -662,6 +708,196 @@ export function createPopScene(canvas, o) {
       });
     }
     capList(splats, Math.max(MAX_SPLATS, k));
+  }
+
+  /**
+   * The goo kind a bump squirts (data/bumps.js): 'white', 'cream', 'gold' or 'horn' (white for the others).
+   * @param {object} p the bump
+   * @returns {string} the goo kind
+   */
+  function gooKind(p) {
+    const g = bumpInfo(p.type)?.goo;
+    return g === 'cream' || g === 'gold' || g === 'horn' ? g : 'white';
+  }
+
+  /**
+   * Whether a bump gets the juicy look while squeezed and the juicy pop (SPEC D45): the goo kinds, juicy pops on.
+   * @param {object} p the bump
+   * @returns {boolean} true for a juicy bump
+   */
+  const juicyBump = (p) => juicy && JUICY_KINDS.includes(p.type);
+
+  /**
+   * The juicy bump's dome now (pop test G): its size, tightness, the throb, how much of the creamy head shows, the
+   * head's size and the bead of goo at the tip. A whitehead's head always shows, a big one's mostly.
+   * @param {object} p the bump
+   * @returns {{s: number, pr: number, k: number, head: number, hr: number, bead: number}} the dome
+   */
+  function domeOf(p) {
+    const pr = Math.max(0, Math.min(1, p.pressure));
+    const k = reduced ? 0 : throb(p.phase ?? 0) * smooth((pr - 0.12) / 0.3);
+    const big = p.type === 'big';
+    const s = p.r * (1 + 0.55 * pr + 0.07 * k);
+    const hr = s * (big ? 0.4 + 0.28 * pr : 0.5 + 0.2 * pr) * (1 + 0.05 * k);
+    const floor = p.type === 'whitehead' ? 1 : big ? 0.8 : 0;
+    return { s, pr, k, head: Math.max(floor, smooth(pr / 0.9)), hr, bead: smooth((pr - 0.5) / 0.45) * (1 + 0.3 * k) };
+  }
+
+  /**
+   * Draw a juicy bump that is not popped yet: the game's own bump at rest, handing over to pop test G's dome as the
+   * squeeze starts (tight, shiny, the head showing through, throbbing, a bead of goo at the tip near the end).
+   * @param {object} p the bump
+   * @returns {void}
+   */
+  function drawJuicyBump(p) {
+    const f = smooth(p.pressure / 0.1);
+    if (f < 1) {
+      ctx.save();
+      ctx.globalAlpha = 1 - f;
+      drawPimple(ctx, p, p.pressure, p.appear, time);
+      ctx.restore();
+    }
+    if (f <= 0) return;
+    const d = domeOf(p);
+    ctx.save();
+    ctx.globalAlpha = f;
+    drawDome(ctx, p.x, p.y, d.s * p.appear, {
+      pr: d.pr, head: d.head, hr: d.hr * p.appear, goo: juicyGoo(gooKind(p)), open: 0, openAng: p.axis + Math.PI / 2, bead: d.bead,
+      big: p.type === 'big', red: p.type === 'red',
+    });
+    ctx.restore();
+  }
+
+  /**
+   * The juicy pop itself (SPEC D45, pop test G): the dome splits, a goo mound rises out of the opening and slumps (it
+   * stays as goo to wipe), a ring of round glossy drops flies out square to the squeeze, the dome sinks into a crater
+   * that heals (drawn by render from p.popAt), and the extras: drops on the glass, the ripple, a jolt for the grand show.
+   * @param {object} p the bump (popped now)
+   * @param {object} plan its pop plan (pop-fx.js popPlan)
+   * @param {{s: number, hr: number}} dome the dome at the moment it burst
+   * @returns {void}
+   */
+  function juicyPop(p, plan, dome) {
+    const big = p.type === 'big';
+    const goo = gooKind(p);
+    p.popAt = time;
+    p.popS = dome.s;
+    p.popHr = dome.hr;
+    p.openAng = p.axis + Math.PI / 2;
+    const dir = outDir(p.axis, p.x, face ? face.cx : w / 2); // the mound slumps out over the cheek and down
+    const R = p.popS * 0.3;
+    blobs.push({ juicy: true, mound: true, x: p.x + Math.cos(dir) * R * 1.25, y: p.y + Math.sin(dir) * R * 1.25, r: p.popHr * 0.9, hr: p.popHr, R, dir, big, goo, age: reduced ? 1 : 0 });
+    capBlobs();
+    for (const d of sprayDrops({ x: p.x, y: p.y, hr: p.popHr, openAng: p.openAng, big, n: plan.drops, scale, goo, reach: plan.reach, rand })) drops.push(d);
+    capList(drops, MAX_JUICY_DROPS);
+    popExtras(p, plan, goo);
+    const grand = plan.size === 'grand';
+    play('pop_juicy', { big, grand });
+    buzz(grand ? [50, 30, 110, 40, 70] : big ? [50, 30, 110] : [30, 20, 50]);
+  }
+
+  /**
+   * The pop's extras from its plan (SPEC D45): goo drops on the screen glass round the bump (merged with the lens
+   * splats), the see-through ripple, and a short jolt of the picture for the grand show (never with reduced motion).
+   * @param {object} p the bump
+   * @param {object} plan its pop plan (pop-fx.js popPlan)
+   * @param {string} [goo] the goo kind (the bump's own when left out)
+   * @returns {void}
+   */
+  function popExtras(p, plan, goo = gooKind(p)) {
+    if (plan.glass > 0) {
+      const at = sceneToScreen(shown(), p.x, p.y); // the glass is in front of the zoom: screen px
+      splashLens(at.x, at.y, goo, 1, { glass: plan.glass });
+    }
+    if (plan.ripple) ripple.start(p.x, p.y, time, { ...plan.ripple, far: Math.min(w, h) * plan.ripple.far, r0: p.r });
+    if (plan.jolt > 0 && !reduced && (quake < 0 || quakeK < plan.jolt)) { quake = time; quakeK = plan.jolt; }
+  }
+
+  /** Keep the landed goo under its cap (more for juicy goo); the painted goo layer is redone when old goo goes. @returns {void} */
+  function capBlobs() {
+    if (capList(blobs, juicy ? MAX_JUICY_BLOBS : MAX_BLOBS) && gooLayer) gooLayer.dirty = true;
+  }
+
+  /**
+   * Draw one bit of goo: the game's drop (flying or landed), or a juicy one (a flying ball, a landed dollop with its
+   * specks, or the goo mound).
+   * @param {CanvasRenderingContext2D} c context
+   * @param {object} d the drop or blob
+   * @returns {void}
+   */
+  function drawAnyDrop(c, d) {
+    if (!d.juicy) drawDrop(c, d);
+    else if (d.mound) drawMound(c, d);
+    else if ((d.z ?? 0) > 0 || d.fall !== undefined) drawFlyer(c, d, scale);
+    else drawLanded(c, d);
+  }
+
+  /**
+   * Paint settled juicy goo into the goo layer once (a picture the size of the scene), so dozens of glossy dollops cost
+   * one picture a frame; when old goo was dropped or everything moved, the layer is painted again from the start.
+   * @returns {void}
+   */
+  function bakeGoo() {
+    if (!juicy) return;
+    /** Whether a bit of juicy goo has settled and is not painted yet. @param {object} b a landed blob @returns {boolean} yes */
+    const ready = (b) => b.juicy && !b.baked && (b.age ?? 1) >= (b.mound ? 0.8 : 0.6);
+    if (!gooLayer && !blobs.some(ready)) return;
+    if (!gooLayer || gooLayer.canvas.width !== Math.round(w * dpr) || gooLayer.canvas.height !== Math.round(h * dpr)) {
+      gooLayer = { ...makeCanvas(w, h, dpr), dirty: true, any: false };
+    }
+    if (gooLayer.dirty) {
+      gooLayer.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      gooLayer.ctx.clearRect(0, 0, gooLayer.canvas.width, gooLayer.canvas.height);
+      gooLayer.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const b of blobs) b.baked = false;
+      gooLayer.dirty = false;
+      gooLayer.any = false;
+      gooLayer.box = null;
+    }
+    for (const b of blobs) {
+      if (!ready(b)) continue;
+      drawAnyDrop(gooLayer.ctx, b);
+      b.baked = true;
+      gooLayer.any = true;
+      const e = b.mound ? b.hr * 2.2 : b.r * 3.2; // how far it reaches, with its specks and shadow
+      const bx = gooLayer.box;
+      gooLayer.box = bx
+        ? { x0: Math.min(bx.x0, b.x - e), y0: Math.min(bx.y0, b.y - e), x1: Math.max(bx.x1, b.x + e), y1: Math.max(bx.y1, b.y + e) }
+        : { x0: b.x - e, y0: b.y - e, x1: b.x + e, y1: b.y + e };
+    }
+  }
+
+  /**
+   * Draw the painted juicy goo layer: only the part that has goo on it (a smaller copy is quicker on slow phones).
+   * @param {CanvasRenderingContext2D} c the context (scene px through the zoom view)
+   * @returns {void}
+   */
+  function drawGooLayer(c) {
+    if (!gooLayer?.any || !gooLayer.box) return;
+    const b = gooLayer.box;
+    const x0 = Math.max(0, Math.floor(b.x0));
+    const y0 = Math.max(0, Math.floor(b.y0));
+    const x1 = Math.min(w, Math.ceil(b.x1));
+    const y1 = Math.min(h, Math.ceil(b.y1));
+    if (x1 <= x0 || y1 <= y0) return;
+    const sw = Math.min(gooLayer.canvas.width - x0 * dpr, (x1 - x0) * dpr);
+    const sh = Math.min(gooLayer.canvas.height - y0 * dpr, (y1 - y0) * dpr);
+    if (sw > 0 && sh > 0) c.drawImage(gooLayer.canvas, x0 * dpr, y0 * dpr, sw, sh, x0, y0, sw / dpr, sh / dpr);
+  }
+
+  /**
+   * The hidden canvas the frame is drawn on while the ripple runs (the size of the shown one; made once, made again
+   * when the size changes), B114.
+   * @returns {{canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D}} it
+   */
+  function hiddenFrame() {
+    if (!hidden || hidden.canvas.width !== canvas.width || hidden.canvas.height !== canvas.height) {
+      const c = hidden?.canvas ?? document.createElement('canvas');
+      c.width = canvas.width;
+      c.height = canvas.height;
+      hidden = { canvas: c, ctx: c.getContext('2d') };
+    }
+    return hidden;
   }
 
   /**
@@ -691,6 +927,10 @@ export function createPopScene(canvas, o) {
       return;
     }
     if (squeeze?.p === p) { p.gooDir = gooDirection(p.axis); endSqueeze(); } // squeezed out: the goo squirts across
+    // Which pop it gets (SPEC D45, pop-fx.js): the grand show for the last bump of a face and a grandFirst scene's first pop.
+    const plan = popPlan({ type: p.type, last: pimples.every((q) => q === p || q.popped), first: o.grandFirst === true && pops === 0, gentle: !juicy, reduced, lite });
+    const dome = plan.style === 'juicy' ? domeOf(p) : null; // the dome as it was at the moment it burst
+    pops += 1;
     if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
       // B72: the pop that clears the face stops the meter just under full, so a customer whose every bump is out
       // never storms off in that same moment (that counted as a fail with no pay, even with no Ow at all).
@@ -717,10 +957,14 @@ export function createPopScene(canvas, o) {
       play('creak');
       buzz([18, 30, 18, 30, 40]);
       if (!reduced) { quake = time; quakeK = 1; }
+      popExtras(p, plan);
+    } else if (plan.style === 'juicy') {
+      juicyPop(p, plan, dome);
     } else {
       squirt(p);
       play(p.type === 'big' ? 'pop_big' : p.type === 'gold' ? 'pop_gold' : 'pop_small');
       buzz(p.type === 'big' ? [30, 40, 50] : 24);
+      popExtras(p, plan);
     }
     marks.push({ x: p.x, y: p.y, r: p.r * (pulled(p) ? 0.9 : 1.1), patched: false });
     if (!reduced) { p.wob = tweezed(p) ? 0 : 0.55; p.wobV = 0; }
@@ -771,7 +1015,9 @@ export function createPopScene(canvas, o) {
     if (!strands.length && !blobs.length && !wait) { beginCream(); return; }
     const { canvas: dirt, ctx: dc } = makeCanvas(w, h, dpr);
     for (const s of strands) drawStrand(dc, s);
-    for (const b of blobs) drawDrop(dc, b);
+    bakeGoo(); // juicy goo that has settled comes from its painted layer in one copy (quicker than painting it again)
+    drawGooLayer(dc);
+    for (const b of blobs) if (!b.baked) drawAnyDrop(dc, b);
     let found = scanGoo(dirt, dc);
     // No pixel access, or a blank picture back (some privacy settings do that; B71: the goo then counted as 0 cells and
     // the wipe could never reach WIPE_DONE, so the round stuck in the wipe): count the goo by its positions instead.
@@ -788,6 +1034,7 @@ export function createPopScene(canvas, o) {
     }
     strands.length = 0;
     blobs.length = 0;
+    gooLayer = null; // the juicy goo is on the wipe's layer now
     const { cells, cols, rows, count } = found;
     const corner = 40 * scale * wipeReach(tool); // the pad waits in the bottom corner (further in when it is the big one)
     let covered = [];
@@ -856,7 +1103,7 @@ export function createPopScene(canvas, o) {
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     texture = tex;
-    for (const p of pimples) mv(p, ['r', 'r0', 'rMax']);
+    for (const p of pimples) mv(p, ['r', 'r0', 'rMax', 'popS', 'popHr']); // popS, popHr: a juicy crater healing
     for (const k of marks) mv(k);
     for (const hn of horns) mv(hn);
     for (const hr of hairs) mv(hr, ['reach']);
@@ -868,6 +1115,7 @@ export function createPopScene(canvas, o) {
     if (squeeze) { resetSqueeze(); stale = touches.size > 0; } // so does a squeeze (it springs back)
     forget();
     if (warmHold) mv(warmHold, []);
+    if (steamAt) mv(steamAt, []);
     for (const st of strands) {
       mv(st, ['len', 'max', 'speed', 'w']);
       st.curl /= s; // the same bend over the longer or shorter worm
@@ -875,8 +1123,18 @@ export function createPopScene(canvas, o) {
       for (const pt of st.pts) mv(pt, []);
     }
     for (const d of drops) mv(d, ['vx', 'vy', 'r']);
-    for (const b of blobs) mv(b);
-    for (const sp of splats) mv(sp, ['r', 'drip']);
+    for (const b of blobs) mv(b, ['r', 'hr', 'R']); // hr, R: the juicy goo mound
+    if (gooLayer) gooLayer.dirty = true; // the painted juicy goo is painted again in its new places
+    for (const sp of splats) {
+      mv(sp, ['r', 'drip', 'r0']);
+      if (sp.glass) { // a drop on the glass: where it hit and its trail move too
+        sp.x0 = sp.x0 * s + tx;
+        sp.y0 = sp.y0 * s + ty;
+        for (const pt of sp.trail) mv(pt, []);
+      }
+    }
+    ripple.clear(); // a ripple across a turn just stops
+    if (juicy && !reduced && !lite) ripple.warmUp(); // and the new canvas size gets its path set up (B114)
     for (const tw of tweezers) mv(tw);
     if (strip) {
       mv(strip, ['w', 'h']);
@@ -930,6 +1188,7 @@ export function createPopScene(canvas, o) {
     canvas.height = Math.round(h * dpr);
     if (tex) texture = tex;
     if (wipe) redrawGoo(w, h, { s: 1, tx: 0, ty: 0 });
+    if (gooLayer) gooLayer.dirty = true; // the painted juicy goo at the new sharpness (bakeGoo makes it again)
     kick();
     if (!raf) render();
   }
@@ -1024,9 +1283,15 @@ export function createPopScene(canvas, o) {
           if (before < th && p.pressure >= th && !warnedThresholds.has(key)) { warnedThresholds.add(key); play('squish', { level: th }); buzz(6); }
           if (p.pressure < th - 0.15) warnedThresholds.delete(key);
         }
+        if (!p.popped && held && juicyBump(p) && p.pressure > 0.12) { // the juicy dome throbs, faster as it fills, a soft blub each time
+          const beat = Math.floor(p.phase ?? 0);
+          p.phase = (p.phase ?? 0) + dt * (1.3 + 4.2 * p.pressure);
+          if (!reduced && Math.floor(p.phase) > beat) play('blub', { level: p.pressure });
+        }
         if (p.pressure >= 1) pop(p);
         if (held || (p.pressure > 0 && keyHold?.p !== p)) busy = true;
       }
+      if (p.popAt !== undefined && time - p.popAt < CRATER.gone + 0.1) busy = true; // a juicy crater healing
       if (p.wob || p.wobV) {
         p.wobV += (-190 * p.wob - 9 * p.wobV) * dt;
         p.wob += p.wobV * dt;
@@ -1057,6 +1322,12 @@ export function createPopScene(canvas, o) {
     }
     warmth = warmest;
     if (warmth > 0 || warmHold) busy = true;
+    // Steam from the warm cloth (SPEC D45 item 5): it rises while the cloth is on a bump, stronger as the bump warms,
+    // and fades where the cloth was when it is lifted or moved off.
+    const steamOn = warmHold && step === 'pop' ? pimples.filter((p) => !p.popped && underCloth(warmHold, p, 34 * scale)) : [];
+    steamK = steamStep(steamK, dt, steamOn.length ? Math.max(0.01, ...steamOn.map((p) => p.warm ?? 0)) : 0);
+    if (warmHold) steamAt = { x: warmHold.x, y: warmHold.y };
+    if (steamK > 0) busy = true;
     // The irritation meter calms by itself after a quiet while, faster with the warm cloth on the face or after a cotton pad.
     if (step === 'pop' && irr.level > 0) {
       const soothing = Boolean(warmHold) && onFace(face, warmHold.x, warmHold.y);
@@ -1087,6 +1358,29 @@ export function createPopScene(canvas, o) {
     for (let i = drops.length - 1; i >= 0; i -= 1) {
       const d = drops[i];
       busy = true;
+      if (d.juicy) { // a juicy drop (pop test G): it slows in the air, falls, lands on the face; off the face it drops away and fades
+        if (d.fall !== undefined) {
+          d.fall += dt;
+          d.vy += 900 * scale * dt;
+          d.y += d.vy * dt;
+          if (d.fall > 0.35) drops.splice(i, 1);
+          continue;
+        }
+        const drag = Math.exp(-dt * 2.4);
+        d.vx *= drag;
+        d.vy *= drag;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.vz -= 700 * dt;
+        d.z += d.vz * dt;
+        if (d.z > 0) continue;
+        if (onFace(face, d.x, d.y)) {
+          drops.splice(i, 1);
+          blobs.push({ juicy: true, x: d.x, y: d.y, r: d.r, goo: d.goo, age: reduced ? 1 : 0, sa: Math.atan2(d.vy, d.vx) });
+          capBlobs();
+        } else { d.fall = 0; d.z = 0; d.vz = 0; d.vx *= 0.3; d.vy = 40 * scale; }
+        continue;
+      }
       d.x += d.vx * dt;
       d.y += d.vy * dt;
       d.vz -= 700 * dt;
@@ -1094,17 +1388,21 @@ export function createPopScene(canvas, o) {
       if (d.z <= 0) { // it lands: squash, then a short slide that leaves a tiny smear (sa = the slide's direction)
         drops.splice(i, 1);
         blobs.push({ x: d.x, y: d.y, r: d.r, gold: d.gold, goo: d.goo, age: 0, sa: Math.atan2(d.vy, d.vx) });
-        capList(blobs, MAX_BLOBS);
+        capBlobs();
       }
     }
-    for (const b of blobs) { // the landing squash settles in a third of a second
-      if (b.age === undefined || b.age >= 0.4) continue;
+    for (const b of blobs) { // the landing squash settles in a third of a second (a juicy dollop's wobble and the mound a little longer)
+      if (b.age === undefined || b.age >= (b.juicy ? 1 : 0.4)) continue;
       b.age = reduced ? 1 : b.age + dt;
       busy = true;
     }
     for (let i = splats.length - 1; i >= 0; i -= 1) {
       const s = splats[i];
       busy = true;
+      if (s.glass) { // a juicy drop on the glass: clings, slides down, fades (pop-fx.js stepGlass)
+        if (!stepGlass(s, dt, scale)) splats.splice(i, 1);
+        continue;
+      }
       const age = time - s.born;
       s.age = Math.max(0, age);
       s.drip = Math.min(s.r * 1.6, s.age * s.r * 0.6); // kept for resize(); the drips themselves come from splatDrips()
@@ -1194,8 +1492,16 @@ export function createPopScene(canvas, o) {
     return -60 + smooth(s) * (w + 120);
   }
 
-  /** Draw the whole scene once. @returns {void} */
+  /**
+   * Draw the whole scene once. While the juicy pop's ripple runs, the frame is drawn on a hidden canvas, copied onto
+   * the shown one in one go and then bent there (B114: never read the shown canvas half way through a frame); the
+   * lens (splats and glass drops) goes on last, over the bend.
+   * @returns {void}
+   */
   function render() {
+    bakeGoo(); // settled juicy goo into its painted layer
+    const off = ripple.busy() ? hiddenFrame() : null;
+    ctx = off ? off.ctx : shownCtx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(...viewMatrix()); // everything below is drawn in scene px through the zoom view (T1.4)
@@ -1206,7 +1512,8 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) {
       const a = (p.popped ? 0 : p.pressure) + p.wob;
       const shake = !reduced && !p.popped && p.pressure > 0.8 ? Math.sin(time * 70) * 0.03 : 0;
-      if (!tweezed(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake, !p.popped);
+      const beat = !p.popped && juicyBump(p) && p.pressure > 0.12 ? domeOf(p).k * 0.1 : 0; // the juicy dome's throb pushes the skin
+      if (!tweezed(p) && Math.abs(a) > 0.01) drawWarp(p, a + shake + beat, !p.popped);
     }
     faceLife()?.draw(ctx, lifeNow()); // the blinking, glancing eyes over the picture (only while they move, T8.1)
     for (const p of pimples) { // a warm bump glows pink and steams (SPEC D37); a ring when it just got fully warm
@@ -1221,9 +1528,17 @@ export function createPopScene(canvas, o) {
     }
     for (const pa of patches) drawPatch(ctx, pa.x, pa.y, pa.r);
     if (strip && !strip.off) drawStripDots(ctx, strip.dots, strip.stuck ? strip.x + strip.q * strip.w : -Infinity);
-    for (const p of pimples) if (!p.popped) drawPimple(ctx, p, p.pressure, p.appear, time);
+    for (const p of pimples) {
+      if (p.popped) continue;
+      if (juicyBump(p)) drawJuicyBump(p); // the juicy dome while squeezed (SPEC D45)
+      else drawPimple(ctx, p, p.pressure, p.appear, time);
+    }
+    for (const p of pimples) { // a juicy bump just popped: the split dome sinking into a crater that heals (about 2 s)
+      if (p.popped && p.popAt !== undefined && time - p.popAt < CRATER.gone) drawPopped(ctx, p, time - p.popAt, juicyGoo(gooKind(p)));
+    }
     for (const s of strands) drawStrand(ctx, s);
-    for (const b of blobs) drawDrop(ctx, b);
+    drawGooLayer(ctx); // settled juicy goo, painted once (bakeGoo)
+    for (const b of blobs) if (!b.baked) drawAnyDrop(ctx, b);
     for (const p of pimples) { // the squeezing fingertips, over the skin's moles, marks and the other bumps
       const shake = !reduced && !p.popped && p.pressure > 0.8 ? Math.sin(time * 70) * 0.03 : 0;
       drawFingertips(p, (p.popped ? 0 : p.pressure) + p.wob + shake);
@@ -1290,10 +1605,13 @@ export function createPopScene(canvas, o) {
       drawStrip(ctx, strip, strip.q, strip.lift);
       ctx.restore();
     }
-    for (const d of drops) drawDrop(ctx, d);
+    for (const d of drops) drawAnyDrop(ctx, d);
     if (warmHold) { // the cloth shows the heat of the hottest bump under it (SPEC D41: the bump itself is hidden)
       const heat = Math.max(0, ...pimples.filter((p) => !p.popped && underCloth(warmHold, p, 34 * scale)).map((p) => p.heat ?? 0));
       drawCloth(ctx, warmHold.x, warmHold.y, 34 * scale, reduced ? 0 : time, heat);
+    }
+    if (steamK > 0.01 && steamAt) { // soft steam wisps curling up from the cloth (D45 item 5; still with reduced motion)
+      drawClothSteam(ctx, steamAt.x, steamAt.y, 34 * scale, reduced ? 1.7 : time, steamK, steamWisps(lite, reduced), lite);
     }
     if (wipe && !wipe.fade) drawPad(ctx, wipe.pad.x, wipe.pad.y, 26 * scale * wipeReach(tool)); // bigger with the cotton pad
     if (cream) {
@@ -1318,9 +1636,20 @@ export function createPopScene(canvas, o) {
     }
     for (const p of pimples) if (p.ringFrom !== undefined) drawTargetRing(p); // which bump two fingers have (T1.7)
     if (squeeze) drawGhostPads(squeeze.p); // the two squeezing fingers, on the bump's edges (screen px)
-    if (splats.length) { // the lens is in front of the zoom: splats are drawn in screen px
+    ctx = shownCtx;
+    if (off) { // the finished frame onto the shown canvas in one copy, then the ripple bends it
+      shownCtx.setTransform(1, 0, 0, 1, 0, 0);
+      shownCtx.globalCompositeOperation = 'copy';
+      shownCtx.drawImage(off.canvas, 0, 0);
+      shownCtx.globalCompositeOperation = 'source-over';
+      ripple.draw(shownCtx, off.canvas, time, { at: (x, y) => sceneToScreen(shown(), x, y), z: shown().z, dpr });
+    }
+    if (splats.length) { // the lens is in front of the zoom: splats and glass drops are drawn in screen px
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      for (const s of splats) if (time >= s.born) drawSplat(ctx, s);
+      for (const s of splats) {
+        if (s.glass) drawGlassDrop(ctx, s);
+        else if (time >= s.born) drawSplat(ctx, s);
+      }
       ctx.setTransform(...viewMatrix());
     }
     wobbleScreen();
@@ -1373,7 +1702,10 @@ export function createPopScene(canvas, o) {
     if (disposed || paused) return;
     if (wasBusy && !slow?.slow) { // the slow-phone watcher counts back-to-back moving frames only
       slow = slowStep(slow, now - last);
-      if (slow.slow) { try { o.onSlow?.(); } catch (e) { console.warn('onSlow failed:', e); } }
+      if (slow.slow) {
+        lite = true; // the juicy pop gets lighter too: fewer drops, no ripple (SPEC D45)
+        try { o.onSlow?.(); } catch (e) { console.warn('onSlow failed:', e); }
+      }
     }
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
@@ -2018,7 +2350,16 @@ export function createPopScene(canvas, o) {
   canvas.popTool = () => tool;
   canvas.popWarmth = () => warmth;  canvas.popIrritation = () => irr.level;
   canvas.popTwist = () => ({ twist, off: { ...off }, room, swayK, giggleAt, time }); // for browser checks (T8.3)
+  // For browser checks (SPEC D45): the juicy pop's state now (drops in the air, goo on the skin, glass drops, ripple, steam).
+  canvas.popFx = () => ({
+    juicy, lite, reduced, pops, flying: drops.length, blobs: blobs.length, baked: blobs.filter((b) => b.baked).length,
+    glass: splats.filter((s) => s.glass).length, splats: splats.filter((s) => !s.glass).length, ripple: ripple.busy(), steam: steamK,
+  });
   measureRoom();
+  if (juicy) { // the juicy pop's pictures made now, with the face, so the first pop never waits for them
+    try { warmGoo([...new Set(pimples.map(gooKind))]); } catch { /* no canvas: drawn the slow way */ }
+    gooLayer = { ...makeCanvas(w, h, dpr), dirty: true, any: false, box: null };
+  }
   render();
   kick();
 
@@ -2092,6 +2433,7 @@ export function createPopScene(canvas, o) {
       drops.length = 0;
       blobs.length = 0;
       splats.length = 0;
+      gooLayer = null;
       wipe = null;
       kick();
       if (!raf) render();

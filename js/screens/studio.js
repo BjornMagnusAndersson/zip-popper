@@ -11,8 +11,13 @@
 // back. With reduced motion the cap just swaps, no hop and no flight.
 // The wall of fame (R8j): a gold frame on the wall for each kind of bump she has mastered, an empty nail for the rest
 // (pop/backdrop.js fameSpots). Each frame is a button that opens its diploma again. Right after a new Master's diploma
-// ("Hang it up!") the screen opens in hang mode: the new frame drops onto its nail with a little swing (no motion with
-// reduced motion), a line says so, and Continue goes on with the game.
+// ("Hang it up!") the screen opens in hang mode: the new frame drops onto its nail with a little swing and, as it lands,
+// a shine sweeps over the gold with glints on its corners (D45, fx/frame-shine.js; no motion with reduced motion), a line
+// says so, and Continue goes on with the game.
+// The room's light and particle effects (SPEC D45, js/fx/room-fx.js) live on the same moving-parts layer, under her
+// and the frame buttons: tier 0 dust in the light, the flickering bulb with its moth and a dim green mood; tier 1 fewer
+// motes and shine sweeps; the spa sparkle motes, petals, the candle and the diffuser. About 16 frames a second while
+// the screen shows (none while the page is hidden); still with reduced motion; half the particles with Lighter graphics.
 
 import { el, svg, icon, header, screenShell, button } from './dom.js';
 import {
@@ -22,6 +27,8 @@ import {
 import { BUMP_IDS } from '../data/bumps.js';
 import { drawCharacter, drawScrubCap, headSpot, OUTFITS } from '../game/comic-art.js';
 import { studioCaptions, capFlight, studioCapStart, CAP_FLIGHT_MS } from '../game/studio.js';
+import { syncRoomFx } from '../fx/room-fx.js';
+import { makeFrameShine } from '../fx/frame-shine.js';
 
 const FIGURE_HEIGHT = 640; // comic-art.js: a standing figure at scale 1 is about this tall, floor to the top of the bun
 
@@ -35,12 +42,12 @@ const FIGURE_HEIGHT = 640; // comic-art.js: a standing figure at scale 1 is abou
  *   whose frame was just earned (hang mode: it drops onto the wall, and a Continue button shows); onDiploma = a frame
  *   was tapped; onContinue = Continue in hang mode; onBack = Back; pins = home-popping pins in the jar on the shelf
  *   (game/pin-jar.js; a caption line once there is one); sound = the game's sound player, for the leak's plink
- *   (left out = no plink)
+ *   (left out = no plink); lowDetail = the Settings switch "Lighter graphics" (half the room's particles, fewer frames)
  * @returns {{node: HTMLElement, dispose: () => void}} the screen
  */
 export function createStudioScreen({
   t, tier = 0, layers = [], outfit = 'everyday', masters = [], hang = null, pins = 0, onDiploma, onContinue, onBack, reducedMotion = false,
-  sound = null,
+  sound = null, lowDetail = false,
 }) {
   const shell = screenShell('studio', { label: t('ui.studio.title'), reducedMotion });
   const head = header(t, t('ui.studio.title'), onBack, shell.signal);
@@ -112,6 +119,8 @@ export function createStudioScreen({
     fx.height = canvas.height;
     const spots = layerSpots(w, h, true);
     geo = { w, h, dpr, hero: spots.hero, chair: spots.chair };
+    roomFx = syncRoomFx(roomFx, { w, h, dpr, kind: backdropKind('studio', tier), layers, where: 'view', reduced: reducedMotion, lite: lowDetail });
+    roomFx.bake(ctx); // the still parts (the mood, the light shaft, the lamp glows) go into the still room once
     her.setAttribute('viewBox', `0 0 ${w} ${h}`);
     stopFlight();
     drawHer();
@@ -124,6 +133,7 @@ export function createStudioScreen({
   let motionTimer = 0; // the wait before the next moving-parts frame (0 = none)
   let motionFrame = 0; // the animation frame asked for after that wait (0 = none)
   let lastTime = null; // the moving parts' time at the last frame, to hear each drop land once
+  let roomFx = null; // the room's light and particle effects for the picture's size (js/fx/room-fx.js)
 
   /** Stop the moving parts' next frame (the screen closes, or a frame is drawn now). @returns {void} */
   function stopMotion() {
@@ -147,21 +157,65 @@ export function createStudioScreen({
     fc.clearRect(0, 0, fx.width, fx.height);
     fc.setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0);
     drawStudioMotion(fc, geo.w, geo.h, tier, layers, time, reducedMotion);
+    roomFx?.frame(fc, time); // dust in the light, the moth, the mood, shine and petals (SPEC D45)
     // the plink follows the sound switch (the sound player), never while the page is hidden
     if (leaks && sound && !globalThis.document?.hidden && dripLands(lastTime ?? time, time)) sound.play('drip');
     lastTime = time;
+    if (globalThis.document?.hidden) return; // hidden: nothing moves until the page shows again (onShown)
     const plinks = leaks && sound && reducedMotion ? nextDripLanding(time) + 0.01 : Infinity;
-    const next = Math.min(nextStudioChange(time, tier, layers, reducedMotion), plinks);
+    const next = Math.min(nextStudioChange(time, tier, layers, reducedMotion), plinks, roomFx ? roomFx.next() : Infinity);
     if (Number.isFinite(next)) motionTimer = setTimeout(() => { motionTimer = 0; motionFrame = requestAnimationFrame(drawMotion); }, next * 1000);
+  }
+
+  /** The page was hidden or shown again: the moving parts stop while hidden and go on when it shows. @returns {void} */
+  function onShown() {
+    if (globalThis.document?.hidden) stopMotion();
+    else drawMotion();
+  }
+  globalThis.document?.addEventListener?.('visibilitychange', onShown, { signal: shell.signal });
+
+  let shineRaf = 0; // the frame shine's animation frame (0 = none)
+  /** Stop the frame shine, if it runs. @returns {void} */
+  function stopShine() {
+    if (shineRaf) cancelAnimationFrame(shineRaf);
+    shineRaf = 0;
+  }
+
+  /**
+   * The new frame's shine as it lands on its nail (D45, fx/frame-shine.js): the frame is drawn again each frame with
+   * the band of light and the corner glints on top, in its own canvas, so they swing with it; it stops by itself.
+   * @param {HTMLCanvasElement} drop the dropping frame's canvas @param {CanvasRenderingContext2D} dc its context
+   * @param {{x: number, y: number, s: number, tilt: number, type: string}} spot the frame's nail spot in the canvas
+   * @param {number} dpr pixel ratio
+   * @returns {void}
+   */
+  function shineFrame(drop, dc, spot, dpr) {
+    const shine = makeFrameShine(dpr);
+    const start = performance.now();
+    /** One frame of the shine. @param {number} now frame time in ms @returns {void} */
+    const step = (now) => {
+      shineRaf = 0;
+      if (shell.signal.aborted || !drop.isConnected) { shine.dispose(); return; }
+      const ms = now - start;
+      dc.setTransform(1, 0, 0, 1, 0, 0);
+      dc.clearRect(0, 0, drop.width, drop.height);
+      dc.setTransform(dpr, 0, 0, dpr, 0, 0);
+      fameFrame(dc, spot, true);
+      shine.draw(dc, spot, ms);
+      if (shine.done(ms)) { shine.dispose(); return; }
+      shineRaf = requestAnimationFrame(step);
+    };
+    shineRaf = requestAnimationFrame(step);
   }
 
   /**
    * Put a button over each framed diploma (it opens that diploma), and in hang mode the new frame dropping onto its
-   * nail; when it lands, the room is painted again with that frame in it.
+   * nail (with a shine as it lands, D45); when it lands, the room is painted again with that frame in it.
    * @param {number} w picture width @param {number} h picture height @param {number} dpr pixel ratio
    * @returns {void}
    */
   function placeFrames(w, h, dpr) {
+    stopShine();
     wall.replaceChildren();
     const spots = fameSpots(w, h).filter((q) => masters.includes(q.type));
     for (const p of spots) {
@@ -177,18 +231,24 @@ export function createStudioScreen({
         wall.append(b);
       }
       if (dropping && p.type === hang) {
-        const cw = p.s * 1.5;
-        const ch = p.s * 1.8;
+        // Room round the frame for the glints of its shine (D45); it swings round its nail (transform-origin).
+        const cw = p.s * 2.2;
+        const ch = p.s * 2.3;
+        const nailY = p.s * 0.35;
         const drop = el('canvas', 'app-studio__drop');
         drop.width = Math.round(cw * dpr);
         drop.height = Math.round(ch * dpr);
         drop.setAttribute('aria-hidden', 'true');
-        Object.assign(drop.style, { left: `${p.x - cw / 2}px`, top: `${p.y - p.s * 0.15}px`, width: `${cw}px`, height: `${ch}px` });
+        Object.assign(drop.style, {
+          left: `${p.x - cw / 2}px`, top: `${p.y - nailY}px`, width: `${cw}px`, height: `${ch}px`, transformOrigin: `50% ${(nailY / ch) * 100}%`,
+        });
         const dc = drop.getContext('2d');
+        const spot = { ...p, x: cw / 2, y: nailY };
         dc.setTransform(dpr, 0, 0, dpr, 0, 0);
-        fameFrame(dc, { ...p, x: cw / 2, y: p.s * 0.15 }, true);
+        fameFrame(dc, spot, true);
         drop.addEventListener('animationend', () => { dropping = false; size = ''; paint(); }, { once: true, signal: shell.signal });
         wall.append(drop);
+        shineFrame(drop, dc, spot, dpr);
       }
     }
   }
@@ -313,6 +373,7 @@ export function createStudioScreen({
       if (frame) cancelAnimationFrame(frame);
       stopFlight();
       stopMotion();
+      stopShine();
       shell.dispose();
     },
   };

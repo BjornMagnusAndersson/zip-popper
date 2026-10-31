@@ -21,6 +21,7 @@ export const SETTING_TOGGLES = [
   { id: 'vibration', labelKey: 'ui.settings.vibration' },
   { id: 'reducedMotion', labelKey: 'ui.settings.reducedMotion' },
   { id: 'squeeze', labelKey: 'ui.settings.squeeze', hintKey: 'ui.settings.squeezeHint' }, // T1.7
+  { id: 'gentlePops', labelKey: 'ui.settings.gentlePops', hintKey: 'ui.settings.gentlePopsHint' }, // the calm pop (SPEC D45)
   { id: 'lowDetail', labelKey: 'ui.settings.lowDetail', hintKey: 'ui.settings.lowDetailHint' }, // older phones (owner 2026-10-28)
 ];
 
