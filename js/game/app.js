@@ -59,6 +59,7 @@ import { faceSetup, recordFace, revealOn, stripFriendsMet } from '../screens/alb
 import { describeTwist } from '../data/twists.js';
 import { describeBoss } from '../data/bosses.js';
 import { isPartyDay } from '../fx/stage-logic.js';
+import { withPartyLights } from './customer-lines.js';
 import { startPartyConfetti, partyConfettiNeeded } from '../fx/party-confetti.js';
 import * as L from './app-logic.js';
 import {
@@ -702,7 +703,8 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function showIntro(step) {
     // ?twist= (T8.3) and ?boss= (T8.4) only in test runs.
-    const args = L.roundArgs(save, step, flags.seed, flags.test ? flags.twist : null, flags.test ? flags.boss : null);
+    // D46-29: on Prom Penny's party visits her second line says she brought the party lights.
+    const args = withPartyLights(save, L.roundArgs(save, step, flags.seed, flags.test ? flags.twist : null, flags.test ? flags.boss : null));
     if (!args && step.keepWorking) { showMenu(); return; } // never happens: every Keep working number has a customer
     if (!args) { persist(L.finishStep(save, step)); continueStory(); return; } // no such customer: never in v1 data
     // The twist pill (T8.3). A hurry request IS the "in a hurry" twist: its pill carries the request's own line (with
@@ -792,13 +794,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       stampKey: stamp && face ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
       reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '', lowDetail: Boolean(save.settings.lowDetail) }) : null,
       tier: args?.tier ?? 0, lowDetail: Boolean(save.settings.lowDetail), // D45: petals in the spa; Lighter graphics = fewer pieces
-      party: isPartyDay(args), // Penny's party day: 3 stars throw confetti, in the spa too (R2)
+      party: isPartyDay(args), // Penny's party visits: 3 stars throw confetti, in the spa too (R2, D46-28)
+      // a story round before the studio (Hubby, chapter 0): her heart puff instead of confetti, with its sound (D46-25)
+      story: !L.paysMoney(step), playSound: (name) => sound.play(name),
       skills: L.skillNews(out.skills), // D34: "Level up!" or how many clean pops the next level needs
       pinCount: out.pinJar ?? null, // "Pin taken away! Pin jar: n" after a pin visit
       onContinue: () => afterResult(onward),
       onShop: L.shopOpen(save) ? () => afterResult(() => showShop(onward)) : undefined,
     }));
-    // Prom Penny's party day (D45 item 6): confetti when her round is finished (the screen's own 3-star confetti counts).
+    // Prom Penny's party visits (D45 item 6, D46-28): confetti when her round is finished (the screen's own 3-star confetti counts).
     if (isPartyDay(args) && partyConfettiNeeded({ stars: out.stars, failed: out.failed, tier: args?.tier ?? 0 })) {
       startPartyConfetti(shown.node, { reduced: still(), lite: Boolean(save.settings.lowDetail) });
     }
@@ -815,7 +819,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     // "Hang it up!": the studio view, where the new frame drops onto the wall of fame; its Continue goes on (R8j)
     show(createDiplomaScreen({
       t, reducedMotion: still(), type: types[0], playerName: playerName(), buttonKey: 'ui.diploma.hang',
-      celebrate: true, lowDetail: Boolean(save.settings.lowDetail), // D45: confetti for a new Master
+      celebrate: true, lowDetail: Boolean(save.settings.lowDetail), // D45, D46-31: gold stars and streamers for a new Master
       onContinue: () => { persist(L.clearPendingDiploma(save, types[0])); showStudio(() => showDiplomas(types.slice(1), then), types[0]); }, // seen: off the waiting list (B93)
     }));
     sound.play('cheer');

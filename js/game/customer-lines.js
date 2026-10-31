@@ -8,15 +8,18 @@
 // - A walk-in whose name she has met before never says "First time here..."; she may say "Back again!".
 // - Lines that sound like a clock (the old deadline jokes, "please be quick!") only come when the customer really has a
 //   clock (a hurry request or the daily "Beat the clock"); everyone else gets a calm aside as the second line.
+// - On Prom Penny's party visits (party lights in the room, D46-28) her second line says she brought the lights
+//   (withPartyLights, D46-29).
 // The numbers and key counts are in data/customer-lines.js.
 
 import { REGULARS, GENERIC_COUNTS, genericKey, makeRng } from '../data/customers.js';
 import { CHAPTERS } from '../data/chapters.js';
 import {
-  REGULAR_LINE_COUNTS, OLD_STYLE_KINDS, WALK_IN_LINES, HUSBAND_ASIDES, HURRY_LINE, HURRY_LINE_TIERS, AGAIN_LINES,
+  REGULAR_LINE_COUNTS, OLD_STYLE_KINDS, WALK_IN_LINES, HUSBAND_ASIDES, HURRY_LINE, HURRY_LINE_TIERS, AGAIN_LINES, PARTY_LINES,
 } from '../data/customer-lines.js';
 import { hurryLimit } from './requests.js';
 import { progressFromSave } from './chapter-logic.js';
+import { isPartyDay } from '../fx/stage-logic.js';
 
 /** A different number per line slot, so the intro and the result lines of one visit do not follow each other. */
 const SALT = { intro: 11, second: 23, happy: 37, ok: 41, ow: 53 };
@@ -81,6 +84,33 @@ export function againKeys() {
 }
 
 /**
+ * Prom Penny's "I brought my own party lights" second lines (customer.penny.lights.1 to N, SPEC D46-29).
+ * @returns {string[]} string keys
+ */
+export function partyLightsKeys() {
+  return Array.from({ length: PARTY_LINES.lights }, (_, i) => `customer.${PARTY_LINES.who}.lights.${i + 1}`);
+}
+
+/**
+ * The round arguments of one of Prom Penny's party visits (fx/stage-logic.js isPartyDay: her event day, or an intro
+ * about a party, prom or dance) with her second line saying she brought the party lights (D46-29, audit R4), so the
+ * fairy lights in the room have a cause. Picked like her other lines: from the face seed, never the line she said last
+ * visit (the line memory then remembers it, as any second line). Any other round comes back as it is.
+ * @param {object} save the save (its line memory)
+ * @param {object|null} args the round's startRound arguments (app-logic.js roundArgs)
+ * @returns {object|null} the arguments (a new object when the second line changed)
+ */
+export function withPartyLights(save, args) {
+  if (!args || !isPartyDay(args)) return args;
+  const memo = args.lines?.id ? save?.customerLines?.[args.lines.id] ?? {} : {};
+  const key = pickLine(partyLightsKeys(), args.seed, SALT.second, memo.second);
+  return {
+    ...args, customer: { ...args.customer, deadlineKey: key },
+    lines: args.lines ? { ...args.lines, secondKey: key } : args.lines,
+  };
+}
+
+/**
  * The intro keys that are only for a first visit (a regular's old intro, the walk-in "First time here" lines).
  * @returns {string[]} string keys
  */
@@ -109,7 +139,7 @@ export function allLineKeys() {
   for (const r of REGULARS) for (const kind of Object.keys(REGULAR_LINE_COUNTS)) keys.push(...regularKeys(r.id, kind));
   for (const kind of ['intro', 'back', 'aside']) keys.push(...walkInKeys(kind));
   for (const kind of ['intro', 'deadline', ...REACTION_KINDS]) keys.push(...genericKeys(kind));
-  keys.push(...hurryIntroKeys(), ...againKeys(), ...Object.values(HUSBAND_ASIDES));
+  keys.push(...hurryIntroKeys(), ...againKeys(), ...Object.values(HUSBAND_ASIDES), ...partyLightsKeys());
   return [...new Set(keys)];
 }
 

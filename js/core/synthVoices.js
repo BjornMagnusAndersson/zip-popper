@@ -64,9 +64,17 @@ export const VOICES = {
   /**
    * The Evil Horn coming out: a comic door-creak that rises, then a hollow "thwop". With o.grow (B58) only a softer,
    * slower creak and no thwop: the horn starting to grow out.
-   * @param {object} k kit @param {number} t start @param {{grow?: boolean}} [o] options
+   * With o.tick (owner 2026-10-31) one short creak of the horn being squeezed: two rough clicks, higher and louder
+   * with o.level (the pressure), played faster and faster as it builds to the crack.
+   * @param {object} k kit @param {number} t start @param {{grow?: boolean, tick?: boolean, level?: number}} [o] options
    */
   creak(k, t, o) {
+    if (o?.tick) {
+      const lv = Math.max(0, Math.min(1, o.level ?? 0.5));
+      for (let i = 0; i < 3; i += 1) k.tone(150 + lv * 260 + i * 30, t + i * 0.025, 0.04, { type: 'sawtooth', vol: 0.035 + lv * 0.05, slideTo: 130 + lv * 240 + i * 36 });
+      k.hiss(t, 0.08, { freq: 800 + lv * 900, q: 7, vol: 0.02 + lv * 0.035 });
+      return;
+    }
     const grow = Boolean(o?.grow);
     const len = grow ? 0.8 : 0.42;
     const vol = grow ? 0.045 : 0.07;
@@ -78,6 +86,28 @@ export const VOICES = {
     if (grow) return;
     k.tone(520, t + 0.47, 0.16, { vol: 0.35, slideTo: 160 }); // thwop
     k.hiss(t + 0.47, 0.08, { type: 'lowpass', freq: 900, vol: 0.18 });
+  },
+  /**
+   * The Evil Horn's big pop (owner 2026-10-31): a loud, dry CRACK (a sharp noise snap and a falling knock), a wet
+   * splash of goo, a whoosh as it spins away, then, 0.42 s on, the THWACK of it sticking in the wall, a rubbery
+   * "boi-oi-oing" as it quivers there, and a small bright "ding". With o.calm (reduced motion: it only lifts off) the
+   * crack and the splash only. @param {object} k kit @param {number} t start @param {{calm?: boolean}} [o] options
+   */
+  hornCrack(k, t, o) {
+    k.hiss(t, 0.05, { type: 'highpass', freq: 2400, vol: 0.5 }); // the crack
+    k.tone(900, t, 0.06, { type: 'square', vol: 0.12, slideTo: 180 });
+    k.tone(240, t + 0.01, 0.16, { type: 'triangle', vol: 0.45, slideTo: 60 }); // the knock under it
+    k.hiss(t + 0.03, 0.28, { type: 'lowpass', freq: 600, to: 220, vol: 0.28 }); // the splash of goo
+    if (o?.calm) return;
+    k.hiss(t + 0.06, 0.36, { freq: 900, to: 2600, q: 1.6, vol: 0.09 }); // the whoosh
+    const hit = t + 0.42;
+    k.hiss(hit, 0.04, { freq: 1500, q: 1, vol: 0.4 }); // thwack
+    k.tone(180, hit, 0.12, { type: 'triangle', vol: 0.4, slideTo: 70 });
+    for (let i = 0; i < 5; i += 1) { // the dart's boing, wobbling down and fading
+      k.tone(330 - i * 18, hit + 0.04 + i * 0.075, 0.09, { type: 'triangle', vol: 0.16 - i * 0.026, slideTo: 440 - i * 22 });
+    }
+    k.tone(2093, hit + 0.06, 0.4, { type: 'triangle', vol: 0.07 }); // ding
+    k.tone(3136, hit + 0.09, 0.3, { type: 'triangle', vol: 0.04 });
   },
   /** The ingrown hair coming out: a twangy "boi-oing" that wobbles down, then a tiny "plip". @param {object} k kit @param {number} t start */
   pluck(k, t) {
@@ -250,5 +280,18 @@ export const VOICES = {
     k.tone(1318.5, t, 0.12, { type: 'triangle', vol: 0.14 });
     k.tone(1760, t + 0.09, 0.5, { type: 'triangle', vol: 0.14 });
     k.hiss(t, 0.05, { type: 'highpass', freq: 5000, vol: 0.06 });
+  },
+  /**
+   * Her heart puff (SPEC D46-25): a soft "pff" of the pink puff, a gentle rising twinkle as the hearts fly out, then the
+   * big heart's soft "ba-dum" (timed to its beat, celebrate-logic.js HEART_PUFF.beat) with a warm little bell.
+   * @param {object} k kit @param {number} t start
+   */
+  hearts(k, t) {
+    k.hiss(t, 0.18, { type: 'lowpass', freq: 1100, to: 380, vol: 0.09 }); // the puff
+    [1318.5, 1568, 1975.5, 2637].forEach((f, i) => k.tone(f, t + 0.03 + i * 0.06, 0.32, { type: 'triangle', vol: 0.045 }));
+    k.tone(150, t + 0.5, 0.1, { vol: 0.16, slideTo: 92 }); // ba-
+    k.tone(136, t + 0.63, 0.12, { vol: 0.12, slideTo: 84 }); // -dum
+    k.tone(1046.5, t + 0.52, 0.6, { type: 'triangle', vol: 0.035 });
+    k.tone(1568, t + 0.52, 0.6, { type: 'triangle', vol: 0.02 });
   },
 };

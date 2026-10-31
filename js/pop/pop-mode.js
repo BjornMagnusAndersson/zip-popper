@@ -958,7 +958,7 @@ export function createPopMode({
     sizeCanvas(canvas, w, h);
     c.scene = createPopScene(canvas, {
       width: w, height: h, dpr, reduced: still(), sound, buzz, squeeze, zoom: zoom !== false,
-      juicy: !gentlePops, lite: lighter, grandFirst: round && cfg.reluctant === true, // the juicy pop (SPEC D45); Hubby's first pop is the big show
+      juicy: !gentlePops, lite: lighter, grandFirst: round && cfg.grandFirst === true, // the juicy pop (SPEC D45); Hubby's first pop in chapter 0 is the big show (D46-26)
       texture: faceTexture(c), pimples, strip: lay.strip, decoys: lay.decoys,
       tool: toolId, tools: toolIds, face: { cx: face.cx, cy: face.cy, rx: face.rx, ry: face.ry },
       irritation: round ? cfg.irritation : undefined,
@@ -1115,7 +1115,8 @@ export function createPopMode({
      *   true); decoys = false keeps moles and freckles off (default true); onFinish gets round-logic.js finishPayload;
      *   customerName = shown in the header ("Popping Pilot Pete", else "Pop them!"); skipCost = what "Next customer"
      *   costs in reputation, shown on the fail choice (left out = no cost shown); retryOnly = true hides "Next customer"
-     *   (a story round before the studio opens, app-logic.js roundArgs). twist = the customer's twist
+     *   (a story round before the studio opens, app-logic.js roundArgs). grandFirst = true gives the first pop the
+     *   grand show (chapter 0's Hubby only, D46-26; the torchlight leaves it off). twist = the customer's twist
      *   (T8.3, data/twists.js: 'fidgety', 'ticklish', 'sensitive', or 'hurry' for a hurry request; shown as a label
      *   in the header, the first three also change the play); twistHintKey = its tip for the hint line (until the
      *   first pop). boss = a boss or event customer's face rules (T8.4, data/bosses.js bossSpec `boss`) and
@@ -1144,6 +1145,7 @@ export function createPopMode({
         },
         escape: o.customer?.escape === true, // the husband in armor (chapter 2) refuses the first pop and runs off
         reluctant: o.customer?.reluctant === true, // the chapter 0 husband: stern the whole round, never beams (owner 2026-10-28)
+        grandFirst: o.grandFirst === true, // the first pop is the grand show: only chapter 0's Hubby round (D46-26, app-logic.js roundArgs)
         gloves: o.gloves === true, // she owns the gloves (app-logic.js roundArgs, SPEC D32e)
         twist: typeof o.twist === 'string' ? o.twist : null, // T8.3: the customer's twist
         twistHint: typeof o.twistHintKey === 'string' ? o.twistHintKey : null,

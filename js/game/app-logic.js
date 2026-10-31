@@ -209,10 +209,12 @@ export function comicOutfit(strip, save) {
  * - leakFixed: once "Fix the leak" is bought and scrubbed (story audit R2), every strip drops the drip and the leak
  *   stain and the bucket under it, except the strips whose story IS the leak (LEAK_STORY_STRIPS).
  * - ringLight, pinkChair: in `studio: 'owned'` strips the ring light and the pink chair follow the shop too (owner's
- *   pick Q14 c, 2026-10-29); the paint and the new sign do not. Nothing bought = the strip exactly as written.
+ *   pick Q14 c, 2026-10-29).
+ * - paint, newSign: in `studio: 'owned'` strips the wall paint and the new shiny sign follow the shop as well (SPEC
+ *   D47, widening Q14 c), once bought and scrubbed like the others. Nothing bought = the strip exactly as written.
  * @param {object|null} strip the strip data
  * @param {object} save the save
- * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean}|null}
+ * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean, paint?: boolean, newSign?: boolean}|null}
  *   what to draw, or null = draw the strip as it is
  */
 export function comicStudio(strip, save) {
@@ -221,7 +223,8 @@ export function comicStudio(strip, save) {
   const layers = backdropLayers(save);
   const leak = !LEAK_STORY_STRIPS.includes(strip.id) && layers.includes('leakFix') ? { leakFixed: true } : {};
   if (strip.studio !== 'owned') return gloves || leak.leakFixed ? { gloves, ...leak } : null;
-  return { gloves, livingPlant: layers.includes('plant'), ringLight: layers.includes('lamp'), pinkChair: layers.includes('chair'), ...leak };
+  return { gloves, livingPlant: layers.includes('plant'), ringLight: layers.includes('lamp'), pinkChair: layers.includes('chair'),
+    paint: layers.includes('wallPaint'), newSign: layers.includes('sign'), ...leak };
 }
 
 /** Strips that always draw the leak, even after "Fix the leak": opening day (strip 5) and the fix itself (mleak). */
@@ -565,6 +568,7 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
     // A story round before the studio opens (Hubby, chapters 0 to 4) has no "Next customer" after a storm-off, only
     // Try again: skipping him would jump to the ban strip without a pop (owner 2026-10-29, R8 R5).
     retryOnly: !paysMoney(step),
+    grandFirst: spec.customer?.grandFirst === true, // D46-26: Hubby's first pop in chapter 0 is the grand show
     twist, twistHintKey: boss ? boss.hintKey : describeTwist(twist, { ownedTools: unlockedTools })?.hintKey ?? null,
     boss: spec.boss ?? null, bossNameKey: boss?.nameKey ?? null, // T8.4
     // T8.5: the daily challenge's date and goal (a clock goal carries its limit, the same as the hurry request's).
@@ -627,6 +631,7 @@ export function torchlightArgs(save, chapter, forcedSeed = null) {
     difficulty: TORCHLIGHT_ROUND.difficulty, seed: roundSeed(chapter, 1, forcedSeed), holdFactors, roughReductions,
     unlockedTools: [...economyFromSave(save).unlockedTools], request: null, room: 'home', tier: 0, career: false,
     decoys: false, mood: 'sleep',
+    grandFirst: false, // D46-26: a sneak pop is a normal pop; only the last one (the one that wakes him) stays grand
   };
 }
 

@@ -5,9 +5,13 @@
 // onto his chin only; the sign is back in the dark, "clean" again, and now Nils is the one squinting.
 // Format: docs/COMIC-FORMAT.md.
 
-/** The dingy studio at night (tier 0; the plant wears Greta's scarf). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
+/**
+ * The dingy studio at night (tier 0; the plant wears Greta's scarf). newSign: false = always the old sign, even after
+ * the shop's new sign (SPEC D47): the joke is the stain on it.
+ * @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer
+ */
 const studio = (w, h, o = {}) => ({
-  art: 'room', kind: 'studio', w, h, sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true, plantScarf: '#e8505b', ...o,
+  art: 'room', kind: 'studio', w, h, sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true, plantScarf: '#e8505b', newSign: false, ...o,
 });
 
 /** A see-through dark sheet over the whole panel (the light is off). @param {number} w width @param {number} h height @param {number} [a] how dark, 0..1 @returns {object} layer */

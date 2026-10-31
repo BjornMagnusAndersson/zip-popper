@@ -3,9 +3,12 @@
 // the soft pink crater that heals, thick glossy goo balls (drops in the air, dollops on the skin with two splatter
 // specks, the goo mound), the goo drops on the screen glass that slide down, and the warm cloth's steam wisps (D45
 // item 5). engine.js decides what and when (pop-fx.js does the sums). Cartoon only: the goo is creamy white, custard
-// yellow, golden or pale green; the crater is soft pink skin, never red, never a wound.
+// yellow, golden or pale green; the crater is soft pink skin, never red, never a wound. Splat v2 (owner 2026-10-31):
+// landed drops are cartoon splats (drawLanded: irregular glossy blob, specks, shadow, drip run, merged puddles), and
+// the Evil Horn's show (drawHornShow: crack flash, speed trail, stuck in the wall with a "ding", dust puffs).
 import { rng } from './logic.js';
-import { craterAt } from './pop-fx.js';
+import { craterAt, hornAt, FALL_TIME } from './pop-fx.js';
+import { drawHorn, drawTwinkle } from './art.js';
 
 // The goo colours per kind: body (lit top), shade, deep (the underside), hi (shine), rim (a soft see-through edge).
 // White and cream are pop test G's; gold and horn follow the game's own goo colours (art.js GOO_LOOK).
@@ -371,35 +374,289 @@ export function drawFlyer(c, d, scale) {
   const st = 1 + 0.3 * Math.min(1, sp / (500 * scale));
   const r = d.r * (1 + d.z / 260);
   c.save();
-  if (d.fall !== undefined) c.globalAlpha *= Math.max(0, 1 - d.fall / 0.35);
+  if (d.fall !== undefined) c.globalAlpha *= Math.max(0, 1 - d.fall / FALL_TIME);
   else gooShadow(c, d.x, d.y, d.r * 0.9, d.r * 0.6, 0.14);
   drawGooBall(c, d.x, y, r * st, r / Math.sqrt(st), Math.atan2(vy, d.vx), g);
   c.restore();
 }
 
+const ONE_PART = [{ dx: 0, dy: 0, k: 1 }]; // a splat of one drop (merged splats carry more parts)
+
 /**
- * A juicy drop that landed: it hits flat and wide, wobbles back with weight and stays as a round glossy dollop, with
- * two little splatter specks thrown on ahead of it as it hits.
+ * Add one splat part's outline to the path: a flattened round blob with a slightly irregular, soft cartoon edge (three
+ * gentle waves round it, set by the splat's own phases), smoothed through the midpoints.
  * @param {CanvasRenderingContext2D} c context
- * @param {{x: number, y: number, r: number, age?: number, sa?: number, goo?: string}} s the landed drop (age = seconds
- *   since it landed; sa = the way it was flying)
+ * @param {number} x middle
+ * @param {number} y middle
+ * @param {number} rx half-width
+ * @param {number} ry half-height
+ * @param {number[]} ph the edge's three wave phases
+ * @param {number} [grow] px added all round (the rim, the shadow)
+ * @returns {void}
+ */
+function splatPath(c, x, y, rx, ry, ph, grow = 0) {
+  const N = 14;
+  const pts = [];
+  for (let i = 0; i < N; i += 1) {
+    const a = (i / N) * Math.PI * 2;
+    const k = 1 + 0.08 * Math.sin(3 * a + ph[0]) + 0.05 * Math.sin(5 * a + ph[1]) + 0.03 * Math.sin(7 * a + ph[2]);
+    pts.push([x + Math.cos(a) * (rx * k + grow), y + Math.sin(a) * (ry * k + grow)]);
+  }
+  const last = pts[N - 1];
+  c.moveTo((last[0] + pts[0][0]) / 2, (last[1] + pts[0][1]) / 2);
+  for (let i = 0; i < N; i += 1) {
+    const p = pts[i];
+    const q = pts[(i + 1) % N];
+    c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+  }
+  c.closePath();
+}
+
+/**
+ * Add a drip run's outline to the path: a tongue of goo hanging down from the splat, narrowing, with a round bead at
+ * its end.
+ * @param {CanvasRenderingContext2D} c context
+ * @param {number} x top middle
+ * @param {number} y top
+ * @param {number} w half-width at the top
+ * @param {number} L length to the bead's middle
+ * @param {number} rb the bead's radius
+ * @returns {void}
+ */
+function dripPath(c, x, y, w, L, rb) {
+  const n = rb * 0.62; // the neck just above the bead
+  c.moveTo(x - w, y);
+  c.bezierCurveTo(x - w * 0.7, y + L * 0.45, x - n, y + L * 0.55, x - n, y + L - rb * 0.7);
+  c.arc(x, y + L, rb, Math.PI * 1.25, Math.PI * 1.75, true);
+  c.bezierCurveTo(x + n, y + L * 0.55, x + w * 0.7, y + L * 0.45, x + w, y);
+  c.closePath();
+}
+
+/**
+ * A juicy drop that landed, as a cartoon splat (owner 2026-10-31: "could be a bit more good looking"): it hits flat
+ * and wide and wobbles back with weight, then stays as a glossy flattened blob with a slightly irregular edge, a soft
+ * shadow, a couple of small satellite specks thrown on ahead of it, and on bigger drops a short drip run that creeps
+ * down. Drops that landed on each other are one puddle (s.parts: one outline, one shading). No ink outline.
+ * @param {CanvasRenderingContext2D} c context
+ * @param {{x: number, y: number, r: number, age?: number, sa?: number, goo?: string, seed?: number, drip?: number,
+ *   parts?: {dx: number, dy: number, k: number}[]}} s the landed drop (age = seconds since it landed; sa = the way it
+ *   was flying; seed = its edge's shape 0..1; drip = the drip run's length in radii (0 = none); parts = the drops
+ *   merged into it, offsets and sizes in radii)
  * @returns {void}
  */
 export function drawLanded(c, s) {
   const g = juicyGoo(s.goo);
   const age = s.age ?? 1;
-  const k = age < 0.55 ? Math.exp(-age * 7) * Math.cos(age * 24) : 0;
-  const rx = s.r * (1.12 + 0.45 * k);
-  const ry = s.r * (0.84 - 0.35 * k);
-  gooShadow(c, s.x + s.r * 0.15, s.y + s.r * 0.35, rx, ry * 0.9, 0.15);
-  drawGooBall(c, s.x, s.y, rx, ry, 0, g, 0.9);
+  const r = s.r;
+  const k = age < 0.55 ? Math.exp(-age * 7) * Math.cos(age * 24) : 0; // the landing squash, wobbling out
+  const sx = 1.12 + 0.45 * k;
+  const sy = 0.84 - 0.35 * k;
+  const sd = s.seed ?? 0.5;
+  const ph = [sd * 6.28, sd * 17.3, sd * 29.1];
+  const parts = (s.parts ?? ONE_PART).map((p) => ({ x: s.x + p.dx * r, y: s.y + p.dy * r, rx: r * p.k * sx, ry: r * p.k * sy }));
+  const du = Math.min(1, Math.max(0, (age - 0.1) / 0.8));
+  const L = (s.drip ?? 0) * r * du * du * (3 - 2 * du); // the drip creeps down, slowing
+  const dx = s.x + r * (sd < 0.5 ? -0.42 : 0.42) * sx; // it runs off the lower edge, a little to one side
+  const dy = s.y + r * sy * 0.2;
+  const dw = r * 0.34;
+  const rb = r * 0.3;
   const gu = Math.min(1, age / 0.12);
   const grow = gu * gu * (3 - 2 * gu);
-  if (grow <= 0) return;
-  for (const [d, kk, side] of [[1.7, 0.3, 0.35], [2.4, 0.19, -0.3]]) {
-    const a = (s.sa ?? 0) + side;
-    drawGooBall(c, s.x + Math.cos(a) * s.r * d * grow, s.y + Math.sin(a) * s.r * d * grow, s.r * kk * 1.1 * grow, s.r * kk * 0.85 * grow, 0, g, 0.7);
+  if (grow > 0) { // the satellite specks, thrown on ahead as it hit
+    for (const [d, kk, side] of [[1.7, 0.26, 0.4], [2.3, 0.16, -0.3]]) {
+      const a = (s.sa ?? 0) + side;
+      drawGooBall(c, s.x + Math.cos(a) * r * d * grow, s.y + Math.sin(a) * r * d * grow, r * kk * 1.15 * grow, r * kk * 0.85 * grow, 0, g, 0.7);
+    }
   }
+  c.fillStyle = 'rgba(110,60,30,0.15)'; // the soft shadow, down and right
+  c.beginPath();
+  for (const p of parts) splatPath(c, p.x + r * 0.14, p.y + r * 0.3, p.rx, p.ry, ph, r * 0.06);
+  if (L > 0.5) dripPath(c, dx + r * 0.12, dy + r * 0.2, dw, L, rb);
+  c.fill();
+  if (L > 0.5) { // the drip run: shaded, with a lit edge down its left side
+    c.save();
+    const dg = c.createLinearGradient(dx - dw, 0, dx + dw, 0);
+    dg.addColorStop(0, g.body);
+    dg.addColorStop(0.4, g.body);
+    dg.addColorStop(1, g.shade);
+    c.fillStyle = dg;
+    c.beginPath(); dripPath(c, dx, dy, dw, L, rb); c.fill();
+    c.strokeStyle = `rgba(255,255,255,0.55)`;
+    c.lineWidth = Math.max(0.7, r * 0.09);
+    c.lineCap = 'round';
+    c.beginPath(); c.moveTo(dx - dw * 0.45, dy + r * 0.2); c.quadraticCurveTo(dx - dw * 0.3, dy + L * 0.5, dx - rb * 0.45, dy + L - rb * 0.2); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.beginPath(); c.arc(dx - rb * 0.35, dy + L - rb * 0.3, Math.max(0.5, rb * 0.25), 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+  c.fillStyle = g.rim; // a soft see-through edge instead of an ink outline
+  c.beginPath();
+  for (const p of parts) splatPath(c, p.x, p.y, p.rx, p.ry, ph, Math.max(0.7, r * 0.09));
+  c.fill();
+  let top = Infinity;
+  let bot = -Infinity;
+  for (const p of parts) { top = Math.min(top, p.y - p.ry); bot = Math.max(bot, p.y + p.ry); }
+  const bg = c.createLinearGradient(0, top, 0, bot); // lit on top, deeper underneath: one shading for the whole puddle
+  bg.addColorStop(0, g.body);
+  bg.addColorStop(0.42, g.body);
+  bg.addColorStop(0.8, g.shade);
+  bg.addColorStop(1, g.deep);
+  c.fillStyle = bg;
+  c.beginPath();
+  for (const p of parts) splatPath(c, p.x, p.y, p.rx, p.ry, ph);
+  c.fill();
+  parts.forEach((p, i) => { // the shine: a broad soft one and a crisp glint on each bigger part
+    if (i && p.rx < r * 0.55) return;
+    const R = Math.max(p.rx, p.ry);
+    const hx = p.x - p.rx * 0.3;
+    const hy = p.y - p.ry * 0.36;
+    const hg = c.createRadialGradient(hx, hy, 0, hx, hy, R * 0.62);
+    hg.addColorStop(0, 'rgba(255,255,255,0.72)');
+    hg.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = hg;
+    c.beginPath(); c.ellipse(p.x, p.y, p.rx, p.ry, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.92)';
+    c.beginPath(); c.ellipse(p.x - p.rx * 0.36, p.y - p.ry * 0.44, Math.max(0.6, R * 0.17), Math.max(0.45, R * 0.09), -0.5, 0, Math.PI * 2); c.fill();
+    if (R > 2.5) { // light bouncing back up inside its lower edge: it reads wet
+      c.strokeStyle = 'rgba(255,255,255,0.32)';
+      c.lineWidth = Math.max(0.6, R * 0.08);
+      c.beginPath(); c.ellipse(p.x, p.y + p.ry * 0.04, p.rx * 0.72, p.ry * 0.66, 0, Math.PI * 0.22, Math.PI * 0.78); c.stroke();
+    }
+  });
+}
+
+/**
+ * The Evil Horn's show (owner 2026-10-31), t = hn.t seconds after the crack: a comic crack flash at the base, the horn
+ * spinning off with a speed trail (two fading ghosts and white streaks; no ghosts with Lighter graphics), then stuck
+ * in the wall quivering like a dart, with a ring and a burst of little stars where it hit, then dropping loose and
+ * fading. With reduced motion (hn.calm) it only lifts off and fades. pop-fx.js hornAt says where it is.
+ * @param {CanvasRenderingContext2D} c context (scene px)
+ * @param {{x: number, y: number, r: number, len: number, t: number, spin: number, aimX: number, aimY: number, aimA: number,
+ *   calm?: boolean, lite?: boolean}} hn the flying horn
+ * @returns {void}
+ */
+export function drawHornShow(c, hn) {
+  const t = hn.t;
+  const at = hornAt(hn, t);
+  if (!hn.calm && t < 0.16) drawCrackFlash(c, hn.x, hn.y - hn.len * 0.25, hn.r, t / 0.16);
+  c.save();
+  if (at.flying) {
+    const back = hornAt(hn, Math.max(0, t - 0.1));
+    /** The horn's middle (half way up its length) for a hornAt state. @param {{x: number, y: number, a: number}} q state @returns {number[]} [x, y] */
+    const mid = (q) => [q.x + Math.sin(q.a) * hn.len * 0.45, q.y - Math.cos(q.a) * hn.len * 0.45];
+    const [x0, y0] = mid(back);
+    const [x1, y1] = mid(at);
+    const ang = Math.atan2(y1 - y0, x1 - x0);
+    const nx = -Math.sin(ang);
+    const ny = Math.cos(ang);
+    c.lineCap = 'round';
+    c.strokeStyle = 'rgba(255,255,255,0.6)'; // speed streaks behind it
+    for (const [o, wk] of [[-0.32, 0.07], [0, 0.11], [0.32, 0.07]]) {
+      c.lineWidth = Math.max(1, hn.r * wk);
+      const ox = nx * hn.r * o;
+      const oy = ny * hn.r * o;
+      c.beginPath(); c.moveTo(x0 + ox, y0 + oy); c.lineTo(x1 + ox, y1 + oy); c.stroke();
+    }
+    if (!hn.lite) {
+      for (const [dt, al] of [[0.075, 0.18], [0.04, 0.35]]) {
+        const gh = hornAt(hn, Math.max(0, t - dt));
+        c.globalAlpha = al;
+        drawHorn(c, gh.x, gh.y, hn.r, gh.a);
+      }
+    }
+  }
+  c.globalAlpha = at.alpha;
+  if (at.alpha > 0.01) drawHorn(c, at.x, at.y, hn.r, at.a);
+  c.restore();
+  if (at.hit >= 0 && at.hit < 0.6) drawWallHit(c, hn.aimX, hn.aimY, hn.r, at.hit, hn.lite);
+}
+
+/**
+ * The comic crack flash as the horn breaks loose: a pale jagged burst at its base, growing and fading in a blink.
+ * @param {CanvasRenderingContext2D} c context
+ * @param {number} x middle
+ * @param {number} y middle
+ * @param {number} r size
+ * @param {number} u 0..1 through the flash
+ * @returns {void}
+ */
+function drawCrackFlash(c, x, y, r, u) {
+  const R = r * (0.7 + 0.9 * u);
+  c.save();
+  c.globalAlpha = (1 - u) * 0.95;
+  for (const [k, col] of [[1, '#fff6d8'], [0.6, '#ffffff']]) {
+    c.fillStyle = col;
+    c.beginPath();
+    for (let i = 0; i < 18; i += 1) {
+      const a = (i / 18) * Math.PI * 2 + 0.2;
+      const rr = R * k * (i % 2 ? 0.42 : i % 4 === 0 ? 1 : 0.78);
+      if (i) c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else c.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    c.closePath();
+    c.fill();
+  }
+  c.restore();
+}
+
+/**
+ * Where the horn hit the wall: a quick white ring, a few short impact lines and little cartoon stars bursting out
+ * (a "ding!"). Lighter graphics: the ring and fewer stars.
+ * @param {CanvasRenderingContext2D} c context
+ * @param {number} x the hit's spot
+ * @param {number} y the hit's spot
+ * @param {number} r the horn's size
+ * @param {number} t seconds since the hit
+ * @param {boolean} [lite] Lighter graphics
+ * @returns {void}
+ */
+function drawWallHit(c, x, y, r, t, lite = false) {
+  c.save();
+  const u = Math.min(1, t / 0.32);
+  if (u < 1) {
+    c.strokeStyle = `rgba(255,255,255,${0.85 * (1 - u)})`;
+    c.lineWidth = Math.max(1.2, r * 0.1 * (1 - u * 0.6));
+    c.beginPath(); c.arc(x, y, r * (0.25 + 1.1 * u), 0, Math.PI * 2); c.stroke();
+    c.lineCap = 'round';
+    c.strokeStyle = `rgba(255,248,220,${0.9 * (1 - u)})`;
+    c.lineWidth = Math.max(1, r * 0.08);
+    for (let i = 0; i < 6; i += 1) {
+      const a = (i / 6) * Math.PI * 2 + 0.4;
+      c.beginPath(); c.moveTo(x + Math.cos(a) * r * (0.45 + 0.4 * u), y + Math.sin(a) * r * (0.45 + 0.4 * u));
+      c.lineTo(x + Math.cos(a) * r * (0.75 + 0.6 * u), y + Math.sin(a) * r * (0.75 + 0.6 * u)); c.stroke();
+    }
+  }
+  const v = Math.min(1, t / 0.6);
+  const e = 1 - (1 - v) ** 2;
+  const n = lite ? 3 : 5;
+  for (let i = 0; i < n; i += 1) {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2 + 0.3;
+    const d = r * (0.3 + 1.3 * e);
+    drawTwinkle(c, x + Math.cos(a) * d, y + Math.sin(a) * d - r * 0.4 * e, r * (0.5 - 0.2 * v), 1 - v * v);
+  }
+  c.restore();
+}
+
+/**
+ * One puff of dust at the Evil Horn's base (pop-fx.js hornPuffs): a soft cartoon smoke ball, lit on top, that swells
+ * and fades.
+ * @param {CanvasRenderingContext2D} c context
+ * @param {{x: number, y: number, r: number, t: number, life: number}} pf the puff
+ * @returns {void}
+ */
+export function drawPuff(c, pf) {
+  const u = Math.min(1, pf.t / pf.life);
+  const a = 0.85 * (1 - u) ** 1.4;
+  if (a < 0.01) return;
+  const r = pf.r * (0.7 + 0.9 * (1 - (1 - u) ** 2));
+  c.fillStyle = `rgba(206,196,182,${a})`;
+  c.beginPath(); c.arc(pf.x, pf.y + r * 0.14, r, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = `rgba(150,138,124,${a * 0.45})`; // a soft cartoon edge, so each puff reads on pale skin
+  c.lineWidth = Math.max(0.8, r * 0.07);
+  c.stroke();
+  c.fillStyle = `rgba(252,250,244,${a})`;
+  c.beginPath(); c.arc(pf.x - r * 0.08, pf.y - r * 0.06, r * 0.86, 0, Math.PI * 2); c.fill();
+  c.fillStyle = `rgba(255,255,255,${a * 0.8})`;
+  c.beginPath(); c.arc(pf.x - r * 0.32, pf.y - r * 0.34, r * 0.24, 0, Math.PI * 2); c.fill();
 }
 
 /**

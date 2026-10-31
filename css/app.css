@@ -574,6 +574,9 @@
    never take a tap. The Total coin's still glint is for reduced motion (no coins fly then). */
 .app-fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .app-result__fx, .app-diploma__fx { z-index: 5; }
+/* D46-25: her heart puff after a story round lies UNDER the title and the stars, so the hearts come out from behind them. */
+.app-result__hearts { z-index: 0; }
+.app-result--hearts .app-result__top { position: relative; z-index: 1; }
 .app-reveal__pic .app-fx { position: absolute; display: block; }
 .app-pill--glint { position: relative; box-shadow: 0 0 0 3px rgba(255, 226, 120, 0.55), 0 0 14px rgba(255, 214, 90, 0.85); }
 .app-pill--glint::after {

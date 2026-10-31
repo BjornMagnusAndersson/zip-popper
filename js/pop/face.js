@@ -2963,6 +2963,61 @@ export function drawFace(ctx, face, spec = DEFAULT_FACE_SPEC, o = {}) {
   drawGlasses(ctx, f, look);
   drawMoodExtras(ctx, f, mood);
   if (ctx.canvas) ctx.canvas.faceLife = makeFaceLife(f, spec, { mood, seed, look, dpr: o.dpr ?? 1 });
+  if (ctx.canvas) ctx.canvas.skinAt = skinTest(f, layers); // where the bare skin is (the pop scene's goo lands only there)
+}
+
+/**
+ * A test for where the bare skin is on a face picture (owner 2026-10-31: goo that lands on hair, a hat or the room
+ * must not stay there): the head outline with the front hair, beard, headwear and helmet (the `over` layer) cut out,
+ * as a small mask made the first time it is asked and kept with the still layers.
+ * @param {object} f the face geometry
+ * @param {{over: object, skin?: object|null}} entry the face's still layers (stillLayers)
+ * @returns {(x: number, y: number) => boolean|null} (x, y in scene px) -> true on skin, false off it, null when no mask
+ *   can be made (no canvas, or pixel reading is blocked): then the caller uses its own skin oval
+ */
+function skinTest(f, entry) {
+  return (x, y) => {
+    if (entry.skin === undefined) entry.skin = skinMask(f, entry.over);
+    const m = entry.skin;
+    if (!m) return null;
+    const i = Math.floor(x * m.k);
+    const j = Math.floor(y * m.k);
+    if (i < 0 || j < 0 || i >= m.w || j >= m.h) return false;
+    return m.data[j * m.w + i] === 1;
+  };
+}
+
+/**
+ * Paint the skin mask once (a quarter of the scene's size): the head outline, minus the over layer; read back as one
+ * byte per mask pixel (1 = skin). A blank or scrambled read (some privacy settings) gives null.
+ * @param {object} f the face geometry
+ * @param {{canvas: HTMLCanvasElement, x: number, y: number, w: number, h: number}} over the over layer
+ * @returns {{w: number, h: number, k: number, data: Uint8Array}|null} the mask, or null
+ */
+function skinMask(f, over) {
+  try {
+    const K = 0.25;
+    const w = Math.max(1, Math.ceil((f.width > 0 ? f.width : f.cx * 2) * K));
+    const h = Math.max(1, Math.ceil(f.height * K));
+    const cv = document.createElement('canvas');
+    cv.width = w;
+    cv.height = h;
+    const c = cv.getContext('2d', { willReadFrequently: true });
+    c.setTransform(K, 0, 0, K, 0, 0);
+    headPath(c, f);
+    c.fillStyle = '#ffffff';
+    c.fill();
+    c.globalCompositeOperation = 'destination-out'; // hair, beard, hats and helmet are not skin
+    putLayer(c, over);
+    const px = c.getImageData(0, 0, w, h).data;
+    const data = new Uint8Array(w * h);
+    let n = 0;
+    for (let i = 0; i < w * h; i += 1) if (px[i * 4 + 3] > 140) { data[i] = 1; n += 1; }
+    if (n < Math.PI * f.rx * f.ry * K * K * 0.35) return null; // far too little skin: the read was blank or scrambled
+    return { w, h, k: K, data };
+  } catch {
+    return null;
+  }
 }
 
 /** Mood -> the idle life (T8.1): seconds between blinks [min, max], seconds between glances [min, max], how long a
@@ -2976,6 +3031,8 @@ const LIFE_PLANS = {
 };
 /** Seconds one blink takes (down quickly, a moment shut, up again). */
 const BLINK_TIME = 0.2;
+/** Seconds a flinch takes (a goo drop flying at an eye): snapped shut, squeezed a moment, open again. */
+const FLINCH_TIME = 0.45;
 /** Seconds the eyes take to move into a glance, or back. */
 const GLANCE_MOVE = 0.09;
 
@@ -2990,8 +3047,10 @@ const GLANCE_MOVE = 0.09;
  *   seed for the timing, the face look if already known, the pixel ratio of the picture, and debugBlink = true: always
  *   blinking and glancing in turn (to time the worst case), or a fixed state {blink, gx, gy} (for preview pictures)
  * @returns {{breath: {px: number, period: number}, busy: (t: number) => boolean, next: (t: number) => number,
- *   draw: (ctx: CanvasRenderingContext2D, t: number) => void}} busy = something is moving at t (seconds), next =
- *   seconds from t until the next movement starts (Infinity = never), draw = the moving eyes at t over the picture
+ *   draw: (ctx: CanvasRenderingContext2D, t: number) => void, eyes: {side: number, x: number, y: number, rx: number, ry: number}[],
+ *   flinch: (t: number) => boolean}} busy = something is moving at t (seconds), next = seconds from t until the next
+ *   movement starts (Infinity = never), draw = the moving eyes at t over the picture, eyes = where the eyes are (scene
+ *   px, with lids and lenses: the goo keep-out), flinch = shut the eyes for a moment at t (a goo drop flying at one)
  */
 export function makeFaceLife(face, spec, o = {}) {
   const look = o.look ?? faceLook(spec);
@@ -3010,6 +3069,17 @@ export function makeFaceLife(face, spec, o = {}) {
   let lookEnd = 0; // when it starts to move back
   let gx = 0;
   let gy = 0;
+  let flinchAt = -Infinity; // when a goo drop flying at an eye last made her flinch (engine.js, owner 2026-10-31)
+  /**
+   * How shut a flinch keeps the eyes at t: snapped shut, squeezed a moment, then open again (0..1).
+   * @param {number} t seconds
+   * @returns {number} 0 = open .. 1 = shut
+   */
+  const flinchK = (t) => {
+    const d = t - flinchAt;
+    if (d < 0 || d >= FLINCH_TIME) return 0;
+    return d < 0.05 ? d / 0.05 : d < 0.3 ? 1 : 1 - (d - 0.3) / (FLINCH_TIME - 0.3);
+  };
   /** Pick the next glance's length and direction (it starts at lookAt). @returns {void} */
   const planGlance = () => {
     lookEnd = lookAt + GLANCE_MOVE + between(plan.hold);
@@ -3035,6 +3105,7 @@ export function makeFaceLife(face, spec, o = {}) {
     const d = t - blinkAt;
     let blink = 0;
     if (d >= 0 && d < BLINK_TIME) blink = d < 0.07 ? d / 0.07 : d < 0.1 ? 1 : 1 - (d - 0.1) / 0.1;
+    blink = Math.max(blink, flinchK(t)); // a flinch at a flying goo drop shuts the eyes too
     let k = 0;
     if (glances && t >= lookAt && t < lookEnd + GLANCE_MOVE) {
       k = t < lookAt + GLANCE_MOVE ? (t - lookAt) / GLANCE_MOVE : t < lookEnd ? 1 : 1 - (t - lookEnd) / GLANCE_MOVE;
@@ -3078,12 +3149,31 @@ export function makeFaceLife(face, spec, o = {}) {
     return slot.layer;
   };
   const sleepy = mood === 'sleep';
+  const lens = glasses || look.acc.includes('sunglasses');
+  // The eyes' spots in scene px, with room for the lids, lashes and any lens: no goo may settle there (engine.js).
+  const eyes = [-1, 1].map((s) => ({
+    side: s, x: face.cx + s * face.rx * ft.eyeU, y: face.cy + face.ry * ft.eyeV,
+    rx: lens ? Math.max(es * 1.35, face.rx * 0.22) : es * 1.3, ry: Math.max(es * hk, es * 0.55) * 1.45 + es * 0.15,
+  }));
   return {
     breath: { px: sleepy ? 2 : mood === 'glowing' ? 1.5 : 1.2, period: sleepy ? 5.6 : 4.4 },
+    eyes,
+    /**
+     * Flinch at a goo drop flying at an eye (owner 2026-10-31): both eyes snap shut for a moment, as a real flinch.
+     * Faces whose eyes do not move (closed, asleep, sunglasses) do not flinch.
+     * @param {number} t seconds (the same clock as draw)
+     * @returns {boolean} true when the eyes shut
+     */
+    flinch(t) {
+      if (!eyesMove || debug) return false;
+      flinchAt = t - 0.05 * flinchK(t); // from how shut they are now: a new flinch, or a shut one held a little longer
+      return true;
+    },
     /** Whether the eyes are moving at t. @param {number} t seconds @returns {boolean} moving */
     busy(t) {
       if (!eyesMove) return false;
       if (debug) return true;
+      if (flinchK(t) > 0) return true;
       advance(t);
       if (t >= blinkAt && t < blinkAt + BLINK_TIME) return true;
       return glances && ((t >= lookAt && t < lookAt + GLANCE_MOVE) || (t >= lookEnd && t < lookEnd + GLANCE_MOVE));

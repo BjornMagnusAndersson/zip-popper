@@ -12,7 +12,8 @@ import { pinsDrawn } from '../game/pin-jar.js';
 import { makeFxLayer } from '../fx/fx-layer.js';
 import { makeConfetti } from '../fx/confetti-fx.js';
 import { makeCoinFlight } from '../fx/coins-fx.js';
-import { RESULT_FX, celebration, coinCounter, pinDropWait } from '../fx/celebrate-logic.js';
+import { makeHeartPuff } from '../fx/heart-puff-fx.js';
+import { RESULT_FX, HEART_PUFF, celebration, coinCounter, pinDropWait } from '../fx/celebrate-logic.js';
 
 /** How the pin drops into the jar on the result card (owner 2026-10-29): the fall, in ms (the wait before it: celebrate-logic.js pinDropWait). */
 const PIN_DROP = { fall: 650 };
@@ -85,19 +86,67 @@ function belowReveal(card, face, base) {
 }
 
 /**
+ * Where the heart puff starts, measured now inside the screen: the middle and size of the star row, and the top of the
+ * title (the big heart rises above it).
+ * @param {{node: HTMLElement, starRow?: HTMLElement|null, titleNode?: HTMLElement|null}} o the screen and its parts
+ * @returns {{from: {x: number, y: number, w: number, h: number}|null, top: number|null}} the places in layer px
+ */
+function heartsPlace(o) {
+  const base = o.node.getBoundingClientRect();
+  const r = o.starRow?.getBoundingClientRect();
+  const t = o.titleNode?.getBoundingClientRect();
+  return {
+    from: r?.width ? { x: r.left + r.width / 2 - base.left, y: r.top + r.height / 2 - base.top, w: r.width, h: r.height } : null,
+    top: t?.height ? t.top - base.top : null,
+  };
+}
+
+/**
+ * Her heart puff (D46-25, fx/heart-puff-fx.js) on a story round's result: on its own layer UNDER the title and the
+ * stars (CSS app-result--hearts), so the hearts come out from behind them; its soft sound ("pff", a twinkle and the
+ * big heart's "ba-dum") plays when it starts. Reduced motion: a few still hearts (the sound still plays).
+ * @param {{node: HTMLElement, starRow: HTMLElement|null, titleNode: HTMLElement|null, still: boolean, lite: boolean,
+ *   playSound?: (name: string) => void}} o the screen, its parts, reduced motion, Lighter graphics, the sound player
+ * @returns {{layer: ReturnType<typeof makeFxLayer>, state: () => object|null}} the layer and its state, for checks
+ */
+function startHearts(o) {
+  const layer = makeFxLayer(o.node, { lite: o.lite, className: 'app-fx app-result__hearts' });
+  let puff = null;
+  if (o.still) {
+    /** Paint the still hearts once the screen is in the page. @returns {void} */
+    const paint = () => {
+      const p = heartsPlace(o);
+      if (p.from) layer.still((c, W, H) => makeHeartPuff({ kit: layer.kit, W, H, from: p.from, top: p.top, lite: o.lite, still: true }).paintStill(c, W, H));
+    };
+    requestAnimationFrame(paint);
+    layer.add(() => { o.playSound?.('hearts'); return null; }, HEART_PUFF.at);
+  } else {
+    layer.add((W, H) => {
+      o.playSound?.('hearts');
+      const p = heartsPlace(o);
+      return p.from ? (puff = makeHeartPuff({ kit: layer.kit, W, H, from: p.from, top: p.top, lite: o.lite })) : null;
+    }, HEART_PUFF.at);
+  }
+  return { layer, state: () => puff?.state() ?? null };
+}
+
+/**
  * Start the result moment's effects (SPEC D45 item 2) on a layer over the screen: confetti on 3 stars (petals in the
- * spa), and the tip coins flying from the customer's face into the Total line's coin, which bumps and counts up to the
+ * spa; her heart puff instead after a story round before the studio, D46-25), and the tip coins flying from the
+ * customer's face into the Total line's coin, which bumps and counts up to the
  * true total as each lands. Reduced motion: no coins fly (the total shows at once with a still glint) and only a few
  * still confetti pieces at the edges. Lighter graphics: about half the pieces and coins. Taps go through the layer.
- * @param {{node: HTMLElement, kind: 'confetti'|'petals'|null, failed: boolean, rows: object[]|null, totalPill: HTMLElement|null,
- *   fromNode: HTMLElement|null, reveal: object|null, still: boolean, lite: boolean}} o the screen, its celebration
+ * @param {{node: HTMLElement, kind: 'confetti'|'petals'|'hearts'|null, failed: boolean, rows: object[]|null, totalPill: HTMLElement|null,
+ *   fromNode: HTMLElement|null, reveal: object|null, still: boolean, lite: boolean, starRow?: HTMLElement|null,
+ *   titleNode?: HTMLElement|null, playSound?: (name: string) => void}} o the screen, its celebration
  *   (celebrate-logic.js celebration), its result and the parts the coins fly between (fromNode = where they start
- *   without a reveal card)
+ *   without a reveal card), the stars and the title (the heart puff starts there) and the sound player
  * @returns {{dispose: () => void, state: () => object}} the effects
  */
 function startEffects(o) {
   const layer = makeFxLayer(o.node, { lite: o.lite, className: 'app-fx app-result__fx' });
-  const kind = o.kind;
+  const hearts = o.kind === 'hearts' ? startHearts(o) : null;
+  const kind = o.kind === 'hearts' ? null : o.kind; // the confetti or petals on the layer over the screen
   let confetti = null;
   let coins = null;
   const counter = o.rows && o.totalPill && !o.failed ? coinCounter(o.rows, { lite: o.lite, still: o.still }) : null;
@@ -128,11 +177,11 @@ function startEffects(o) {
   }
   return {
     /** Stop every effect and take the layer away (the true total stays on the counter). @returns {void} */
-    dispose() { layer.dispose(); if (counter && text) text.textContent = String(counter.total); },
+    dispose() { layer.dispose(); hearts?.layer.dispose(); if (counter && text) text.textContent = String(counter.total); },
     /** For checks. @returns {object} state */
     state: () => ({
-      kind, busy: layer.busy(), confetti: confetti?.state() ?? null, coins: coins?.state() ?? null,
-      counter: counter ? { ...counter, shown: text?.textContent ?? null } : null,
+      kind: o.kind, busy: layer.busy() || Boolean(hearts?.layer.busy()), confetti: confetti?.state() ?? null, coins: coins?.state() ?? null,
+      hearts: hearts?.state() ?? null, counter: counter ? { ...counter, shown: text?.textContent ?? null } : null,
     }),
   };
 }
@@ -167,23 +216,26 @@ function kindList(keys, t) {
  *   skills = the skill lines (app-logic.js skillNews, D34): level ups, or how many clean pops the next level needs;
  *   pinCount = after a pin visit (game/pin-jar.js), the pins now in the jar: a "Pin taken away!" line; null = none;
  *   tier = the studio tier 0..2 (the spa, 2, gets petals instead of confetti, D45); lowDetail = Lighter graphics (about
- *   half the confetti and coins); party = Prom Penny's party day (3 stars: confetti, in the spa too, R2)
+ *   half the confetti and coins); party = one of Prom Penny's party visits (3 stars: confetti, in the spa too, R2);
+ *   story = a story round before the studio (Hubby, chapter 0): her heart puff instead of confetti (D46-25);
+ *   playSound = plays a sound by name (the heart puff's soft sound)
  * @returns {{node: HTMLElement, dispose: () => void, fxState: () => object}} the screen; fxState = the effects, for checks
  */
 export function createResultScreen({
   t, stars = 0, failed = false, payout, reputationChange = 0, skipPenalty = 0, factKey, reactionKey, playerName = '',
   onContinue, onShop, onTryAgain, onNext, reducedMotion = false, tagKey = null, tagVars = null, reveal = null, stampKey = null,
-  skills = [], pinCount = null, tier = 0, lowDetail = false, party = false,
+  skills = [], pinCount = null, tier = 0, lowDetail = false, party = false, story = false, playSound = null,
 }) {
-  const kind = celebration({ stars, failed, tier, party }); // the 3-star burst (D45), or null
+  const kind = celebration({ stars, failed, tier, party, story }); // the 3-star burst (D45), her heart puff (D46-25), or null
   const shell = screenShell('result', { label: t(resultTitleKey({ stars, failed })), reducedMotion });
   if (failed) shell.node.classList.add('app-result--fail');
-  const body = el('div', `app-body app-result${reveal ? ' app-result--reveal' : ''}`);
+  const body = el('div', `app-body app-result${reveal ? ' app-result--reveal' : ''}${kind === 'hearts' ? ' app-result--hearts' : ''}`);
   if (reveal) body.append(reveal.node); // the before and after card first (T8.2)
 
   const top = el('div', 'app-result__top');
   if (failed) top.append(el('p', 'app-huff', t('ui.result.fail.huff')));
-  top.append(el('h1', 'app-result__title', t(resultTitleKey({ stars, failed }))));
+  const title = el('h1', 'app-result__title', t(resultTitleKey({ stars, failed })));
+  top.append(title);
   const starRow = el('div', 'app-stars');
   starRow.setAttribute('role', 'img');
   starRow.setAttribute('aria-label', t('ui.result.stars', { n: failed ? 0 : stars }));
@@ -274,9 +326,11 @@ export function createResultScreen({
   left.prepend(top);
   body.append(left, main);
   shell.node.append(body);
-  // The result moment's effects (D45): confetti on 3 stars (petals in the spa), the tip coins to the Total line.
+  // The result moment's effects (D45): confetti on 3 stars (petals in the spa; her heart puff after a story round,
+  // D46-25), the tip coins to the Total line.
   const fx = startEffects({
     node: shell.node, kind, failed, rows, totalPill, fromNode: tipPill, reveal, still: reducedMotion, lite: lowDetail,
+    starRow, titleNode: title, playSound,
   });
   /** Stop the effects and the reveal (if any) and remove the screen. @returns {void} */
   const dispose = () => { fx.dispose(); reveal?.dispose?.(); cancelAnimationFrame(jarFrame); shell.dispose(); };

@@ -21,7 +21,8 @@ export const SOUND_TABLE = {
   squeeze: { type: 'synth', voice: 'squeak', category: 'sfx' }, // two-finger squeeze (T1.7): a short squeak, higher with {level}
   squelch: { type: 'synth', voice: 'squelch', category: 'sfx' },
   splat: { type: 'synth', voice: 'splat', category: 'sfx' },
-  creak: { type: 'synth', voice: 'creak', category: 'sfx' }, // the Evil Horn creaking out (T1.3)
+  creak: { type: 'synth', voice: 'creak', category: 'sfx' }, // the Evil Horn creaking out (T1.3); {tick, level}: one creak while squeezed
+  horn_crack: { type: 'synth', voice: 'hornCrack', category: 'sfx' }, // the Evil Horn's big pop: crack, whoosh, thwack in the wall, boing, ding; {calm}
   pluck: { type: 'synth', voice: 'pluck', category: 'sfx' }, // the long ingrown hair flopping out (T1.3)
   // tools and care
   tweeze: { type: 'synth', voice: 'tweeze', category: 'sfx' },
@@ -49,4 +50,5 @@ export const SOUND_TABLE = {
   // rewards
   cheer: { type: 'synth', voice: 'cheer', category: 'sfx' },
   cash: { type: 'synth', voice: 'cash', category: 'sfx' },
+  hearts: { type: 'synth', voice: 'hearts', category: 'sfx' }, // her heart puff after Hubby's round (SPEC D46-25): a soft puff, a twinkle, "ba-dum"
 };

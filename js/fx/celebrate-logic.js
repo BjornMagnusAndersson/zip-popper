@@ -1,7 +1,8 @@
 // The rules of the result moment's effects (SPEC D45 item 2) and the Master diploma's (item 7), kept apart from the
 // drawing so they can be tested without a browser: when each effect starts on the result screen, how many tip coins
 // fly and what the coin counter shows as each one lands (it always ends at the true total from the game state; the
-// effects never change the economy), which celebration a result gets (confetti on 3 stars, petals in the spa), where
+// effects never change the economy), which celebration a result gets (confetti on 3 stars, petals in the spa, her
+// heart puff after Hubby's chapter 0 round, D46-25), the Master diploma's gold shower (D46-31), where
 // the reveal's star glints sit on the clean face (never on the eyes), and the frame shine's timing on the wall of fame.
 import { AUTO_WIPE } from '../screens/album-logic.js';
 
@@ -102,14 +103,82 @@ export function coinCounter(rows, o = {}) {
 
 /**
  * Which celebration a result gets: confetti for 3 stars, petals instead when the studio is the spa (tier 2), nothing
- * for fewer stars or a customer who stormed off. On Prom Penny's party day it is always confetti, in the spa too (R2).
- * @param {{stars?: number, failed?: boolean, tier?: number, party?: boolean}} o the result, the studio tier and whether
- *   it is Penny's party day
- * @returns {'confetti'|'petals'|null} the celebration
+ * for fewer stars or a customer who stormed off. On Prom Penny's party visits it is always confetti, in the spa too
+ * (R2). A story round before the studio (Hubby, chapter 0: he did NOT want the pop, D33) never gets confetti: her
+ * little heart puff instead, on any finished face (SPEC D46-25, R1).
+ * @param {{stars?: number, failed?: boolean, tier?: number, party?: boolean, story?: boolean}} o the result, the
+ *   studio tier, whether it is one of Penny's party visits, and whether it is a story round before the studio
+ * @returns {'confetti'|'petals'|'hearts'|null} the celebration
  */
-export function celebration({ stars = 0, failed = false, tier = 0, party = false } = {}) {
-  if (failed || stars < 3) return null;
+export function celebration({ stars = 0, failed = false, tier = 0, party = false, story = false } = {}) {
+  if (failed) return null;
+  if (story) return 'hearts';
+  if (stars < 3) return null;
   return tier === 2 && !party ? 'petals' : 'confetti';
+}
+
+/**
+ * Her heart puff on a story round's result (D46-25): a soft pink puff behind the stars, small cartoon hearts flying
+ * out and floating up with a sway (some pop into sparkles), and one big heart that beats once and pops. at = seconds
+ * after the screen opens (with the third star), life = about how long it all takes, hearts = the small hearts (about
+ * half with Lighter graphics), still = the hearts of the still picture (reduced motion), beat = when the big heart
+ * beats (seconds after the puff starts; its "ba-dum" sound, synthVoices.js hearts, is timed to it), bigPop = when it
+ * pops into mini hearts.
+ */
+export const HEART_PUFF = { at: 0.7, life: 2.0, hearts: 14, sparkles: 10, puffs: 7, still: 5, beat: 0.5, bigPop: 1.35 };
+
+/**
+ * How many of each part the heart puff has: about half with Lighter graphics (the big heart always), a few still
+ * hearts with reduced motion.
+ * @param {{lite?: boolean, still?: boolean}} [o] Lighter graphics; reduced motion
+ * @returns {{hearts: number, sparkles: number, puffs: number, big: boolean}} counts
+ */
+export function heartPuffCount(o = {}) {
+  const h = HEART_PUFF;
+  if (o.still) return { hearts: o.lite ? Math.ceil(h.still / 2) : h.still, sparkles: 0, puffs: 0, big: true };
+  /** A full count, or about half of it with Lighter graphics. @param {number} n full count @returns {number} count */
+  const half = (n) => (o.lite ? Math.ceil(n / 2) : n);
+  return { hearts: half(h.hearts), sparkles: half(h.sparkles), puffs: o.lite ? 4 : h.puffs, big: true };
+}
+
+/**
+ * The big heart's size at a moment of the puff: it grows out from behind the middle star, beats once (a quick swell,
+ * a squash back and a little bounce) and settles. 0 before it starts.
+ * @param {number} t seconds since the puff started
+ * @returns {number} its scale (1 = full size)
+ */
+export function bigHeartScale(t) {
+  if (!(t > 0)) return 0;
+  const grow = Math.min(1, t / 0.3);
+  const base = 1 - (1 - grow) ** 3; // eases out to full size
+  const b = t - HEART_PUFF.beat;
+  if (b < 0) return base;
+  if (b < 0.08) return 1 + 0.3 * (b / 0.08); // the beat: swell
+  if (b < 0.18) return 1.3 - 0.38 * ((b - 0.08) / 0.1); // squash back
+  if (b < 0.3) return 0.92 + 0.16 * ((b - 0.18) / 0.12); // a little bounce
+  if (b < 0.42) return 1.08 - 0.08 * ((b - 0.3) / 0.12);
+  return 1;
+}
+
+/**
+ * The Master diploma's gold shower (D46-31, R10: gold stars and long streamers, not the result's confetti a few
+ * seconds before): at = seconds after the diploma opens; life = a star's longest fall; stars, streamers and twinkles
+ * = full counts (about half with Lighter graphics); still = the gold stars of the still picture (reduced motion; two
+ * streamers hang at the top corners then).
+ */
+export const GOLD_SHOWER = { at: 0.3, life: 2.6, stars: 46, streamers: 7, twinkles: 12, still: 10, stillStreamers: 2 };
+
+/**
+ * How many of each part the gold shower has.
+ * @param {{lite?: boolean, still?: boolean}} [o] Lighter graphics; reduced motion
+ * @returns {{stars: number, streamers: number, twinkles: number}} counts
+ */
+export function goldShowerCount(o = {}) {
+  const g = GOLD_SHOWER;
+  if (o.still) return { stars: o.lite ? Math.ceil(g.still / 2) : g.still, streamers: g.stillStreamers, twinkles: 0 };
+  /** A full count, or about half of it with Lighter graphics. @param {number} n full count @returns {number} count */
+  const half = (n) => (o.lite ? Math.ceil(n / 2) : n);
+  return { stars: half(g.stars), streamers: half(g.streamers), twinkles: half(g.twinkles) };
 }
 
 /**

@@ -35,6 +35,19 @@ export const WALK_IN_LINES = { firstOnly: [2, 6], clockOnly: [8], intro: 12, bac
  */
 export const AGAIN_LINES = { count: 4 };
 
+/**
+ * Prom Penny's party visits (SPEC D46-28 and D46-29, audit R3 and R4): when her intro is about a party, prom or dance
+ * (these keys), the visit brings her party lights (fairy lights and bokeh in the room, confetti at the end; the rule is
+ * fx/stage-logic.js isPartyDay), as her event day does. On every party-light visit her second line says she brought
+ * the lights: customer.penny.lights.1 to N (lights = N), picked like her other lines (game/customer-lines.js
+ * withPartyLights). customer.penny.back.6 ("another event") and intro.7 (a sleepover) are not party lines.
+ */
+export const PARTY_LINES = {
+  who: 'penny',
+  intros: ['customer.penny.intro', 'customer.penny.intro.2', 'customer.penny.intro.4', 'customer.penny.back.4'],
+  lights: 3,
+};
+
 /** The husband (chapters 0 and 2) keeps his lines; his second line is this aside unless he has a clock (never in v1). */
 export const HUSBAND_ASIDES = { husband: 'chapter.0.husband.aside', husbandArmor: 'chapter.2.husband.aside' };
 

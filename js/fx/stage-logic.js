@@ -3,6 +3,7 @@
 // over the customer, floor smoke rolls in, then the lights come back up into the normal intro). No DOM, no clock: the
 // drawing lives in intro-stage.js, spotlight-fx.js and smoke-fx.js. Normal customers never get it.
 import { isBoss } from '../data/bosses.js';
+import { PARTY_LINES } from '../data/customer-lines.js';
 
 /** Seconds: dimmed to near dark by T_DIM, the clunk at T_ON, lit until T_HOLD, the room light back by T_UP, all gone by T_END. */
 export const STAGE_TIMES = { T_DIM: 0.3, T_ON: 0.6, T_HOLD: 1.55, T_UP: 2.1, T_END: 2.35 };
@@ -107,11 +108,25 @@ export function stillLevels() {
 }
 
 /**
- * Whether a round is Prom Penny's event day (D45 item 6): Penny in a boss or event slot (career customer 5, or a
- * Keep working event that lands on her). Only then the party lights and the end confetti show.
- * @param {{boss?: object|null, customer?: {id?: string}|null}|null} o the round's startRound arguments (app-logic.js roundArgs)
- * @returns {boolean} true = party day
+ * Whether an intro line is one of Prom Penny's party lines (a party, prom or dance tonight, data/customer-lines.js
+ * PARTY_LINES).
+ * @param {string|null|undefined} key the intro's string key
+ * @returns {boolean} true = a party line
+ */
+export function isPartyIntro(key) {
+  return typeof key === 'string' && PARTY_LINES.intros.includes(key);
+}
+
+/**
+ * Whether a round is one of Prom Penny's party visits (D45 item 6, D46-28): her event day (Penny in a boss or event
+ * slot: career customer 5, or a Keep working event that lands on her) or any visit whose intro is about a party, prom
+ * or dance. Only then the party lights and the end confetti show (and her second line says she brought the lights,
+ * game/customer-lines.js withPartyLights).
+ * @param {{boss?: object|null, customer?: {id?: string, introKey?: string}|null, lines?: {introKey?: string}|null}|null} o
+ *   the round's startRound arguments (app-logic.js roundArgs)
+ * @returns {boolean} true = a party visit
  */
 export function isPartyDay(o) {
-  return Boolean(o?.boss) && o?.customer?.id === 'penny';
+  if (o?.customer?.id !== PARTY_LINES.who) return false;
+  return Boolean(o.boss) || isPartyIntro(o.customer.introKey ?? o.lines?.introKey);
 }

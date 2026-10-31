@@ -162,6 +162,8 @@ const PRECACHE = [
   './js/fx/celebrate-logic.js',
   './js/fx/fx-layer.js',
   './js/fx/confetti-fx.js',
+  './js/fx/heart-puff-fx.js',
+  './js/fx/gold-shower-fx.js',
   './js/fx/coins-fx.js',
   './js/fx/reveal-fx.js',
   './js/fx/frame-shine.js',
@@ -185,7 +187,7 @@ const PRECACHE = [
   './assets/audio/sizzle.wav',
 ];
 
-const CACHE_VERSION = 'v104';
+const CACHE_VERSION = 'v105';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the

@@ -23,6 +23,9 @@ export const HUSBAND = {
   bumpTypes: ['whitehead'],
   chapter: 0,
   reluctant: true, // owner 2026-10-28: he does NOT want this; stern face all round, protest lines after (the ban follows)
+  // D46-26: his first pop in chapter 0 is the grand show (app-logic.js roundArgs passes it on). The chapter 1 torchlight
+  // reuses him but leaves it off (torchlightArgs): there the first sneak pop is a normal one, only the last stays big.
+  grandFirst: true,
 };
 
 /**

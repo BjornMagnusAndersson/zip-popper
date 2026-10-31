@@ -40,8 +40,8 @@ function shadeIndex(fy) {
   return fy > 0.93 ? 4 : fy > 0.4 ? 3 : fy > -0.3 ? 2 : fy > -0.8 ? 1 : 0;
 }
 
-/** Paint a five-point cartoon star with an ink outline into its sprite. @param {CanvasRenderingContext2D} c the sprite's context @param {number} w size @param {string[]} cols [top, middle, bottom] css colours @returns {void} */
-function paintStar(c, w, cols) {
+/** Paint a five-point cartoon star with an ink outline into its sprite (the diploma's gold shower uses it too). @param {CanvasRenderingContext2D} c the sprite's context @param {number} w size @param {string[]} cols [top, middle, bottom] css colours @returns {void} */
+export function paintStar(c, w, cols) {
   const m = w / 2;
   const R = w * 0.42;
   c.beginPath();
@@ -125,8 +125,8 @@ function paintBloom(c, w, pair) {
   c.beginPath(); c.arc(m, m, w * 0.12, 0, TAU); c.fill(); c.stroke();
 }
 
-/** Paint a sparkle: a small soft glow with a long thin four-point star (drawn added on, as light). @param {CanvasRenderingContext2D} c the sprite's context @param {number} w size @param {string} rgb tint "r,g,b" @returns {void} */
-function paintSparkle(c, w, rgb) {
+/** Paint a sparkle: a small soft glow with a long thin four-point star (drawn added on, as light; the heart puff and the gold shower use it too). @param {CanvasRenderingContext2D} c the sprite's context @param {number} w size @param {string} rgb tint "r,g,b" @returns {void} */
+export function paintSparkle(c, w, rgb) {
   const m = w / 2;
   const g = c.createRadialGradient(m, m, 0, m, m, m * 0.6);
   g.addColorStop(0, 'rgba(255,255,255,1)');

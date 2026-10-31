@@ -1160,6 +1160,9 @@ export const ROOMS = {
   // sign (the painted word CLEAN!, a small tick, sparkles and a stain) and a cheap lamp. Options: leakX, bulbX, signX, signTilt,
   // signY (its nail's height as a share of the floor line, default 0.12), doorX, doorOpen, leak/bulb/sign/door false to hide one.
   // ringX (0..1 across): with lamp: false, where the ring light stands once she has bought it (B109; no ring light without it).
+  // paint: true = the shop's wall paint (SPEC D47, the game's 'paint' layer): lavender walls with the white band of pink
+  // dots, no water stains, peeling bits or cracks (the tiles stay). newSign: true = the shop's shiny sign hangs straight
+  // on the same nail instead of the old crooked one (no stain). studioKit sets both once bought; false keeps the old look.
   studio: {
     wall: ['#8e9b83', '#7b8872'], stripes: '#86937c', skirting: '#5f6a56', floor: '#4f5648', boards: '#3c4237',
     sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: true, lamp: true,
@@ -1174,6 +1177,9 @@ export const ROOMS = {
     shabby: true, leak: true, bulb: true, sign: false, door: true, washers: true, cobwebs: true, sink: true, socks: true,
   },
 };
+
+/** The shop's wall paint in the studio (SPEC D47, the same colours as pop/backdrop.js PAINT): soft lavender, a white band with pink dots. */
+const PAINT = { wall: ['#efe6fb', '#dfd0f4'], stripes: '#e6dbf8', band: '#ffffff', dot: '#f08fb0' };
 
 /**
  * The dingy studio's wall (tier 0): grimy tiles low down, water stains, peeling paint, cracks and a door (the leaking
@@ -1196,7 +1202,36 @@ function shabbyWall(g, r, w, F) {
   }
   for (let y = top; y <= F - 22; y += t) g.appendChild(line(`M0 ${y} L${w} ${y}`, 3, { stroke: '#6c7560' }));
   g.appendChild(el('rect', { x: 0, y: top - 8, width: w, height: 10, fill: '#9aa287', ...ink(3) }));
-  // Olive-brown water stains (never anything like blood), peeling flakes and cracks.
+  if (r.paint === true) {
+    // SPEC D47: the shop's fresh paint covers every stain, flake and crack (pop/backdrop.js drawRoom 'wallPaint'), and
+    // a white stencilled band of pink dots runs along the top, just under the ceiling pipe.
+    paintBand(g, w, 46 * k, k);
+  } else {
+    shabbyStains(g, w, F, k);
+  }
+  if (r.door) door(g, r, w, F, k);
+}
+
+/**
+ * The white stencilled band of the freshly painted studio wall (SPEC D47, as pop/backdrop.js paintBand): a white
+ * stripe with a row of pink dots and a faint pink shadow under it.
+ * @param {SVGElement} g where to draw @param {number} w width @param {number} y top of the band @param {number} k size unit
+ * @returns {void}
+ */
+function paintBand(g, w, y, k) {
+  const bh = 22 * k;
+  g.appendChild(el('rect', { x: 0, y: y + bh, width: w, height: 4 * k, fill: '#d66e96', opacity: 0.25 }));
+  g.appendChild(el('rect', { x: -10, y, width: w + 20, height: bh, fill: PAINT.band, ...ink(3) }));
+  for (let x = 30 * k; x < w; x += 60 * k) g.appendChild(el('circle', { cx: x, cy: y + bh / 2, r: bh * 0.26, fill: PAINT.dot }));
+}
+
+/**
+ * The dingy studio's water stains (olive brown, never anything like blood), peeling paint flakes and cracks on the
+ * upper wall; the shop's wall paint covers them all (SPEC D47).
+ * @param {SVGElement} g where to draw @param {number} w width @param {number} F floor line @param {number} k size unit
+ * @returns {void}
+ */
+function shabbyStains(g, w, F, k) {
   const sid = `cst${gid += 1}`;
   g.appendChild(el('defs', {}, [el('radialGradient', { id: sid }, [el('stop', { offset: 0, 'stop-color': '#786834', 'stop-opacity': 0.12 }), el('stop', { offset: 0.8, 'stop-color': '#786834', 'stop-opacity': 0.3 }), el('stop', { offset: 1, 'stop-color': '#786834', 'stop-opacity': 0 })])]));
   for (const [fx, fy, rr] of [[0.12, 0.3, 90], [0.46, 0.55, 70], [0.86, 0.38, 110], [0.64, 0.18, 60]]) g.appendChild(el('ellipse', { cx: w * fx, cy: F * fy, rx: rr * k, ry: rr * k * 0.8, fill: `url(#${sid})` }));
@@ -1213,8 +1248,15 @@ function shabbyWall(g, r, w, F) {
     const d = F * len;
     g.appendChild(line(`M${x} ${y} l${-d * 0.1} ${d * 0.3} l${d * 0.12} ${d * 0.2} l${-d * 0.08} ${d * 0.25} l${d * 0.1} ${d * 0.25}`, 3.5, { stroke: '#3f463a' }));
   }
-  if (r.door) {
-    // A tired wooden door, open (dark doorway, the door leaf swung in) or shut (scuffed, with a knob).
+}
+
+/**
+ * The studio's tired wooden door at doorX, open (dark doorway, the door leaf swung in) or shut (scuffed, with a knob).
+ * @param {SVGElement} g where to draw @param {object} r room options @param {number} w width @param {number} F floor line
+ * @param {number} k size unit @returns {void}
+ */
+function door(g, r, w, F, k) {
+  {
     const dh = F * 0.84;
     const dw = Math.min(dh * 0.48, 300 * k);
     const dx = w * (r.doorX ?? 0.12) - dw / 2;
@@ -1278,7 +1320,8 @@ function shabbyFront(g, r, w, F) {
     // wall, its dull joint at leakX with a brown stain under it and a drop hanging from it. In front of the curtain rod.
     g.appendChild(pipe({ x: 0, w, y: 26 * k, r: 14 * k, jointX: w * (r.leakX ?? 0.5), joint: 'old' }).node);
   }
-  if (r.sign) {
+  if (r.sign && r.newSign === true) shinySign(g, r, w, F, k); // SPEC D47: the shop's sign replaces the old one
+  else if (r.sign) {
     const sx = w * (r.signX ?? 0.72);
     const sy = F * (r.signY ?? 0.12);
     const sw = 250 * k;
@@ -1321,6 +1364,46 @@ function shabbyFront(g, r, w, F) {
     g.appendChild(el('ellipse', { cx: bx, cy: by, rx: 20 * k, ry: 24 * k, fill: '#fff2bf', ...ink(4) }));
     for (const s of [-1, 1]) g.appendChild(line(`M${bx + s * 34 * k} ${by - 10 * k} l${s * 14 * k} ${-6 * k} l${-s * 4 * k} ${12 * k} l${s * 14 * k} ${-6 * k}`, 3.5, { stroke: '#e8b830' }));
   }
+}
+
+/**
+ * The shop's shiny new sign (SPEC D47, as pop/backdrop.js shinySign): hanging straight from the old sign's nail (signX,
+ * signY), the same size, a clean cream board with a green inner frame, the painted word CLEAN! (B9) and a small tick,
+ * a shine streak and gold sparkles, and no stain. Without the string table: a big tick and a pink heart.
+ * @param {SVGElement} g the room group @param {object} r room options @param {number} w width @param {number} F floor line
+ * @param {number} k size unit @returns {void}
+ */
+function shinySign(g, r, w, F, k) {
+  const sx = w * (r.signX ?? 0.72);
+  const sy = F * (r.signY ?? 0.12);
+  const sw = 250 * k;
+  const sh = 130 * k;
+  const top = sy + 40 * k;
+  const x0 = sx - sw / 2;
+  g.appendChild(line(`M${sx} ${sy} L${x0 + sw * 0.1} ${top} M${sx} ${sy} L${x0 + sw * 0.9} ${top}`, 3.5));
+  g.appendChild(el('rect', { x: x0 + 8 * k, y: top + 10 * k, width: sw, height: sh, rx: 14 * k, fill: '#281e1e', opacity: 0.18 }));
+  g.appendChild(el('rect', { x: x0, y: top, width: sw, height: sh, rx: 14 * k, fill: '#fffaf0', ...ink(5) }));
+  g.appendChild(el('rect', { x: x0 + sh * 0.1, y: top + sh * 0.1, width: sw - sh * 0.2, height: sh * 0.8, rx: sh * 0.12, fill: 'none', stroke: '#3fae8c', 'stroke-width': sh * 0.06 }));
+  const word = signWord(x0 + sw * 0.44, top + sh * 0.68, sw * 0.6, sh * 0.48, k);
+  if (word) {
+    g.appendChild(word);
+    g.appendChild(line(`M${x0 + sw * 0.77} ${top + sh * 0.5} l${sw * 0.05} ${sh * 0.16} l${sw * 0.08} ${-sh * 0.34}`, 8 * k, { stroke: '#3fae8c' }));
+  } else {
+    g.appendChild(line(`M${x0 + sw * 0.2} ${top + sh * 0.5} l${sw * 0.12} ${sh * 0.2} l${sw * 0.2} ${-sh * 0.42}`, 14 * k, { stroke: '#3fae8c' }));
+    const hx = x0 + sw * 0.73;
+    const hy = top + sh * 0.5;
+    const hz = sh * 0.2;
+    g.appendChild(el('path', { d: `M${hx} ${hy + hz} C${hx - hz * 2} ${hy - hz * 0.4} ${hx - hz * 0.8} ${hy - hz * 1.6} ${hx} ${hy - hz * 0.5} C${hx + hz * 0.8} ${hy - hz * 1.6} ${hx + hz * 2} ${hy - hz * 0.4} ${hx} ${hy + hz}Z`, fill: '#f08fb0', ...ink(3) }));
+  }
+  // A white shine streak on the top left corner of the board: it is brand new.
+  g.appendChild(line(`M${x0 + sw * 0.06} ${top + sh * 0.42} Q${x0 + sw * 0.07} ${top + sh * 0.12} ${x0 + sw * 0.2} ${top + sh * 0.08}`, 6 * k, { stroke: '#ffffff', opacity: 0.9 }));
+  for (const [fx, fy, q] of [[0.52, 0.02, 20], [0.47, 0.98, 14], [-0.52, 0.06, 13]]) {
+    const cx = sx + sw * fx;
+    const cy = top + sh * fy;
+    const z = q * k;
+    g.appendChild(el('path', { d: `M${cx} ${cy - z} Q${cx + z * 0.2} ${cy - z * 0.2} ${cx + z} ${cy} Q${cx + z * 0.2} ${cy + z * 0.2} ${cx} ${cy + z} Q${cx - z * 0.2} ${cy + z * 0.2} ${cx - z} ${cy} Q${cx - z * 0.2} ${cy - z * 0.2} ${cx} ${cy - z}Z`, fill: '#ffd25a', ...ink(2.5) }));
+  }
+  g.appendChild(el('circle', { cx: sx, cy: sy, r: 7 * k, fill: '#8a96a6', ...ink(3) }));
 }
 
 /**
@@ -1413,11 +1496,13 @@ function laundry(g, r, w, F) {
  *   sad little plant from the plan strip on the window sill instead of the big floor plant (it keeps plantEyes and
  *   plantScarf, and droops when its eyes are sad); plantShelf (true or a scale) puts that little plant, drooping, on
  *   a small crate at plantX instead (comic-art.js studioKit, SPEC D32j); plantHighlight draws yellow highlighter
- *   stripes across whichever plant is there
+ *   stripes across whichever plant is there; in the studio, paint: true and newSign: true draw the shop's wall paint
+ *   and shiny sign (SPEC D47, see ROOMS.studio)
  * @returns {{node: SVGElement}} the room
  */
 function room(l) {
   const r = { ...(ROOMS[l.kind] ?? ROOMS.living), ...l };
+  if (r.paint === true && r.shabby) Object.assign(r, { wall: PAINT.wall, stripes: PAINT.stripes }); // SPEC D47: the shop's paint
   const w = l.w ?? 1600;
   const h = l.h ?? 900;
   const F = l.floorY ?? h * 0.74;
@@ -2170,9 +2255,13 @@ export function dressHeroine(arts, outfit) {
  *   (same spot; a room with lamp: false stays without one).
  * - pinkChair: true = she bought the pink chair (Q14): every chair layer is the pink wingback (a layer with
  *   wingback: false keeps the folding chair).
+ * - paint: true = she bought the wall paint (SPEC D47): a studio room has the lavender painted wall (a room with
+ *   paint: false keeps the dingy wall).
+ * - newSign: true = she bought the new sign (SPEC D47): a studio room's old crooked sign is the shiny new one (same
+ *   nail; a room with newSign: false keeps the old sign, one with sign: false still has none).
  * Without any of these the strips are drawn exactly as written (a player who bought nothing sees no change).
  * @param {Record<string, Function>} arts an art kit (usually ARTS, maybe already dressed)
- * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean}|null} [o]
+ * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean, paint?: boolean, newSign?: boolean}|null} [o]
  *   what she has (null or nothing = the kit unchanged)
  * @returns {Record<string, Function>} the art kit to hand the comic player
  */
@@ -2195,6 +2284,14 @@ export function studioKit(arts, o = null) {
   if (o.ringLight) {
     const room = kit.room; // chained on top of the changes above
     if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.ringLight === undefined ? { ...l, ringLight: true } : l, k);
+  }
+  if (o.paint) {
+    const room = kit.room; // chained on top of the changes above
+    if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.paint === undefined ? { ...l, paint: true } : l, k);
+  }
+  if (o.newSign) {
+    const room = kit.room; // chained on top of the changes above
+    if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.newSign === undefined ? { ...l, newSign: true } : l, k);
   }
   if (o.pinkChair && typeof arts.chair === 'function') kit.chair = (l, k) => arts.chair(l.wingback === undefined ? { ...l, wingback: true } : l, k);
   return kit;

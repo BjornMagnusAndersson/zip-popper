@@ -5,8 +5,12 @@
 // studio (running gag: the sign that is never clean). Button: "Hang it back up. Nobody saw." The plant saw.
 // Format: docs/COMIC-FORMAT.md.
 
-/** The dingy studio (tier 0; the plant wears Greta's scarf). @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer */
-const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', lamp: false, ...o });
+/**
+ * The dingy studio (tier 0; the plant wears Greta's scarf). paint: false = always the dingy wall, even after the shop's
+ * wall paint (SPEC D47): the joke is the only clean bit of wall behind the sign.
+ * @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer
+ */
+const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', lamp: false, paint: false, ...o });
 
 /**
  * The wind machine: a little desk fan on a stand, blowing towards dir.

@@ -166,6 +166,9 @@ function open(strip) {
       // &ring = the ring light bought, &pinkchair = the pink chair bought (Q14 c, only in studio strips, as the game does)
       ringLight: strip.studio === 'owned' && params.has('ring'),
       pinkChair: strip.studio === 'owned' && params.has('pinkchair'),
+      // &paint = the wall paint bought, &newsign = the new sign bought (SPEC D47, only in studio strips, as the game does)
+      paint: strip.studio === 'owned' && params.has('paint'),
+      newSign: strip.studio === 'owned' && params.has('newsign'),
     }),
     onSeen: (id, info) => { log.textContent += `seen: ${id}${info.skipped ? ' (skipped)' : ''}\n`; },
   });

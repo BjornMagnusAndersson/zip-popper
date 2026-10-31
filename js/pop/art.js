@@ -119,10 +119,11 @@ export function paintSkin(ctx, w, h, dpr, seed, o = {}) {
  * @param {{x: number, y: number, r: number, type: string}} p the pimple
  * @param {number} amt squeeze
  * @param {number} appear growth
- * @param {number} time seconds (for the golden twinkle)
+ * @param {number} time seconds (for the golden twinkle and the horn's tremble)
+ * @param {boolean} [tense] the Evil Horn's tense build-up while squeezed (the juicy pop on)
  * @returns {void}
  */
-export function drawPimple(ctx, p, amt, appear, time) {
+export function drawPimple(ctx, p, amt, appear, time, tense = false) {
   const s = p.r * appear * (1 + 0.45 * amt);
   if (s <= 0.3) return;
   const { x, y, type } = p;
@@ -157,15 +158,36 @@ export function drawPimple(ctx, p, amt, appear, time) {
     return;
   }
   if (type === 'horn') { // the Evil Horn: a pink swollen base with a little cartoon horn poking out (it rises and wiggles as it is squeezed)
-    const base = ctx.createRadialGradient(x - s * 0.25, y - s * 0.1, s * 0.1, x, y + s * 0.15, s * 0.9);
-    base.addColorStop(0, '#ffe2d8'); base.addColorStop(0.6, '#f6a7ad'); base.addColorStop(1, 'rgba(240,140,150,0.55)');
+    // tense (the juicy pop, owner 2026-10-31): the build-up to its crack: the base swells, strain marks show round it
+    // and the horn trembles harder and faster as the pressure rises (time 0 = no tremble, for reduced motion)
+    const k = tense ? Math.min(1, amt) : 0;
+    const sw = 1 + 0.22 * k * k;
+    const base = ctx.createRadialGradient(x - s * 0.25, y - s * 0.1, s * 0.1, x, y + s * 0.15, s * 0.9 * sw);
+    base.addColorStop(0, '#ffe2d8'); base.addColorStop(0.6, k > 0.5 ? '#f49aa6' : '#f6a7ad'); base.addColorStop(1, 'rgba(240,140,150,0.55)');
     ctx.fillStyle = base;
-    ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 1.0, s * 0.64, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 1.0 * sw, s * 0.64 * sw, 0, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = Math.max(1.5, s * 0.08); // a pale rim, so the base reads on dark skin too
     ctx.strokeStyle = 'rgba(255,236,226,0.85)';
     ctx.stroke();
-    const wiggle = amt > 0.05 ? Math.sin(time * 26) * 0.07 * Math.min(1, amt) : 0;
-    drawHorn(ctx, x, y + s * 0.42 - s * 0.2 * Math.min(1, amt), s * 1.65, wiggle); // big enough to read on a phone
+    if (k > 0.45) { // comic strain marks round the base, pulsing
+      const a0 = Math.min(1, (k - 0.45) / 0.3);
+      const pulse = 1 + 0.18 * Math.sin(time * 22);
+      ctx.strokeStyle = `rgba(176,64,92,${0.6 * a0})`;
+      ctx.lineWidth = Math.max(1.2, s * 0.07);
+      ctx.lineCap = 'round';
+      for (const a of [-2.75, -2.25, -0.89, -0.39, 0.5, 2.64]) {
+        const d0 = s * 1.18 * sw;
+        const d1 = d0 + s * 0.26 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a) * d0, y + s * 0.3 + Math.sin(a) * d0 * 0.75);
+        ctx.lineTo(x + Math.cos(a) * d1, y + s * 0.3 + Math.sin(a) * d1 * 0.75);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+    }
+    const wiggle = amt > 0.05 ? Math.sin(time * (26 + 34 * k)) * (0.07 + 0.09 * k * k) * Math.min(1, amt) : 0;
+    const jx = Math.sin(time * 61) * s * 0.045 * k * k; // and it shivers sideways
+    drawHorn(ctx, x + jx, y + s * 0.42 - s * 0.2 * Math.min(1, amt) - s * 0.1 * k * k, s * 1.65 * (1 + 0.06 * k), wiggle); // big enough to read on a phone
     return;
   }
   const dome = ctx.createRadialGradient(x - s * 0.3, y - s * 0.35, s * 0.1, x, y, s * 1.05);

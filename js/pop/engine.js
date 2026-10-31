@@ -25,12 +25,17 @@
 // Juicy pop (SPEC D45 item 1, option juicy: true; from pop test G): whiteheads, pink and big bumps dome up tight while
 // squeezed and throb, then split open: a goo mound rises out, glossy drops fly and land with splatter specks, a small
 // soft crater heals in about 2 s, a see-through ripple bends the picture (ripple.js) and a few drops hit the screen
-// glass and slide down (the lens splats, splashLens). Scaled by size; the biggest show for the last bump of a face and
-// for the first pop with option grandFirst (Hubby, chapter 0). The golden bump and the Evil Horn keep their own pop
+// glass and slide down (the lens splats, splashLens). Scaled by size; the biggest show for the last goo bump of a face
+// (blackheads and hairs left over do not count, D46-32) and for the first pop with option grandFirst (Hubby, chapter 0
+// only, D46-26). A chin, jaw or nose bump throws its upward drops sideways (D46-33). The golden bump and the Evil Horn keep their own pop
 // and get the ripple (gold also golden glass drops); blackheads and hairs are unchanged. pop-fx.js decides, pop-fx-art.js
 // draws. juicy false (the Settings switch "Gentle pops") = the calm pop as before. Reduced motion: no ripple, no glass,
 // no jolt, fewer drops; option lite (Lighter graphics, or the slow-phone switch): fewer drops, no ripple. The warm
-// cloth steams while it is on a bump (D45 item 5).
+// cloth steams while it is on a bump (D45 item 5). Splat v2 (owner 2026-10-31): fewer, fatter drops land close round
+// the bump as cartoon splats (merged into puddles, drip runs), a fine mist flies and vanishes; goo lands only on bare
+// skin (the picture's skin mask, face.js skinAt), elsewhere it slides down and fades; a drop flying at an eye makes her
+// flinch (faceLife.flinch) and slides off the shut eye down the cheek. The Evil Horn's own show: it trembles and creaks
+// louder while squeezed, then cracks, shoots off spinning and sticks in the wall like a dart (pop-fx.js hornAt).
 import { pressureStep, tapPressure, hitTest, hitDecoy, rng, holdTime, grownRadius, grownHold, growStart } from './logic.js';
 import { fullView, screenToScene, sceneToScreen, clampView, zoomAt, panView, pinchView, refitView } from './logic.js';
 import { bumpInfo, isImplemented } from '../data/bumps.js';
@@ -50,8 +55,10 @@ import {
   drawTweezers, drawFinger, drawCloth, drawWarmBump, drawPatch, drawOuch, drawHorn, drawHair, hairPoints, drawDecoy,
   gooLook, capList,
 } from './art.js';
-import { popPlan, sprayDrops, glassSpots, stepGlass, throb, outDir, steamStep, steamWisps, CRATER, JUICY_KINDS } from './pop-fx.js';
+import { popPlan, sprayDrops, glassSpots, stepGlass, throb, outDir, steamStep, steamWisps, CRATER, JUICY_KINDS, lastShow, sprayAim } from './pop-fx.js';
+import { mistDrops, eyeAt, slideOffEye, FALL_TIME, HORN_SHOW, hornTarget, hornPuffs } from './pop-fx.js';
 import { juicyGoo, drawDome, drawPopped, drawMound, drawFlyer, drawLanded, drawGlassDrop, drawClothSteam, warmGoo } from './pop-fx-art.js';
+import { drawHornShow, drawPuff } from './pop-fx-art.js';
 import { makeRipple } from './ripple.js';
 import { SWAY, TICKLE, SENSITIVE } from '../data/twists.js';
 import { swayOffset, swayAmplitude, swayRoom, clampOffset, tickleDue, giggleDrop, giggleBlocks, jerkOffset, ticklishZone, swayView } from './twist-logic.js';
@@ -214,6 +221,8 @@ export function createPopScene(canvas, o) {
   const tweezers = []; // tweezers pulling a blackhead out
   const horns = []; // Evil Horns flying off after they creaked out
   const hairs = []; // ingrown hairs flopping away after they came out
+  const puffs = []; // dust puffs at an Evil Horn's base as it cracks out
+  const fxCount = { flinch: 0, eyeSlide: 0, fell: 0, merged: 0 }; // for browser checks: what the splat rules did
   let quake = -1; // time the last horn came out (the picture wobbles for a moment); -1 = none
   let quakeK = 1; // how hard that wobble is (1 = horn, smaller for a hair)
   let hold = null; // {p, id, since} the pimple being squeezed
@@ -242,6 +251,7 @@ export function createPopScene(canvas, o) {
   const juicy = o.juicy === true;
   let lite = Boolean(o.lite);
   let pops = 0;
+  let lastSize = null; // the last pop's show size (popPlan size), for browser checks
   const ripple = makeRipple();
   let gooLayer = null;
   let hidden = null;
@@ -267,6 +277,27 @@ export function createPopScene(canvas, o) {
   const faceLife = () => (reduced || halted ? null : texture?.faceLife ?? null);
   /** Wall-clock seconds for the idle life (the loop's own time stands still while it sleeps). @returns {number} seconds */
   const lifeNow = () => performance.now() / 1000;
+  /** The face picture's eyes (scene px, with their lids and lenses; face.js makeFaceLife), none when unknown. @returns {object[]} eyes */
+  const eyesNow = () => texture?.faceLife?.eyes ?? [];
+
+  /**
+   * Whether a scene point is on bare skin: the face picture's skin mask (face.js skinAt: not on hair, a hat, a helmet
+   * or the room), or the skin oval when the picture has no mask.
+   * @param {number} x scene x
+   * @param {number} y scene y
+   * @returns {boolean} true on skin
+   */
+  function onSkin(x, y) {
+    let k = null;
+    try { k = texture?.skinAt?.(x, y) ?? null; } catch { k = null; }
+    return k === null ? onFace(face, x, y) : k;
+  }
+
+  /** She flinches at a goo drop flying at her eye: the eyes snap shut a moment (not with reduced motion or Lighter graphics). @returns {void} */
+  function flinch() {
+    if (lite) return;
+    try { if (faceLife()?.flinch?.(lifeNow())) fxCount.flinch += 1; } catch { /* an older picture without it */ }
+  }
 
   /**
    * While nothing else moves, wake the drawing loop when the face's next blink or glance starts. While the page or
@@ -679,17 +710,18 @@ export function createPopScene(canvas, o) {
    * @param {string} goo the goo kind (colour)
    * @param {number} power the amount: 1 = a normal big pimple (2 or 3 splats, about 3 drips each). A later super zit
    *   can call this with a big power (say 4 to 8) for a whole-screen splash with many long drips.
-   * @param {{glass?: number}} [opt] glass = this many juicy goo drops on the glass instead of splats (SPEC D45, pop test
-   *   G: they hit round the bump, cling, then slide slowly down with a wet trail and fade); power makes them bigger
+   * @param {{glass?: number, avoid?: object[]}} [opt] glass = this many juicy goo drops on the glass instead of splats
+   *   (SPEC D45, pop test G: they hit round the bump, cling, then slide down with a wet trail and fade); power makes
+   *   them bigger; avoid = screen circles they keep off (the eyes)
    * @returns {void}
    */
   function splashLens(x, y, goo, power = 1, opt = {}) {
     if (opt.glass > 0) {
-      const spots = glassSpots({ n: Math.round(opt.glass), x, y, w, h, scale, power, rand });
+      const spots = glassSpots({ n: Math.round(opt.glass), x, y, w, h, scale, power, rand, avoid: opt.avoid });
       for (const s of spots) {
-        splats.push({
-          glass: true, x: s.x, y: s.y, x0: s.x, y0: s.y, r: s.r, r0: s.r, age: -s.delay, hold: 0.35 + rand() * 0.6, vy: 0,
-          life: 3 + rand() * 1.5, sway: rand() * 6, trail: [], goo, a: 1, born: time,
+        splats.push({ // owner 2026-10-31: they cling only a moment, then slide away (none sit still for long)
+          glass: true, x: s.x, y: s.y, x0: s.x, y0: s.y, r: s.r, r0: s.r, age: -s.delay, hold: 0.15 + rand() * 0.3, vy: 0,
+          life: 2.2 + rand() * 0.7, sway: rand() * 6, trail: [], goo, a: 1, born: time,
           specks: Array.from({ length: 4 }, () => ({ a: rand() * Math.PI * 2, d: 1.5 + rand() * 1.3, k: 0.14 + rand() * 0.14 })),
         });
       }
@@ -788,12 +820,88 @@ export function createPopScene(canvas, o) {
     const R = p.popS * 0.3;
     blobs.push({ juicy: true, mound: true, x: p.x + Math.cos(dir) * R * 1.25, y: p.y + Math.sin(dir) * R * 1.25, r: p.popHr * 0.9, hr: p.popHr, R, dir, big, goo, age: reduced ? 1 : 0 });
     capBlobs();
-    for (const d of sprayDrops({ x: p.x, y: p.y, hr: p.popHr, openAng: p.openAng, big, n: plan.drops, scale, goo, reach: plan.reach, rand })) drops.push(d);
+    // a chin, jaw or nose bump sends its upward drops sideways, off the lips and eyes (D46-33, pop-fx.js sprayAim)
+    const aim = face ? sprayAim((p.x - face.cx) / face.rx, (p.y - face.cy) / face.ry) : null;
+    for (const d of sprayDrops({ x: p.x, y: p.y, hr: p.popHr, openAng: p.openAng, big, n: plan.drops, scale, goo, reach: plan.reach, aim, rand })) drops.push(d);
+    for (const d of mistDrops({ x: p.x, y: p.y, hr: p.popHr, n: plan.mist, scale, goo, reach: plan.reach, rand })) drops.push(d); // a fine mist that vanishes
     capList(drops, MAX_JUICY_DROPS);
     popExtras(p, plan, goo);
     const grand = plan.size === 'grand';
     play('pop_juicy', { big, grand });
     buzz(grand ? [50, 30, 110, 40, 70] : big ? [50, 30, 110] : [30, 20, 50]);
+  }
+
+  /**
+   * The Evil Horn's show (owner 2026-10-31, pop-fx.js hornPlan): a loud crack, the horn shoots off spinning and sticks
+   * in the wall like a dart (hornAt), its base pops open into a soft crater that heals, a big burst of pale horn goo
+   * with a mound and a mist, puffs of dust round the base, and the extras: glass drops, the strongest ripple, a jolt.
+   * Its game rules (warm cloth, hold, irritation) are the same as before; only the look, feel and sound changed.
+   * @param {object} p the horn bump (popped now)
+   * @param {object} plan its pop plan
+   * @returns {void}
+   */
+  function hornPop(p, plan) {
+    const s = p.r * 1.45; // the bump at full squeeze (drawPimple), so the flying horn starts the size it was
+    const hr = s * 1.65 * 1.06;
+    const len = hr * 1.3;
+    const x = p.x;
+    const y = p.y + s * 0.1;
+    let boxes = [];
+    try { boxes = o.covered?.() ?? []; } catch { boxes = []; }
+    const v = shown(); // the buttons' boxes are screen px: into scene px for the target
+    const avoid = boxes.map((b) => { const a = screenToScene(v, b.x, b.y); const c = screenToScene(v, b.x + b.w, b.y + b.h); return { x: a.x, y: a.y, w: c.x - a.x, h: c.y - a.y }; });
+    const aim = hornTarget({ x, y, len, w, h, face, avoid }); // it sticks in the wall, never behind a button
+    horns.push({ x, y, r: hr, len, t: 0, spin: aim.x >= x ? 1 : -1, show: true, calm: reduced, lite, aimX: aim.x, aimY: aim.y, aimA: aim.a, hit: false });
+    const goo = 'horn';
+    p.popAt = time; // its base pops open and sinks into a soft crater that heals (drawPopped)
+    p.popS = s * 0.85;
+    p.popHr = p.r * 0.5;
+    p.openAng = 0;
+    const dir = outDir(p.axis ?? 0, p.x, face ? face.cx : w / 2);
+    const R = p.popS * 0.3;
+    blobs.push({ juicy: true, mound: true, x: p.x + Math.cos(dir) * R * 1.25, y: p.y + Math.sin(dir) * R * 1.25, r: p.popHr * 0.9, hr: p.popHr, R, dir, big: true, goo, age: reduced ? 1 : 0 });
+    capBlobs();
+    const steer = face ? sprayAim((p.x - face.cx) / face.rx, (p.y - face.cy) / face.ry) : null;
+    for (const d of sprayDrops({ x: p.x, y: p.y, hr: p.popHr, openAng: (p.axis ?? 0) + Math.PI / 2, big: true, n: plan.drops, scale, goo, reach: plan.reach, aim: steer, rand })) drops.push(d);
+    for (const d of mistDrops({ x: p.x, y: p.y, hr: p.popHr, n: plan.mist, scale, goo, reach: plan.reach, rand })) drops.push(d);
+    capList(drops, MAX_JUICY_DROPS);
+    for (const pf of hornPuffs({ x: p.x, y: p.y + p.r * 0.2, r: p.r, n: plan.puffs, rand })) puffs.push(pf);
+    popExtras(p, plan, goo);
+    play('horn_crack', { calm: reduced });
+    buzz(reduced ? [30, 20, 60] : [45, 25, 110, 60, 30, 40, 70]);
+  }
+
+  /**
+   * A juicy drop settles on the skin: as its own splat (a fatter one may get a drip run, when there is skin below it),
+   * or, when it lands on a splat of the same burst, merged into that one as one puddle (at most four drops each).
+   * @param {object} d the drop
+   * @returns {void}
+   */
+  function landJuicy(d) {
+    const near = blobs.find((b) => b.juicy && !b.mound && !b.baked && (b.parts?.length ?? 1) < 4 && Math.hypot(b.x - d.x, b.y - d.y) < (b.r + d.r) * 0.9);
+    if (near) {
+      if (!near.parts) near.parts = [{ dx: 0, dy: 0, k: 1 }];
+      near.parts.push({ dx: (d.x - near.x) / near.r, dy: (d.y - near.y) / near.r, k: d.r / near.r });
+      fxCount.merged += 1;
+      return;
+    }
+    const drip = d.r > 6 * scale && rand() < 0.5 && onSkin(d.x, d.y + d.r * 2.6) ? 0.9 + rand() * 0.9 : 0; // some fat ones run a little
+    blobs.push({ juicy: true, x: d.x, y: d.y, r: d.r, goo: d.goo, age: reduced ? 1 : 0, sa: Math.atan2(d.vy, d.vx), seed: rand(), drip });
+    capBlobs();
+  }
+
+  /**
+   * Just before a flying juicy drop lands: if it is coming down on an eye, she flinches now (a real flinch comes
+   * before the hit). Checked once per drop.
+   * @param {object} d the drop
+   * @returns {void}
+   */
+  function watchEye(d) {
+    if (d.watched || d.mist || d.vz >= 0) return;
+    const tl = (d.vz + Math.sqrt(d.vz * d.vz + 1400 * Math.max(0, d.z))) / 700; // seconds to the landing
+    if (tl > 0.12) return;
+    d.watched = true;
+    if (eyeAt(eyesNow(), d.x + d.vx * tl, d.y + d.vy * tl, d.r)) flinch();
   }
 
   /**
@@ -806,8 +914,10 @@ export function createPopScene(canvas, o) {
    */
   function popExtras(p, plan, goo = gooKind(p)) {
     if (plan.glass > 0) {
-      const at = sceneToScreen(shown(), p.x, p.y); // the glass is in front of the zoom: screen px
-      splashLens(at.x, at.y, goo, 1, { glass: plan.glass });
+      const v = shown();
+      const at = sceneToScreen(v, p.x, p.y); // the glass is in front of the zoom: screen px
+      const avoid = eyesNow().map((e) => { const q = sceneToScreen(v, e.x, e.y); return { x: q.x, y: q.y, r: Math.max(e.rx, e.ry) * v.z }; });
+      splashLens(at.x, at.y, goo, 1, { glass: plan.glass, avoid }); // never over an eye (owner 2026-10-31)
     }
     if (plan.ripple) ripple.start(p.x, p.y, time, { ...plan.ripple, far: Math.min(w, h) * plan.ripple.far, r0: p.r });
     if (plan.jolt > 0 && !reduced && (quake < 0 || quakeK < plan.jolt)) { quake = time; quakeK = plan.jolt; }
@@ -828,7 +938,7 @@ export function createPopScene(canvas, o) {
   function drawAnyDrop(c, d) {
     if (!d.juicy) drawDrop(c, d);
     else if (d.mound) drawMound(c, d);
-    else if ((d.z ?? 0) > 0 || d.fall !== undefined) drawFlyer(c, d, scale);
+    else if ((d.z ?? 0) > 0 || d.fall !== undefined || d.slideTo !== undefined) drawFlyer(c, d, scale);
     else drawLanded(c, d);
   }
 
@@ -840,7 +950,7 @@ export function createPopScene(canvas, o) {
   function bakeGoo() {
     if (!juicy) return;
     /** Whether a bit of juicy goo has settled and is not painted yet. @param {object} b a landed blob @returns {boolean} yes */
-    const ready = (b) => b.juicy && !b.baked && (b.age ?? 1) >= (b.mound ? 0.8 : 0.6);
+    const ready = (b) => b.juicy && !b.baked && (b.age ?? 1) >= (b.mound ? 0.8 : b.drip ? 1 : 0.6); // a drip run creeps down until 1 s
     if (!gooLayer && !blobs.some(ready)) return;
     if (!gooLayer || gooLayer.canvas.width !== Math.round(w * dpr) || gooLayer.canvas.height !== Math.round(h * dpr)) {
       gooLayer = { ...makeCanvas(w, h, dpr), dirty: true, any: false };
@@ -859,7 +969,8 @@ export function createPopScene(canvas, o) {
       drawAnyDrop(gooLayer.ctx, b);
       b.baked = true;
       gooLayer.any = true;
-      const e = b.mound ? b.hr * 2.2 : b.r * 3.2; // how far it reaches, with its specks and shadow
+      // how far it reaches, with its specks, shadow, drip run and merged parts
+      const e = b.mound ? b.hr * 2.2 : b.r * (3.2 + (b.drip ?? 0) + Math.max(0, ...(b.parts ?? []).map((q) => Math.hypot(q.dx, q.dy) + q.k)));
       const bx = gooLayer.box;
       gooLayer.box = bx
         ? { x0: Math.min(bx.x0, b.x - e), y0: Math.min(bx.y0, b.y - e), x1: Math.max(bx.x1, b.x + e), y1: Math.max(bx.y1, b.y + e) }
@@ -927,8 +1038,11 @@ export function createPopScene(canvas, o) {
       return;
     }
     if (squeeze?.p === p) { p.gooDir = gooDirection(p.axis); endSqueeze(); } // squeezed out: the goo squirts across
-    // Which pop it gets (SPEC D45, pop-fx.js): the grand show for the last bump of a face and a grandFirst scene's first pop.
-    const plan = popPlan({ type: p.type, last: pimples.every((q) => q === p || q.popped), first: o.grandFirst === true && pops === 0, gentle: !juicy, reduced, lite });
+    // Which pop it gets (SPEC D45, pop-fx.js): the grand show for the last goo bump of a face (only blackheads and hairs
+    // left after it counts too, D46-32) and a grandFirst scene's first pop (Hubby in chapter 0, D46-26).
+    const left0 = pimples.filter((q) => q !== p && !q.popped).map((q) => q.type);
+    const plan = popPlan({ type: p.type, last: lastShow(p.type, left0), first: o.grandFirst === true && pops === 0, gentle: !juicy, reduced, lite });
+    lastSize = plan.size; // for browser checks (popFx show)
     const dome = plan.style === 'juicy' ? domeOf(p) : null; // the dome as it was at the moment it burst
     pops += 1;
     if (keyHold?.p !== p) { // a pop by pointer: a cold bump irritates the skin; the cotton pad soothes (the keyboard is gentle)
@@ -951,7 +1065,9 @@ export function createPopScene(canvas, o) {
       tweezers.push({ x: p.x, y: p.y, t: 0, r: p.r, withTweezers: tweezed(p) });
       play('tweeze');
       buzz(14);
-    } else if (horned(p)) { // the Evil Horn creaks out, flies off with a dab of pale goo, and the picture wobbles
+    } else if (horned(p) && plan.horn) { // the Evil Horn's big show (owner 2026-10-31): a crack, off it shoots into the wall
+      hornPop(p, plan);
+    } else if (horned(p)) { // Gentle pops: the Evil Horn creaks out, flies off with a dab of pale goo, and the picture wobbles
       horns.push({ x: p.x, y: p.y, r: p.r * 1.65, t: 0, spin: rand() < 0.5 ? -1 : 1 });
       squirt(p);
       play('creak');
@@ -1105,7 +1221,11 @@ export function createPopScene(canvas, o) {
     texture = tex;
     for (const p of pimples) mv(p, ['r', 'r0', 'rMax', 'popS', 'popHr']); // popS, popHr: a juicy crater healing
     for (const k of marks) mv(k);
-    for (const hn of horns) mv(hn);
+    for (const hn of horns) {
+      mv(hn, ['r', 'len']);
+      if (hn.show) { hn.aimX = hn.aimX * s + tx; hn.aimY = hn.aimY * s + ty; } // where it sticks in the wall moves too
+    }
+    for (const pf of puffs) mv(pf, ['r', 'vx', 'vy']);
     for (const hr of hairs) mv(hr, ['reach']);
     for (const pa of patches) mv(pa);
     for (const d of decoys) mv(d);
@@ -1288,6 +1408,11 @@ export function createPopScene(canvas, o) {
           p.phase = (p.phase ?? 0) + dt * (1.3 + 4.2 * p.pressure);
           if (!reduced && Math.floor(p.phase) > beat) play('blub', { level: p.pressure });
         }
+        if (!p.popped && held && juicy && horned(p) && p.pressure > 0.1) { // the Evil Horn creaks faster and higher as it is squeezed
+          const beat = Math.floor(p.creakPh ?? 0);
+          p.creakPh = (p.creakPh ?? 0) + dt * (1.2 + 6.5 * p.pressure * p.pressure);
+          if (Math.floor(p.creakPh) > beat) play('creak', { tick: true, level: p.pressure });
+        }
         if (p.pressure >= 1) pop(p);
         if (held || (p.pressure > 0 && keyHold?.p !== p)) busy = true;
       }
@@ -1358,12 +1483,23 @@ export function createPopScene(canvas, o) {
     for (let i = drops.length - 1; i >= 0; i -= 1) {
       const d = drops[i];
       busy = true;
-      if (d.juicy) { // a juicy drop (pop test G): it slows in the air, falls, lands on the face; off the face it drops away and fades
+      // A juicy drop (pop test G): it slows in the air, falls and lands on the skin. One that missed the skin (room,
+      // hair, a hat) slides down off it and fades; one flying at an eye makes her flinch and slides off the shut eye
+      // down the cheek (owner 2026-10-31); the mist just vanishes where it lands.
+      if (d.juicy) {
         if (d.fall !== undefined) {
           d.fall += dt;
-          d.vy += 900 * scale * dt;
+          d.vy += 600 * scale * dt;
           d.y += d.vy * dt;
-          if (d.fall > 0.35) drops.splice(i, 1);
+          if (d.fall > FALL_TIME) drops.splice(i, 1);
+          continue;
+        }
+        if (d.slideTo !== undefined) { // sliding off a shut eye, down the cheek
+          d.vy = Math.min(d.vy + 900 * scale * dt, 300 * scale);
+          d.y += d.vy * dt;
+          if (d.y < d.slideTo) continue;
+          d.slideTo = undefined;
+          if (onSkin(d.x, d.y)) { drops.splice(i, 1); landJuicy(d); } else d.fall = 0;
           continue;
         }
         const drag = Math.exp(-dt * 2.4);
@@ -1373,12 +1509,20 @@ export function createPopScene(canvas, o) {
         d.y += d.vy * dt;
         d.vz -= 700 * dt;
         d.z += d.vz * dt;
-        if (d.z > 0) continue;
-        if (onFace(face, d.x, d.y)) {
+        if (d.z > 0) { watchEye(d); continue; }
+        if (d.mist) { drops.splice(i, 1); continue; }
+        const eye = eyeAt(eyesNow(), d.x, d.y, d.r);
+        if (eye) { // no goo settles on an eye: she blinks it away (with reduced motion it is simply gone)
+          flinch();
+          fxCount.eyeSlide += 1;
+          if (reduced) { drops.splice(i, 1); continue; }
+          Object.assign(d, { z: 0, vz: 0, vx: 0, vy: 50 * scale, slideTo: slideOffEye(eye, d.r) });
+          continue;
+        }
+        if (onSkin(d.x, d.y)) {
           drops.splice(i, 1);
-          blobs.push({ juicy: true, x: d.x, y: d.y, r: d.r, goo: d.goo, age: reduced ? 1 : 0, sa: Math.atan2(d.vy, d.vx) });
-          capBlobs();
-        } else { d.fall = 0; d.z = 0; d.vz = 0; d.vx *= 0.3; d.vy = 40 * scale; }
+          landJuicy(d);
+        } else { d.fall = 0; d.z = 0; d.vz = 0; d.vx *= 0.3; d.vy = 40 * scale; fxCount.fell += 1; }
         continue;
       }
       d.x += d.vx * dt;
@@ -1387,6 +1531,7 @@ export function createPopScene(canvas, o) {
       d.z += d.vz * dt;
       if (d.z <= 0) { // it lands: squash, then a short slide that leaves a tiny smear (sa = the slide's direction)
         drops.splice(i, 1);
+        if (juicy && (!onSkin(d.x, d.y) || eyeAt(eyesNow(), d.x, d.y, d.r))) continue; // juicy pops on: none off the skin or on an eye
         blobs.push({ x: d.x, y: d.y, r: d.r, gold: d.gold, goo: d.goo, age: 0, sa: Math.atan2(d.vy, d.vx) });
         capBlobs();
       }
@@ -1415,9 +1560,28 @@ export function createPopScene(canvas, o) {
       if (tweezers[i].t > 0.8) tweezers.splice(i, 1);
     }
     for (let i = horns.length - 1; i >= 0; i -= 1) {
-      horns[i].t += dt;
+      const hn = horns[i];
+      hn.t += dt;
       busy = true;
-      if (horns[i].t > 1.1) horns.splice(i, 1);
+      if (hn.show && !hn.calm && !hn.hit && hn.t >= HORN_SHOW.fly) { // thwack: it sticks in the wall (a second, smaller jolt)
+        hn.hit = true;
+        if (!reduced) { quake = time; quakeK = 0.55; }
+        buzz(30);
+      }
+      if (hn.t > (hn.show && !hn.calm ? HORN_SHOW.gone : 1.1)) horns.splice(i, 1);
+    }
+    for (let i = puffs.length - 1; i >= 0; i -= 1) { // the horn's dust puffs drift out, slowing (they only fade with reduced motion)
+      const pf = puffs[i];
+      pf.t += dt;
+      busy = true;
+      if (!reduced) {
+        const k = Math.exp(-dt * 3.2);
+        pf.vx *= k;
+        pf.vy *= k;
+        pf.x += pf.vx * dt;
+        pf.y += pf.vy * dt;
+      }
+      if (pf.t >= pf.life) puffs.splice(i, 1);
     }
     for (let i = hairs.length - 1; i >= 0; i -= 1) {
       hairs[i].t += dt;
@@ -1531,6 +1695,7 @@ export function createPopScene(canvas, o) {
     for (const p of pimples) {
       if (p.popped) continue;
       if (juicyBump(p)) drawJuicyBump(p); // the juicy dome while squeezed (SPEC D45)
+      else if (horned(p)) drawPimple(ctx, p, p.pressure, p.appear, reduced ? 0 : time, juicy); // its tense build-up (juicy pops)
       else drawPimple(ctx, p, p.pressure, p.appear, time);
     }
     for (const p of pimples) { // a juicy bump just popped: the split dome sinking into a crater that heals (about 2 s)
@@ -1584,7 +1749,9 @@ export function createPopScene(canvas, o) {
       if (tw.withTweezers) drawTweezers(ctx, tw.x, tw.y - up, 0, scale);
       ctx.restore();
     }
-    for (const hn of horns) { // an Evil Horn that creaked out: it pops up, tumbles away and fades
+    for (const pf of puffs) drawPuff(ctx, pf); // dust puffs round an Evil Horn's base
+    for (const hn of horns) { // an Evil Horn that creaked out: it pops up, tumbles away and fades (its big show: drawHornShow)
+      if (hn.show) { drawHornShow(ctx, hn); continue; }
       const up = smooth(hn.t / 0.5) * 40 * scale + Math.max(0, hn.t - 0.5) * 60 * scale;
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, hn.t - 0.7) / 0.4);
@@ -2354,7 +2521,24 @@ export function createPopScene(canvas, o) {
   canvas.popFx = () => ({
     juicy, lite, reduced, pops, flying: drops.length, blobs: blobs.length, baked: blobs.filter((b) => b.baked).length,
     glass: splats.filter((s) => s.glass).length, splats: splats.filter((s) => !s.glass).length, ripple: ripple.busy(), steam: steamK,
+    show: lastSize, // the last pop's show size ('small', 'big' or 'grand'; null before the first pop)
+    ...fxCount, // flinches, drops that slid off an eye, drops that fell off the skin, drops merged into puddles
+    horns: horns.map((hn) => ({ t: hn.t, hit: hn.hit, show: Boolean(hn.show) })), puffs: puffs.length,
+    eyes: eyesNow().map((e) => ({ x: e.x, y: e.y, rx: e.rx, ry: e.ry })),
+    onEyes: blobs.filter((b) => eyeAt(eyesNow(), b.x, b.y)).length, // settled goo on an eye (should stay 0)
+    offSkin: blobs.filter((b) => !onSkin(b.x, b.y)).length, // settled goo off the skin (should stay 0)
   });
+  /**
+   * For browser checks (splat v2): throw one juicy drop from one scene point so it lands on another (to see the eye
+   * flinch or the slide off the skin without waiting for a random drop to do it).
+   * @param {number} x0 from x @param {number} y0 from y @param {number} x1 to x @param {number} y1 to y
+   * @returns {void}
+   */
+  canvas.popThrow = (x0, y0, x1, y1) => {
+    const k = 2.4 / (1 - Math.exp(-2.4 * ((120 + Math.sqrt(120 * 120 + 2800)) / 700))); // speed per px of distance (drag 2.4, gravity 700)
+    drops.push({ x: x0, y: y0, z: 2, vx: (x1 - x0) * k, vy: (y1 - y0) * k, vz: 120, r: 6 * scale, goo: 'white', juicy: true });
+    kick();
+  };
   measureRoom();
   if (juicy) { // the juicy pop's pictures made now, with the face, so the first pop never waits for them
     try { warmGoo([...new Set(pimples.map(gooKind))]); } catch { /* no canvas: drawn the slow way */ }
