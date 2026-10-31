@@ -412,28 +412,200 @@ export function glassSpots(o) {
   return out;
 }
 
+// Goo drops on the screen glass, v2 (owner 2026-10-31 on v106: "just straight lines and boring", wanted "more realistic
+// in the cartoony sense"): each one hits as an irregular splat with flung specks, gathers into a fat drop that grows a
+// bulge at the bottom, then slides down in stick-slip lurches, wandering a little sideways, slowing as it thins, maybe
+// splitting in two or picking up a droplet waiting below; it leaves a wet streak beaded with tiny droplets that dries
+// from the top. Everything that sits on the glass (streak points, beads, waiting droplets, a split-off drop) lives in
+// the drop's `trail` list, so a turn of the phone (engine.js resize) moves it all.
+
+/** Glass drop timing: GATHER = seconds the splat takes to pull into a drop; DRY = seconds a streak point stays wet
+ * before it has dried away (the oldest, at the top, first); LOSS = goo left behind per drop radius slid (as a share of
+ * the drop); THIN = below this much goo it stops as a little bead. */
+export const GLASS_DROP = { GATHER: 0.3, DRY: 1.5, LOSS: 0.055, THIN: 0.32 };
+
 /**
- * One step of a drop on the glass: it clings a moment, then slides slowly down (a little faster as it goes, with a
- * slight sway), shrinking, and lays a thin wet trail; it is gone after its life.
- * @param {{x: number, y: number, r: number, r0: number, age: number, hold: number, vy: number, life: number, sway: number,
- *   trail: {x: number, y: number}[]}} q the drop (changed in place)
+ * A new goo drop on the glass at one of glassSpots' spots, ready for stepGlass (moving) and pop-fx-art.js drawGlassDrop.
+ * @param {{x: number, y: number, r: number, delay: number}} s the spot (screen px), its radius and delay
+ * @param {{goo: string, rand: () => number, born: number, w: number, h: number, scale?: number, lite?: boolean,
+ *   still?: boolean}} o goo = goo kind; rand = random 0..1; born = the scene's time; w, h = the screen (CSS px);
+ *   scale = size factor; lite = Lighter graphics (simpler drawing); still = reduced motion (it stays where it hit and fades)
+ * @returns {object} the drop: x, y = where its main drop is; x0, y0 = where it hit; r0 = its size; m = how much goo it
+ *   holds (1 = as it hit); ph = 'hit' | 'hold' | 'slip' | 'stick' | 'stop'; trail = everything it left on the glass
+ */
+export function makeGlassDrop(s, o) {
+  const q = {
+    glass: true, x: s.x, y: s.y, r: s.r, r0: s.r, age: -s.delay, goo: o.goo, a: 1, born: o.born,
+    lite: Boolean(o.lite), still: Boolean(o.still), W: o.w, H: o.h, trail: [],
+  };
+  fillGlassDrop(q, o.rand, o.scale ?? 1);
+  return q;
+}
+
+/**
+ * Give a new glass drop its moving parts (engine.js only sets where it hit, its size, goo, the screen size and the
+ * Lighter graphics / reduced motion flags; stepGlass calls this on its first step, makeGlassDrop at once).
+ * @param {object} q the drop (changed in place)
+ * @param {() => number} rand random 0..1
+ * @param {number} scale size factor
+ * @returns {void}
+ */
+export function fillGlassDrop(q, rand, scale) {
+  const fat = q.r0 / (10 * Math.max(0.8, scale)); // about 1 for a normal drop, more for a fat one
+  Object.assign(q, {
+    x0: q.x, y0: q.y, m: 1, vx: 0, vy: 0, ph: 'hit', pt: 0, travel: 0, lastPt: 0, bulge: 0, wob: 0, n: 0,
+    life: (q.still ? 2.4 : 3.2) + rand() * 0.8,
+    hold: 0.25 + rand() * 0.25 + Math.max(0, fat - 1) * 0.4, // fat drops sit a little longer, growing their bulge
+    ang: (rand() - 0.5) * 0.5, nextBead: 1 + rand() * 1.5, seed: 1 + rand() * 999,
+    splitAt: rand() < 0.4 ? 2 + rand() * 3 : Infinity, // some split in two after this many radii of sliding
+    rim: Array.from({ length: 10 }, () => 0.72 + rand() * 0.56), // the splat's lumpy rim as it hits
+    specks: Array.from({ length: 5 + Math.floor(rand() * 3) }, () => ({ a: rand() * Math.PI * 2, d: 1.6 + rand() * 1.5, k: 0.08 + rand() * 0.12 })),
+  });
+  if (!Array.isArray(q.trail)) q.trail = [];
+  if (q.still) return;
+  const n = rand() < 0.6 ? (rand() < 0.35 ? 2 : 1) : 0; // a droplet or two waiting further down: picked up if it slides into one
+  for (let i = 0; i < n; i += 1) {
+    const y = q.y + q.r0 * (3 + rand() * 4 + i * 4);
+    if (y < (q.H ?? Infinity) - q.r0) q.trail.push({ x: q.x + (rand() - 0.5) * q.r0 * 1.4, y, d: q.r0 * (0.2 + rand() * 0.14), dot: true });
+  }
+}
+
+/**
+ * A repeatable random number 0..1 for one glass drop (its own seed and counter), so the sums stay pure.
+ * @param {{seed: number, n: number}} q the drop (its counter goes up)
+ * @returns {number} 0..1
+ */
+function glassRand(q) {
+  q.n = (q.n ?? 0) + 1;
+  const v = Math.sin((q.seed ?? 1) * 12.9898 + q.n * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/**
+ * The radius of a drop (or its split-off half) holding m of the goo.
+ * @param {number} r0 the drop's size as it hit
+ * @param {number} m goo held (1 = all)
+ * @returns {number} radius
+ */
+export function glassRadius(r0, m) {
+  return r0 * Math.sqrt(Math.max(0, m));
+}
+
+/**
+ * Let a drop go: a lurch of sliding with a new sideways lean (it wanders a little, never far).
+ * @param {object} hd the moving drop (the main drop or its split-off half)
+ * @param {object} q the glass drop that owns it (for the random numbers)
+ * @returns {void}
+ */
+function startSlip(hd, q) {
+  hd.ph = 'slip';
+  hd.pt = 0.16 + glassRand(q) * 0.36 * (0.5 + Math.min(1.2, hd.m));
+  hd.ang = clamp(hd.ang * 0.4 + (glassRand(q) - 0.5) * 0.7, -0.45, 0.45);
+}
+
+/**
+ * One step of one moving drop on the glass (the main drop or its split-off half): it holds and bulges, then
+ * stick-slips down, leaving streak points, beads and goo behind, picking up any waiting droplet it touches.
+ * @param {object} hd the moving drop (changed in place)
+ * @param {object} q the glass drop that owns it (its trail gets the new bits)
+ * @param {number} dt seconds
+ * @param {number} k size factor
+ * @returns {void}
+ */
+function stepHead(hd, q, dt, k) {
+  if (hd.gone || q.still || hd.ph === 'stop') return; // reduced motion: it stays where it hit and fades
+  if (hd.ph === 'hit') { if (q.age >= GLASS_DROP.GATHER) { hd.ph = 'hold'; hd.pt = q.hold; } return; }
+  if (hd.ph === 'hold') { // the goo gathers at the bottom into a fat bulge, then it lets go
+    hd.bulge = Math.min(1, hd.bulge + dt / Math.max(0.2, q.hold));
+    hd.pt -= dt;
+    if (hd.pt <= 0) startSlip(hd, q);
+    return;
+  }
+  hd.pt -= dt;
+  const vmax = (28 + 72 * Math.min(1.4, hd.m)) * k; // thin drops crawl, fat ones run
+  if (hd.ph === 'slip') {
+    hd.vy = Math.min(vmax, hd.vy + (90 + 260 * hd.m) * k * dt);
+    hd.bulge = Math.max(0, hd.bulge - dt * 3);
+    if (hd.pt <= 0) { hd.ph = 'stick'; hd.pt = 0.07 + glassRand(q) * 0.3 * (1.3 - Math.min(1, hd.m) * 0.5); }
+  } else { // stuck a moment on the glass: it stops and the goo piles into a bulge again
+    hd.vy = Math.max(0, hd.vy - 700 * k * dt);
+    hd.bulge = Math.min(1, hd.bulge + dt * 2.5);
+    if (hd.pt <= 0) startSlip(hd, q);
+  }
+  hd.vx += (Math.tan(hd.ang) * hd.vy - hd.vx) * Math.min(1, dt * 6);
+  const r = glassRadius(q.r0, hd.m);
+  const ox = hd.x;
+  const oy = hd.y;
+  hd.x = clamp(hd.x + hd.vx * dt, r, Math.max(r, (q.W ?? Infinity) - r));
+  hd.y += hd.vy * dt;
+  const d = Math.hypot(hd.x - ox, hd.y - oy);
+  hd.travel += d;
+  hd.m = Math.max(0, hd.m - (d / q.r0) * GLASS_DROP.LOSS);
+  const h = hd === q ? 0 : 1;
+  if (hd.travel - hd.lastPt > q.r0 * 0.3) { // a streak point: wider where it went slowly (more goo left there)
+    hd.lastPt = hd.travel;
+    const slow = 1 - Math.min(1, hd.vy / vmax);
+    q.trail.push({ x: hd.x, y: hd.y - r * 0.5, w: r * (0.36 + 0.28 * slow) * (0.75 + 0.5 * glassRand(q)), t: q.age, h });
+  }
+  if (hd.travel > hd.nextBead * q.r0) { // a tiny droplet left behind on the streak
+    hd.nextBead += 1 + glassRand(q) * 2;
+    hd.m = Math.max(0, hd.m - 0.02);
+    q.trail.push({ x: hd.x + (glassRand(q) - 0.5) * r * 0.7, y: hd.y - r * 1.1, b: q.r0 * (0.1 + 0.1 * glassRand(q)), t: q.age });
+  }
+  for (const p of q.trail) { // a waiting droplet it runs into joins it (a little wobble and a push)
+    if (!p.dot || Math.hypot(p.x - hd.x, p.y - hd.y) > r + p.d) continue;
+    p.dot = false;
+    p.gone = true;
+    hd.m = Math.min(1.8, hd.m + (p.d / q.r0) ** 2 * 1.4);
+    hd.vy += 20 * k;
+    q.wob = 1;
+  }
+  const r1 = glassRadius(q.r0, hd.m); // a picked-up droplet makes it fatter: still on the screen
+  hd.x = clamp(hd.x, r1, Math.max(r1, (q.W ?? Infinity) - r1));
+  if (hd.m < GLASS_DROP.THIN) { hd.ph = 'stop'; hd.vy = 0; hd.vx = 0; } // too thin to go on: a bead that dries
+  if (hd.y - r > (q.H ?? Infinity)) hd.gone = true; // off the bottom of the screen
+}
+
+/**
+ * One step of a drop on the glass (SPEC D45, v2 owner 2026-10-31): the splat gathers into a fat drop, which bulges,
+ * then stick-slips down, wandering a little, slowing as it thins and stopping as a bead; it may split in two or pick up
+ * a waiting droplet; its streak dries from the top. Stays on the screen sideways; gone after its life.
+ * @param {object} q the drop from makeGlassDrop (changed in place)
  * @param {number} dt seconds
  * @param {number} scale size factor
  * @returns {boolean} false when it is gone
  */
 export function stepGlass(q, dt, scale) {
+  if (q.ph === undefined) { // a fresh drop from engine.js: its moving parts, from a seed of where and when it hit
+    let n = 0;
+    const seed = (q.x ?? 0) * 7.31 + (q.y ?? 0) * 3.17 + (q.born ?? 0) * 11.3;
+    fillGlassDrop(q, () => { n += 1; const v = Math.sin(seed + n * 91.7) * 43758.5453; return v - Math.floor(v); }, scale);
+  }
   q.age += dt;
   if (q.age > q.life) return false;
-  if (q.age < q.hold) return true;
+  if (q.age < 0) return true;
   const k = Math.max(0.8, scale);
-  q.vy = Math.min(q.vy + 70 * dt, (34 + q.r * 5) * k); // owner 2026-10-31: no drop sits still for long
-  q.y += q.vy * dt;
-  q.x += Math.sin(q.age * 3 + q.sway) * 4 * dt;
-  q.r = Math.max(q.r0 * 0.45, q.r - q.r0 * 0.12 * dt);
-  const last = q.trail[q.trail.length - 1];
-  if (!last || Math.hypot(q.x - last.x, q.y - last.y) > 5) q.trail.push({ x: q.x, y: q.y - q.r * 0.3 });
-  if (q.trail.length > 40) q.trail.shift(); // a long slide keeps only its newest trail points
-  return true;
+  q.wob = Math.max(0, (q.wob ?? 0) - dt * 3);
+  stepHead(q, q, dt, k);
+  let kid = null;
+  for (const p of q.trail) if (p.kid) kid = p;
+  if (kid) stepHead(kid, q, dt, k);
+  else if (q.ph === 'slip' && q.travel > q.splitAt * q.r0 && q.m > 0.7) { // it splits: a smaller drop veers off
+    const side = q.ang >= 0 ? -1 : 1;
+    q.splitAt = Infinity;
+    const part = q.m * 0.4;
+    q.m -= part;
+    q.ang = -side * (0.18 + glassRand(q) * 0.15);
+    q.trail.push({ x: q.x, y: q.y - glassRadius(q.r0, q.m) * 0.5, w: glassRadius(q.r0, part) * 0.4, t: q.age, h: 1 });
+    q.trail.push({
+      kid: true, x: clamp(q.x + side * glassRadius(q.r0, part) * 0.6, glassRadius(q.r0, part), (q.W ?? Infinity) - glassRadius(q.r0, part)), y: q.y + glassRadius(q.r0, q.m) * 0.2, m: part, vx: 0,
+      vy: q.vy * 0.7, ph: 'slip', pt: 0.25, ang: side * (0.32 + glassRand(q) * 0.18), travel: 0, lastPt: 0, nextBead: 1.5, bulge: 0,
+    });
+  }
+  q.r = glassRadius(q.r0, q.m);
+  const dry = GLASS_DROP.DRY;
+  q.trail = q.trail.filter((p) => !p.gone && (p.t === undefined || q.age - p.t < dry + (p.b ? 0.8 : 0.3)));
+  return !(q.gone && (!kid || kid.gone) && !q.trail.some((p) => p.w !== undefined || p.b));
 }
 
 /**

@@ -211,6 +211,7 @@ export function createPopScene(canvas, o) {
   let irrSent = 0; // the level last told to onIrritation
   let halted = false; // true after halt(): the customer stormed off, presses do nothing
   let paused = false; // true after setPaused(true) (the Field guide is open, B48): no frames, so no time passes at all
+  let deferred = []; // jobs that came due while frozen (the wipe start, the done call; D48): run when the scene goes on, so nothing polls meanwhile
   const roll = typeof o.random === 'function' ? o.random : Math.random; // the rough-press dice
   const patches = []; // patches stuck on popped spots
   const marks = []; // pink spots where pimples were (healed by the cream)
@@ -719,10 +720,9 @@ export function createPopScene(canvas, o) {
     if (opt.glass > 0) {
       const spots = glassSpots({ n: Math.round(opt.glass), x, y, w, h, scale, power, rand, avoid: opt.avoid });
       for (const s of spots) {
-        splats.push({ // owner 2026-10-31: they cling only a moment, then slide away (none sit still for long)
-          glass: true, x: s.x, y: s.y, x0: s.x, y0: s.y, r: s.r, r0: s.r, age: -s.delay, hold: 0.15 + rand() * 0.3, vy: 0,
-          life: 2.2 + rand() * 0.7, sway: rand() * 6, trail: [], goo, a: 1, born: time,
-          specks: Array.from({ length: 4 }, () => ({ a: rand() * Math.PI * 2, d: 1.5 + rand() * 1.3, k: 0.14 + rand() * 0.14 })),
+        splats.push({ // v2 (owner 2026-10-31): a lumpy splat that gathers into a fat drop and stick-slips down (pop-fx.js stepGlass fills in the rest)
+          glass: true, x: s.x, y: s.y, x0: s.x, y0: s.y, r: s.r, r0: s.r, age: -s.delay, goo, a: 1, born: time,
+          lite, still: reduced, W: w, H: h, trail: [],
         });
       }
       capList(splats, Math.max(MAX_SPLATS, spots.length));
@@ -1103,6 +1103,7 @@ export function createPopScene(canvas, o) {
     // Wait until the goo has landed (and a peel in progress is done), then start the wipe.
     const start = () => {
       if (disposed || step !== 'pop' || halted) return; // halted (a special mode's scripted end, B28): no wipe step
+      if (paused) { deferred.push(start); return; } // frozen (D48): look again when the scene goes on, no polling meanwhile
       if (drops.length || strands.some((s) => s.len < s.max) || tweezers.length || horns.length || hairs.length || !popStepOver(pimples, strip, Boolean(peel))) { setTimeout(start, 120); return; }
       beginWipe();
     };
@@ -1638,7 +1639,9 @@ export function createPopScene(canvas, o) {
         step = 'done';
         marks.length = 0;
         try { o.onStep?.('done'); } catch { /* ignore */ }
-        setTimeout(() => { if (!disposed) o.onDone?.(); }, 350);
+        /** Tell the controller the face is done (waits while the scene is frozen, D48). @returns {void} */
+        const sayDone = () => { if (disposed) return; if (paused) { deferred.push(sayDone); return; } o.onDone?.(); };
+        setTimeout(sayDone, 350);
       }
       if (step === 'done') busy = cream.t < 2.6;
     }
@@ -2643,6 +2646,9 @@ export function createPopScene(canvas, o) {
       } else {
         try { breathing?.play(); } catch { /* optional */ }
         kick();
+        const due = deferred; // the jobs that waited for the scene to go on (D48)
+        deferred = [];
+        for (const job of due) job();
       }
     },
     /** Whether the scene is frozen (setPaused). @returns {boolean} true while frozen */

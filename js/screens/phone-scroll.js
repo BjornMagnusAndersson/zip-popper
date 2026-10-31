@@ -153,7 +153,8 @@ function batteryIcon() {
  *   reducedMotion?: boolean, onContinue?: () => void, onMenu?: () => void}} o t = string function; sound = the app's
  *   sound player (for the tiny pops); seed = the feed's seed (test runs; else random); reducedMotion = the player's
  *   calm switch; onContinue = Continue on the idea card; onMenu = the Menu button
- * @returns {{node: HTMLElement, dispose: () => void}} the screen
+ * @returns {{node: HTMLElement, setPaused: (on: boolean) => void, dispose: () => void}} the screen (setPaused = the game's
+ *   Menu pause, D48)
  */
 export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion = false, onContinue, onMenu }) {
   /** Calm version: the player's switch or the phone's. @returns {boolean} true = less motion */
@@ -163,8 +164,10 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
   node.classList.add('ps');
   if (still()) node.classList.add('ps--still');
   const feed = makeFeed(Number.isFinite(seed) ? seed : Math.floor(Math.random() * 1e9));
-  /** The time now in seconds. @returns {number} seconds */
-  const now = () => performance.now() / 1000;
+  let awayMs = 0; // time spent away on the game's menu (D48), left out of the feed's clock
+  let awaySince = null; // when the game's Menu took the screen away (ms), null while on show
+  /** The feed's time now in seconds (stands still while away, D48). @returns {number} seconds */
+  const now = () => ((awaySince ?? performance.now()) - awayMs) / 1000;
   let s = createScroll(feed, now());
   let disposed = false;
   let continued = false;
@@ -397,7 +400,7 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
     if (!still() && advanceDue(s, now())) advance();
     if (isIdea(s)) clearInterval(timer);
   }
-  const timer = setInterval(tick, TICK_MS);
+  let timer = setInterval(tick, TICK_MS);
 
   showCard();
   requestAnimationFrame(() => {
@@ -410,6 +413,24 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
 
   return {
     node,
+    /**
+     * The game's Menu took the screen away, or put it back (SPEC D48: Menu pauses it): the feed's clock and its ticker
+     * stand still while away and go on where they stopped.
+     * @param {boolean} on true = away, false = back
+     * @returns {void}
+     */
+    setPaused(on) {
+      if (disposed) return;
+      if (on && awaySince === null) {
+        awaySince = performance.now();
+        clearInterval(timer);
+        timer = 0;
+      } else if (!on && awaySince !== null) {
+        awayMs += performance.now() - awaySince;
+        awaySince = null;
+        if (!isIdea(s)) timer = setInterval(tick, TICK_MS);
+      }
+    },
     /** Stop the clock and take the screen away. @returns {void} */
     dispose() {
       disposed = true;

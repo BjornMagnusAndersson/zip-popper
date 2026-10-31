@@ -157,37 +157,54 @@ export function drawPimple(ctx, p, amt, appear, time, tense = false) {
     ctx.beginPath(); ctx.arc(x - s * 0.18, y - s * 0.18, s * 0.14, 0, Math.PI * 2); ctx.fill();
     return;
   }
-  if (type === 'horn') { // the Evil Horn: a pink swollen base with a little cartoon horn poking out (it rises and wiggles as it is squeezed)
+  if (type === 'horn') { // the Evil Horn: an angry swollen bump, a glossy pink-purple dome with a soft glow, and a fat cartoon horn growing out of it (it rises and wiggles as it is squeezed)
     // tense (the juicy pop, owner 2026-10-31): the build-up to its crack: the base swells, strain marks show round it
     // and the horn trembles harder and faster as the pressure rises (time 0 = no tremble, for reduced motion)
     const k = tense ? Math.min(1, amt) : 0;
     const sw = 1 + 0.22 * k * k;
-    const base = ctx.createRadialGradient(x - s * 0.25, y - s * 0.1, s * 0.1, x, y + s * 0.15, s * 0.9 * sw);
-    base.addColorStop(0, '#ffe2d8'); base.addColorStop(0.6, k > 0.5 ? '#f49aa6' : '#f6a7ad'); base.addColorStop(1, 'rgba(240,140,150,0.55)');
+    const by = y + s * 0.3;
+    const rx = s * 1.0 * sw;
+    const ry = s * 0.66 * sw;
+    const glow = ctx.createRadialGradient(x, by, ry * 0.6, x, by, rx * 1.7); // a soft purple glow round it
+    glow.addColorStop(0, `rgba(190,80,170,${0.32 + 0.25 * k})`);
+    glow.addColorStop(1, 'rgba(190,80,170,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.ellipse(x, by, rx * 1.7, ry * 1.9, 0, 0, Math.PI * 2); ctx.fill();
+    const base = ctx.createRadialGradient(x - s * 0.35, by - ry * 0.45, s * 0.05, x, by, rx);
+    base.addColorStop(0, '#ffdcea'); base.addColorStop(0.45, k > 0.5 ? '#ee86b6' : '#e895bd'); base.addColorStop(1, '#b45d9c');
     ctx.fillStyle = base;
-    ctx.beginPath(); ctx.ellipse(x, y + s * 0.3, s * 1.0 * sw, s * 0.64 * sw, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = Math.max(1.5, s * 0.08); // a pale rim, so the base reads on dark skin too
-    ctx.strokeStyle = 'rgba(255,236,226,0.85)';
+    ctx.beginPath(); ctx.ellipse(x, by, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = Math.max(1.5, s * 0.1); // a pale rim, so the base reads on dark skin too
+    ctx.strokeStyle = 'rgba(255,232,240,0.75)';
     ctx.stroke();
+    ctx.lineWidth = Math.max(0.9, s * 0.05); // and a soft ink line, like the horn's
+    ctx.strokeStyle = 'rgba(120,44,96,0.6)';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; // its gloss
+    ctx.beginPath(); ctx.ellipse(x - rx * 0.52, by - ry * 0.3, rx * 0.2, ry * 0.12, -0.5, 0, Math.PI * 2); ctx.fill();
     if (k > 0.45) { // comic strain marks round the base, pulsing
       const a0 = Math.min(1, (k - 0.45) / 0.3);
       const pulse = 1 + 0.18 * Math.sin(time * 22);
-      ctx.strokeStyle = `rgba(176,64,92,${0.6 * a0})`;
+      ctx.strokeStyle = `rgba(150,52,120,${0.65 * a0})`;
       ctx.lineWidth = Math.max(1.2, s * 0.07);
       ctx.lineCap = 'round';
       for (const a of [-2.75, -2.25, -0.89, -0.39, 0.5, 2.64]) {
         const d0 = s * 1.18 * sw;
         const d1 = d0 + s * 0.26 * pulse;
         ctx.beginPath();
-        ctx.moveTo(x + Math.cos(a) * d0, y + s * 0.3 + Math.sin(a) * d0 * 0.75);
-        ctx.lineTo(x + Math.cos(a) * d1, y + s * 0.3 + Math.sin(a) * d1 * 0.75);
+        ctx.moveTo(x + Math.cos(a) * d0, by + Math.sin(a) * d0 * 0.75);
+        ctx.lineTo(x + Math.cos(a) * d1, by + Math.sin(a) * d1 * 0.75);
         ctx.stroke();
       }
       ctx.lineCap = 'butt';
     }
     const wiggle = amt > 0.05 ? Math.sin(time * (26 + 34 * k)) * (0.07 + 0.09 * k * k) * Math.min(1, amt) : 0;
     const jx = Math.sin(time * 61) * s * 0.045 * k * k; // and it shivers sideways
-    drawHorn(ctx, x + jx, y + s * 0.42 - s * 0.2 * Math.min(1, amt) - s * 0.1 * k * k, s * 1.65 * (1 + 0.06 * k), wiggle); // big enough to read on a phone
+    const hy = y + s * 0.42 - s * 0.2 * Math.min(1, amt) - s * 0.1 * k * k;
+    const hs = s * 1.65 * (1 + 0.06 * k); // big enough to read on a phone
+    ctx.fillStyle = 'rgba(110,30,90,0.4)'; // the dark collar it grows out of
+    ctx.beginPath(); ctx.ellipse(x + jx, hy + hs * 0.06, hs * 0.46, hs * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+    drawHorn(ctx, x + jx, hy, hs, wiggle, { time, flip: /L$/.test(p.zone ?? '') ? -1 : 1 }); // left of the face: it hooks outwards
     return;
   }
   const dome = ctx.createRadialGradient(x - s * 0.3, y - s * 0.35, s * 0.1, x, y, s * 1.05);
@@ -231,58 +248,110 @@ export function drawPimple(ctx, p, amt, appear, time, tense = false) {
 }
 
 /**
- * A little cartoon horn (the Evil Horn): ivory, curled to one side, with two ridges and a shine. Its base sits on
- * (x, y) and it points up (turned by angle); it is about 1.3 times size tall. No goo, no blood: just a silly horn.
+ * The Evil Horn (owner 2026-10-31 on v106: "the effects are better than the object"): a fat, curved cartoon horn,
+ * thick at the base and tapering to a slightly hooked tip, ivory to warm cream with soft shading, curved ridges that
+ * follow its bend (each with a light edge under it), a glossy streak and a rim light, a purple-pink tint where it grows
+ * out of the bump, a clear ink outline over a pale halo (so it reads on dark skin), and, given a time, a tiny glint
+ * winking near the tip. Its base sits on (x, y) and it points up (turned by angle); it is about 1.3 times size tall and
+ * a size wide at the base. Used on the face, in the flying and stuck horn of its show, the intro portrait and the face
+ * album. No goo, no blood: just a silly, slightly smug horn.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {number} x base centre x
  * @param {number} y base centre y
  * @param {number} size about the bump's radius
  * @param {number} [angle] turn in radians (0 = straight up)
+ * @param {{time?: number, flip?: number}} [o] time = seconds for the glint (left out or 0 = no glint); flip = -1 for
+ *   a mirrored horn (its tip hooks to the left: horns on the left of the face hook outwards)
  * @returns {void}
  */
-export function drawHorn(ctx, x, y, size, angle = 0) {
+export function drawHorn(ctx, x, y, size, angle = 0, o = {}) {
   if (size <= 0.5) return;
-  const bw = size * 0.95; // width at the base
-  const hh = size * 1.3; // height
+  const bw = size * 0.82; // width at the base
+  const hh = size * 1.36; // height
+  const small = size < 11; // a small horn: fewer details, so it stays crisp
+  // its two sides as curves from the base up to the tip (the tip hooks over to the right)
+  const L = [[-bw / 2, 0], [-bw * 0.64, -hh * 0.44], [-bw * 0.14, -hh * 1.06], [bw * 0.56, -hh * 0.95]];
+  const R = [[bw / 2, 0], [bw * 0.44, -hh * 0.3], [bw * 0.08, -hh * 0.64], [bw * 0.56, -hh * 0.95]];
+  /** A point a share t up one side's curve. @param {number[][]} P the curve @param {number} t 0 (base) .. 1 (tip) @returns {number[]} [x, y] */
+  const at = (P, t) => {
+    const u = 1 - t;
+    return [0, 1].map((k) => u * u * u * P[0][k] + 3 * u * u * t * P[1][k] + 3 * u * t * t * P[2][k] + t * t * t * P[3][k]);
+  };
+  /** A point between the two sides at share t up, f across (0 = left side, 1 = right side). @param {number} t up @param {number} f across @returns {number[]} [x, y] */
+  const across = (t, f) => { const a = at(L, t); const b = at(R, t); return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
+  if ((o.flip ?? 1) < 0) ctx.scale(-1, 1);
   /** The horn's outline. @returns {void} */
   const outline = () => {
     ctx.beginPath();
-    ctx.moveTo(-bw / 2, 0);
-    ctx.bezierCurveTo(-bw * 0.5, -hh * 0.55, -bw * 0.05, -hh * 0.85, bw * 0.38, -hh);
-    ctx.bezierCurveTo(bw * 0.12, -hh * 0.7, bw * 0.5, -hh * 0.35, bw / 2, 0);
-    ctx.quadraticCurveTo(0, bw * 0.16, -bw / 2, 0);
+    ctx.moveTo(L[0][0], L[0][1]);
+    ctx.bezierCurveTo(L[1][0], L[1][1], L[2][0], L[2][1], L[3][0], L[3][1]);
+    ctx.bezierCurveTo(R[2][0], R[2][1], R[1][0], R[1][1], R[0][0], R[0][1]);
+    ctx.quadraticCurveTo(0, bw * 0.2, L[0][0], L[0][1]);
     ctx.closePath();
   };
-  const g = ctx.createLinearGradient(-bw / 2, 0, bw / 2, -hh);
-  g.addColorStop(0, '#fff7e4'); g.addColorStop(0.55, '#f1dfb8'); g.addColorStop(1, '#d9bd8a');
   outline();
-  ctx.lineWidth = Math.max(3, size * 0.2); // a pale halo round the horn, so it stands out on dark skin
-  ctx.strokeStyle = 'rgba(255,248,232,0.9)';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(3, size * 0.19); // a pale halo round the horn, so it stands out on dark skin
+  ctx.strokeStyle = 'rgba(255,246,236,0.78)';
   ctx.stroke();
+  const g = ctx.createLinearGradient(0, bw * 0.1, bw * 0.3, -hh); // warm cream at the base to ivory at the tip
+  g.addColorStop(0, '#efcf98'); g.addColorStop(0.45, '#f8e6bf'); g.addColorStop(1, '#fffaee');
   ctx.fillStyle = g;
   ctx.fill();
-  ctx.lineWidth = Math.max(1, size * 0.07);
-  ctx.strokeStyle = '#9a7650';
-  ctx.stroke();
   ctx.save();
-  outline();
   ctx.clip();
-  ctx.strokeStyle = 'rgba(154,118,80,0.6)'; // ridges round the horn
-  ctx.lineWidth = Math.max(1, size * 0.05);
-  for (const k of [0.3, 0.55]) {
-    ctx.beginPath();
-    ctx.moveTo(-bw * 0.6, -hh * k + bw * 0.05);
-    ctx.quadraticCurveTo(0, -hh * k + bw * 0.18, bw * 0.6, -hh * k - bw * 0.1);
-    ctx.stroke();
+  const side = ctx.createLinearGradient(-bw * 0.55, 0, bw * 0.55, 0); // round: lit on the left, shaded on the right
+  side.addColorStop(0, 'rgba(255,255,255,0.35)'); side.addColorStop(0.42, 'rgba(255,255,255,0)');
+  side.addColorStop(0.72, 'rgba(176,118,62,0.12)'); side.addColorStop(1, 'rgba(150,92,48,0.5)');
+  ctx.fillStyle = side;
+  ctx.fillRect(-bw, -hh * 1.1, bw * 2, hh * 1.3);
+  const root = ctx.createLinearGradient(0, bw * 0.15, 0, -hh * 0.3); // the purple-pink root where it grows out
+  root.addColorStop(0, 'rgba(170,64,132,0.7)'); root.addColorStop(0.45, 'rgba(206,104,160,0.3)'); root.addColorStop(1, 'rgba(220,130,180,0)');
+  ctx.fillStyle = root;
+  ctx.fillRect(-bw, -hh * 0.35, bw * 2, hh * 0.5);
+  ctx.lineCap = 'round';
+  for (const t of small ? [0.3, 0.56] : [0.2, 0.38, 0.55, 0.71]) { // ridges that follow the bend, each bowing down
+    const a = at(L, t);
+    const b = at(R, t);
+    const w = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const mx = (a[0] + b[0]) / 2;
+    const my = (a[1] + b[1]) / 2 + w * 0.22;
+    ctx.lineWidth = Math.max(0.8, size * (small ? 0.06 : 0.05));
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)'; // its light edge, just under it
+    ctx.beginPath(); ctx.moveTo(a[0], a[1] + size * 0.05); ctx.quadraticCurveTo(mx, my + size * 0.05, b[0], b[1] + size * 0.05); ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,92,52,0.62)';
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(mx, my, b[0], b[1]); ctx.stroke();
   }
-  ctx.restore();
-  ctx.fillStyle = 'rgba(255,255,255,0.75)'; // shine
+  ctx.strokeStyle = 'rgba(255,244,214,0.75)'; // a rim light down the shaded side
+  ctx.lineWidth = Math.max(0.8, size * 0.05);
   ctx.beginPath();
-  ctx.ellipse(-bw * 0.2, -hh * 0.4, size * 0.07, size * 0.24, 0.25, 0, Math.PI * 2);
-  ctx.fill();
+  for (let i = 0; i <= 8; i += 1) { const p = across(0.08 + i * 0.09, 0.86); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+  ctx.stroke();
+  ctx.restore();
+  outline();
+  ctx.lineWidth = Math.max(1.2, size * 0.07); // the ink outline, like the rest of the game's art
+  ctx.strokeStyle = '#5c3b26';
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.88)'; // the glossy streak, following the bend on the lit side
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(1, size * (small ? 0.1 : 0.085));
+  ctx.beginPath();
+  for (let i = 0; i <= 8; i += 1) { const p = across(0.14 + i * 0.07, 0.24); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+  ctx.stroke();
+  const d = across(0.82, 0.34);
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.beginPath(); ctx.arc(d[0], d[1], Math.max(0.6, size * 0.045), 0, Math.PI * 2); ctx.fill();
+  const time = o.time ?? 0;
+  if (time > 0 && !small) { // a tiny smug glint winks near the tip now and then
+    const w = Math.sin(time * 2.1 + x * 0.05);
+    if (w > 0.55) {
+      const tip = at(L, 0.9);
+      drawTwinkle(ctx, tip[0] - size * 0.05, tip[1] + size * 0.05, size * 0.34 * ((w - 0.55) / 0.45), 0.95);
+    }
+  }
   ctx.restore();
 }
 

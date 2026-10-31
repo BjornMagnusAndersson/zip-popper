@@ -13,6 +13,7 @@
 // Reduced motion: no shaking, no shifting, no flash (the light fades in slowly). All text comes from t().
 
 import { createPopMode } from '../pop/pop-mode.js';
+import { createPauseTimers } from '../pop/pause-timers.js';
 import { BUMPS } from '../data/bumps.js';
 import {
   createWake, stepWake, popWake, owWake, stirWake, takeReactions, isAwake, isCaught, catchScript, torchLight, torchRadius,
@@ -73,7 +74,8 @@ function buzz(pattern) {
  *   (storage for the sound switch, squeeze, squeezeHint, onSqueezeHint); roundArgs = the startRound arguments
  *   (app-logic.js torchlightArgs); reducedMotion = the player's calm switch; onContinue = after the catch;
  *   onMenu = the Menu button
- * @returns {{node: HTMLElement, dispose: () => void}} the screen (show it like any other screen)
+ * @returns {{node: HTMLElement, unlock: () => void, setPaused: (on: boolean) => void, applySettings: (s: object) => void,
+ *   dispose: () => void}} the screen (show it like any other screen; setPaused = the game's Menu pause, D48)
  */
 export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedMotion = false, onContinue, onMenu }) {
   /** Calm version: the player's switch or the phone's. @returns {boolean} true = less motion */
@@ -132,7 +134,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   let mumbles = 0;
   let torch = null; // {x, y} in scene px (the pop scene's own box), null until the face is laid out
   const pointers = new Map(); // fingers (or the mouse) down on the scene: id -> {x, y}
-  const timers = new Set();
+  const timers = createPauseTimers(); // its short waits stand still while the game's Menu has the round paused (D48)
   let bubbleTimer = 0;
   let raf = 0;
   let last = performance.now();
@@ -143,12 +145,10 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
    * Run something later, and forget it when the screen goes.
    * @param {() => void} fn what to run
    * @param {number} ms after how long
-   * @returns {number} the timer
+   * @returns {object} the timer
    */
   function later(fn, ms) {
-    const id = setTimeout(() => { timers.delete(id); if (!disposed) fn(); }, ms);
-    timers.add(id);
-    return id;
+    return timers.later(() => { if (!disposed) fn(); }, ms);
   }
 
   /** Where the stage is inside the scene (scene px). @returns {{x: number, y: number, w: number, h: number}} box */
@@ -231,7 +231,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   function say(text) {
     bubble.textContent = text;
     bubble.hidden = false;
-    clearTimeout(bubbleTimer);
+    timers.cancel(bubbleTimer);
     bubbleTimer = later(() => { bubble.hidden = true; }, BUBBLE_MS);
   }
 
@@ -339,7 +339,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
         } else if (step === 'caught') {
           caught.hidden = false;
           say(t('special.torchlight.caughtLine'));
-          clearTimeout(bubbleTimer); // his line stays up
+          timers.cancel(bubbleTimer); // his line stays up
           buzz([40, 50, 80]);
         } else if (step === 'continue') {
           go.hidden = false;
@@ -412,11 +412,29 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
     node,
     /** Wake the popping sounds up (call from inside a tap). @returns {void} */
     unlock: () => pop.unlock(),
+    /**
+     * The game's Menu took the screen away, or put it back (SPEC D48: Menu pauses the round): away = his meter, the
+     * night's frame loop, the short waits (bubbles, the stir, the catch) and the pop scene stand still; back = all go on
+     * where they stopped. Call it with false after the screen is back in the page.
+     * @param {boolean} on true = away, false = back
+     * @returns {void}
+     */
+    setPaused(on) {
+      if (disposed) return;
+      timers.setPaused(on);
+      pop.setAway(on);
+      if (on) { cancelAnimationFrame(raf); raf = 0; return; }
+      last = performance.now(); // no jump in his meter for the time away
+      pointers.clear(); // the tap on Menu moved the torch: back below his chin, as at the start (placed by the next frame)
+      if (phase !== 'catch') torch = null;
+      if (!raf) raf = requestAnimationFrame(tick);
+    },
+    /** Settings changed while away (D48): passed on to the pop scene. @param {object} s the settings @returns {void} */
+    applySettings: (s) => pop.applySettings(s),
     /** Stop everything and take the screen away. @returns {void} */
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);
-      for (const id of timers) clearTimeout(id);
       timers.clear();
       pop.dispose();
       node.remove();

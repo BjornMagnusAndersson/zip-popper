@@ -20,14 +20,17 @@ import { mascotArt } from './mascot.js';
  *   the game shows it where the shop is open); showKeepWorking = true adds "Keep working" under Continue (T5.4, after
  *   the ending), with keepWorkingPercent (its pay) on its second line; onKeepWorking = its tap; showDaily = true adds
  *   "Daily challenge" under it (T8.5), dailySub = its second line as {key, vars} (today's goal and the streak, or
- *   "Done today"), onDaily = its tap
+ *   "Done today"), onDaily = its tap; resumeOn = which button goes back to a round left with the round's Menu button
+ *   (SPEC D48: 'continue', 'justPop', 'keepWorking' or 'daily'; null = none): its label says "Back to the face"
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void, dispose: () => void}} the screen
  */
 export function createMenuScreen({
   t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
   showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60, onAlbum,
-  showDaily = false, dailySub = null, onDaily,
+  showDaily = false, dailySub = null, onDaily, resumeOn = null,
 }) {
+  /** The label of a button that may go back to a paused round (D48). @param {string} path its path @param {string} key its own label key @returns {string} the label */
+  const label = (path, key) => t(resumeOn === path ? 'ui.menu.backToFace' : key);
   const shell = screenShell('menu', { label: t('ui.menu.title'), reducedMotion });
   const body = el('div', 'app-body app-menu');
   const top = el('div', 'app-menu__top');
@@ -40,7 +43,7 @@ export function createMenuScreen({
 
   const cont = el('button', 'app-menubtn app-menubtn--main');
   cont.type = 'button';
-  const contLabel = el('span', 'app-menubtn__label', t('ui.menu.continue'));
+  const contLabel = el('span', 'app-menubtn__label', label('continue', 'ui.menu.continue'));
   const contSub = el('span', 'app-menubtn__sub');
   cont.append(contLabel, contSub);
   cont.addEventListener('click', () => onContinue?.(), { signal: shell.signal });
@@ -49,20 +52,20 @@ export function createMenuScreen({
   // to pop and not the story (it used to be a small button further down).
   const pop = el('button', 'app-menubtn app-menubtn--work app-menubtn--justpop');
   pop.type = 'button';
-  pop.append(el('span', 'app-menubtn__label', t('ui.menu.justPop')), el('span', 'app-menubtn__sub', t('ui.menu.justPopSub')));
+  pop.append(el('span', 'app-menubtn__label', label('justPop', 'ui.menu.justPop')), el('span', 'app-menubtn__sub', t('ui.menu.justPopSub')));
   pop.addEventListener('click', () => onFreePlay?.(), { signal: shell.signal });
   list.append(pop);
   if (showKeepWorking) { // Keep working (T5.4): after the ending, random customers at lower pay
     const work = el('button', 'app-menubtn app-menubtn--work');
     work.type = 'button';
-    work.append(el('span', 'app-menubtn__label', t('ui.menu.keepWorking')), el('span', 'app-menubtn__sub', t('ui.menu.keepWorkingSub', { pct: keepWorkingPercent })));
+    work.append(el('span', 'app-menubtn__label', label('keepWorking', 'ui.menu.keepWorking')), el('span', 'app-menubtn__sub', t('ui.menu.keepWorkingSub', { pct: keepWorkingPercent })));
     work.addEventListener('click', () => onKeepWorking?.(), { signal: shell.signal });
     list.append(work);
   }
   if (showDaily) { // the daily challenge (T8.5): after the ending, under Keep working; dailySub = today's goal and streak
     const day = el('button', 'app-menubtn app-menubtn--work app-menubtn--daily');
     day.type = 'button';
-    day.append(el('span', 'app-menubtn__label', t('ui.menu.daily')));
+    day.append(el('span', 'app-menubtn__label', label('daily', 'ui.menu.daily')));
     if (dailySub?.key) day.append(el('span', 'app-menubtn__sub', t(dailySub.key, dailySub.vars ?? {})));
     day.addEventListener('click', () => onDaily?.(), { signal: shell.signal });
     list.append(day);

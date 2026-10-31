@@ -7,22 +7,24 @@
 // landed drops are cartoon splats (drawLanded: irregular glossy blob, specks, shadow, drip run, merged puddles), and
 // the Evil Horn's show (drawHornShow: crack flash, speed trail, stuck in the wall with a "ding", dust puffs).
 import { rng } from './logic.js';
-import { craterAt, hornAt, FALL_TIME } from './pop-fx.js';
+import { craterAt, hornAt, FALL_TIME, GLASS_DROP, glassRadius } from './pop-fx.js';
 import { drawHorn, drawTwinkle } from './art.js';
 
-// The goo colours per kind: body (lit top), shade, deep (the underside), hi (shine), rim (a soft see-through edge).
+// The goo colours per kind: body (lit top), shade, deep (the underside), hi (shine), rim (a soft see-through edge),
+// ink (the glass drops' outline), thick (how thick and creamy its glass drops look, 0 = a see-through lens; owner
+// 2026-10-31: white and cream goo on the glass must read as goo, not water).
 // White and cream are pop test G's; gold and horn follow the game's own goo colours (art.js GOO_LOOK).
 const GOO = {
-  white: { body: '#fffaf0', shade: '#efe4c8', deep: '#d4c08f', hi: '#ffffff', rim: 'rgba(170,140,80,0.35)' },
-  cream: { body: '#fce6a2', shade: '#efc867', deep: '#cf9c3a', hi: '#fffcec', rim: 'rgba(150,100,30,0.35)' },
-  gold: { body: '#ffd84a', shade: '#f2a81c', deep: '#c98710', hi: '#fffbe0', rim: 'rgba(160,100,10,0.35)' },
-  horn: { body: '#eaf0a6', shade: '#c4cf5c', deep: '#9aa83a', hi: '#fbffe8', rim: 'rgba(100,120,30,0.35)' },
+  white: { body: '#fffaf0', shade: '#efe4c8', deep: '#d4c08f', hi: '#ffffff', rim: 'rgba(170,140,80,0.35)', ink: '#7a6038', thick: 1 },
+  cream: { body: '#fce6a2', shade: '#efc867', deep: '#cf9c3a', hi: '#fffcec', rim: 'rgba(150,100,30,0.35)', ink: '#7e5418', thick: 0.75 },
+  gold: { body: '#ffd84a', shade: '#f2a81c', deep: '#c98710', hi: '#fffbe0', rim: 'rgba(160,100,10,0.35)', ink: '#74480a' },
+  horn: { body: '#eaf0a6', shade: '#c4cf5c', deep: '#9aa83a', hi: '#fbffe8', rim: 'rgba(100,120,30,0.35)', ink: '#4c5a14' },
 };
 
 /**
  * The juicy goo colours of a goo kind (white when unknown).
  * @param {string|undefined} goo 'white', 'cream', 'gold' or 'horn'
- * @returns {{body: string, shade: string, deep: string, hi: string, rim: string}} colours
+ * @returns {{body: string, shade: string, deep: string, hi: string, rim: string, ink: string, thick?: number}} colours
  */
 export function juicyGoo(goo) {
   return GOO[goo] ?? GOO.white;
@@ -561,12 +563,12 @@ export function drawHornShow(c, hn) {
       for (const [dt, al] of [[0.075, 0.18], [0.04, 0.35]]) {
         const gh = hornAt(hn, Math.max(0, t - dt));
         c.globalAlpha = al;
-        drawHorn(c, gh.x, gh.y, hn.r, gh.a);
+        drawHorn(c, gh.x, gh.y, hn.r, gh.a, { flip: hn.spin });
       }
     }
   }
   c.globalAlpha = at.alpha;
-  if (at.alpha > 0.01) drawHorn(c, at.x, at.y, hn.r, at.a);
+  if (at.alpha > 0.01) drawHorn(c, at.x, at.y, hn.r, at.a, { flip: hn.spin }); // it flies off to its own side, hooking outwards as on the face
   c.restore();
   if (at.hit >= 0 && at.hit < 0.6) drawWallHit(c, hn.aimX, hn.aimY, hn.r, at.hit, hn.lite);
 }
@@ -659,38 +661,345 @@ export function drawPuff(c, pf) {
   c.beginPath(); c.arc(pf.x - r * 0.32, pf.y - r * 0.34, r * 0.24, 0, Math.PI * 2); c.fill();
 }
 
+// The glass drops' see-through look: once a frame (at the first drop drawn) the whole scene is copied a third of its
+// size onto this shared canvas, and every drop then shows a magnified bit of that copy (soft from the shrinking: a
+// cheap blur). One copy a frame, not one per drop: reading the scene's canvas makes the browser snapshot all of it.
+// at = when the copy was made (ms); off = no lens look here (no canvas, or it failed once).
+const LENS = { cv: null, cx: null, off: false, at: -1e9, src: null, k: 3 };
+const RGB = new Map(); // '#rrggbb' -> [r, g, b], worked out once
+
 /**
- * A goo drop on the screen glass (screen px, in front of the zoom): it hits with a small splat and some specks (they
- * stay where it hit), clings, then slides slowly down with a thin wet trail, shrinking and fading. A little
- * see-through, so it reads as on the glass, not on the skin.
+ * A '#rrggbb' colour as a CSS rgba() string with the given alpha.
+ * @param {string} hex colour
+ * @param {number} a alpha 0..1
+ * @returns {string} rgba(...)
+ */
+function rgba(hex, a) {
+  let v = RGB.get(hex);
+  if (!v) { v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)); RGB.set(hex, v); }
+  return `rgba(${v[0]},${v[1]},${v[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+}
+
+/**
+ * The scene's small copy for this frame (made at the first glass drop of a frame: more than 5 ms since the last one,
+ * or another canvas), before any drop is drawn, so drops never show each other. Nothing without a canvas (tests).
+ * @param {CanvasRenderingContext2D} c the scene's context
+ * @returns {boolean} true when the copy is ready
+ */
+function frameCopy(c) {
+  if (LENS.off || !c.canvas || typeof c.getTransform !== 'function') return false;
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const src = c.canvas;
+  if (LENS.src === src && Math.abs(now - LENS.at) < 5) return true;
+  try {
+    if (!LENS.cv) {
+      LENS.cv = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(8, 8);
+      LENS.cx = LENS.cv.getContext('2d');
+      if (!LENS.cx) throw new Error('no 2d');
+    }
+    const w = Math.max(1, Math.ceil(src.width / LENS.k));
+    const h = Math.max(1, Math.ceil(src.height / LENS.k));
+    if (LENS.cv.width !== w || LENS.cv.height !== h) { LENS.cv.width = w; LENS.cv.height = h; } else LENS.cx.clearRect(0, 0, w, h);
+    LENS.cx.drawImage(src, 0, 0, w, h);
+    LENS.src = src;
+    LENS.at = now;
+    return true;
+  } catch {
+    LENS.off = true;
+    return false;
+  }
+}
+
+/**
+ * Show the picture behind a glass drop inside it, magnified (the drop must be the current clip): a patch of the
+ * frame's small copy round (x, y), half wide, stretched over the box round the drop.
+ * @param {CanvasRenderingContext2D} c the scene's context (screen transform)
+ * @param {number} x middle of the patch (screen px)
+ * @param {number} y middle of the patch
+ * @param {number} half half the patch's width (screen px)
+ * @param {number} out half the width it is drawn at (screen px): more than half = magnified
+ * @returns {boolean} true when drawn
+ */
+function drawBehind(c, x, y, half, out) {
+  if (!frameCopy(c)) return false;
+  const t = c.getTransform();
+  const k = LENS.k;
+  const sw = (half * 2 * t.a) / k;
+  const sx = Math.max(0, Math.min(LENS.cv.width - sw, ((x - half) * t.a + t.e) / k));
+  const sy = Math.max(0, Math.min(LENS.cv.height - sw, ((y - half) * t.d + t.f) / k));
+  if (sw < 1 || sw > LENS.cv.width || sw > LENS.cv.height) return false;
+  c.drawImage(LENS.cv, sx, sy, sw, sw, x - out, y - out, out * 2, out * 2);
+  return true;
+}
+
+/**
+ * The outline of a goo drop on the glass, smoothed through 16 points: a lumpy splat while it gathers (lump), fatter
+ * and lower at the bottom when it bulges, its top narrowing into the streak while it runs, a quick jiggle (wob).
+ * @param {CanvasRenderingContext2D} c context
+ * @param {number} x middle
+ * @param {number} y middle
+ * @param {number} R radius
+ * @param {{lump: number, rim?: number[], bulge: number, run: number, wob: number, ph: number}} o lump 0..1, rim = the
+ *   splat's lobes, bulge 0..1, run 0..1, wob 0..1, ph = a phase for the jiggle
+ * @returns {void}
+ */
+function dropPath(c, x, y, R, o) {
+  const n = 16;
+  const pts = [];
+  for (let i = 0; i < n; i += 1) {
+    const a = (i / n) * Math.PI * 2;
+    let rr = R;
+    if (o.lump > 0 && o.rim) rr *= 1 + (o.rim[Math.floor((i * o.rim.length) / n)] - 1) * o.lump;
+    if (o.wob > 0) rr *= 1 + 0.12 * o.wob * Math.sin(a * 2 + o.ph);
+    const s = Math.sin(a); // + = the lower half
+    let px = Math.cos(a) * rr;
+    let py = s * rr;
+    if (s > 0) { py *= 1 + 0.32 * o.bulge * s; px *= 1 + 0.06 * o.bulge * s; } else { py *= 1 + 0.5 * o.run * -s; px *= 1 - 0.32 * o.run * s * s; }
+    pts.push([x + px, y + py]);
+  }
+  c.beginPath();
+  c.moveTo((pts[n - 1][0] + pts[0][0]) / 2, (pts[n - 1][1] + pts[0][1]) / 2);
+  for (let i = 0; i < n; i += 1) {
+    const p = pts[i];
+    const q = pts[(i + 1) % n];
+    c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+  }
+  c.closePath();
+}
+
+/**
+ * One fat goo drop on the glass, cartoon-real: inside it a slightly magnified, soft view of what is behind (Lighter
+ * graphics: no view, a creamier fill), a see-through creamy tint, a dark soft edge on the upper left (its thickness),
+ * a warm glow and a little rim light low on the right, a crisp white shine on the upper left and a soft ink outline.
+ * Thick goo (white, cream: g.thick) is nearly opaque instead: a creamy body with a yellowish shade low down (the view
+ * behind only a hint there), a broad soft shine on top, a soft shadow below and the soft outline of the face's goo.
  * @param {CanvasRenderingContext2D} c context (screen transform)
- * @param {{x: number, y: number, x0: number, y0: number, r: number, r0: number, age: number, vy: number, life: number,
- *   trail: {x: number, y: number}[], specks: {a: number, d: number, k: number}[], goo?: string}} q the drop
+ * @param {number} x middle
+ * @param {number} y middle
+ * @param {number} R radius
+ * @param {object} o the shape (dropPath)
+ * @param {{body: string, deep: string, ink: string}} g goo colours
+ * @param {boolean} lite Lighter graphics
+ * @returns {void}
+ */
+function drawLensDrop(c, x, y, R, o, g, lite) {
+  if (R < 0.6) return;
+  const k = g.thick ?? 0; // thick creamy goo (white, cream) or a see-through lens (gold, horn)
+  const low = y + R * (1 + 0.3 * o.bulge); // the drop's bottom
+  if (k > 0) { // a soft shadow below it
+    c.fillStyle = `rgba(90,56,24,${(0.2 * k).toFixed(3)})`;
+    c.beginPath(); c.ellipse(x + R * 0.1, y + R * 0.38 + R * 0.2 * o.bulge, R * 1.02, R * 0.98, 0, 0, Math.PI * 2); c.fill();
+  }
+  dropPath(c, x, y, R, o);
+  c.save();
+  c.clip();
+  const sz = !lite && drawBehind(c, x, y + R * 0.1, R * 0.95, R * 1.3);
+  c.fillStyle = rgba(g.body, sz ? 0.5 : 0.66); // the goo, see-through
+  c.fillRect(x - R * 1.7, y - R * 2, R * 3.4, R * 3.8);
+  const pool = c.createLinearGradient(0, y - R, 0, low); // thicker cream, pooled low in the drop
+  if (k > 0) { // creamy and thick: nearly opaque, a slightly yellowish shade low down, the view behind only a hint there
+    pool.addColorStop(0, rgba(g.body, 0.9 * k));
+    pool.addColorStop(0.5, rgba(g.body, 0.88 * k));
+    pool.addColorStop(0.8, rgba(g.shade, 0.82 * k));
+    pool.addColorStop(1, rgba(g.deep, 0.86 * k));
+  } else {
+    pool.addColorStop(0.4, rgba(g.body, 0));
+    pool.addColorStop(1, rgba(g.shade, 0.6));
+  }
+  c.fillStyle = pool;
+  c.fillRect(x - R * 1.7, y - R * 2, R * 3.4, R * 3.8);
+  const d = 1 - 0.8 * k;
+  const e = c.createRadialGradient(x + R * 0.24, y + R * 0.3, R * 0.15, x + R * 0.1, y + R * 0.12, R * 1.4);
+  e.addColorStop(0, 'rgba(255,255,255,0)');
+  e.addColorStop(0.5, rgba(g.deep, 0.06 * d));
+  e.addColorStop(0.78, rgba(g.deep, 0.5 * d));
+  e.addColorStop(1, rgba(g.ink, 0.78 * d));
+  c.fillStyle = e; // its thickness: a dark soft edge, most on the upper left (faint on thick goo)
+  c.fillRect(x - R * 1.7, y - R * 2, R * 3.4, R * 3.8);
+  const gx = x + R * 0.3;
+  const gy = y + R * (0.42 + 0.3 * o.bulge);
+  const gl = c.createRadialGradient(gx, gy, 0, gx, gy, R * 0.62);
+  gl.addColorStop(0, `rgba(255,255,244,${(0.62 * (1 - 0.6 * k)).toFixed(3)})`);
+  gl.addColorStop(1, 'rgba(255,255,244,0)');
+  c.fillStyle = gl; // the light gathered low on the far side
+  c.fillRect(x - R * 1.7, y - R * 2, R * 3.4, R * 3.8);
+  if (k > 0) { // the broad soft shine on top, as on the face's goo
+    const hx = x - R * 0.3;
+    const hy = y - R * 0.36;
+    const hg = c.createRadialGradient(hx, hy, 0, hx, hy, R * 0.66);
+    hg.addColorStop(0, `rgba(255,255,255,${(0.8 * k).toFixed(3)})`);
+    hg.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = hg;
+    c.fillRect(x - R * 1.7, y - R * 2, R * 3.4, R * 3.8);
+  }
+  c.restore();
+  c.lineWidth = Math.max(1, R * (0.12 - 0.04 * k));
+  c.strokeStyle = k > 0 ? rgba(g.ink, 0.42) : rgba(g.ink, 0.62); // thick goo: the soft outline of the face's goo
+  c.stroke();
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(255,255,255,0.78)'; // a little rim light low on the right
+  c.lineWidth = Math.max(1, R * 0.09);
+  c.beginPath(); c.arc(x, y + R * 0.12 * o.bulge, R * 0.74, 0.25, 1.3); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,0.95)'; // the crisp shine
+  c.beginPath(); c.ellipse(x - R * 0.36, y - R * 0.34 * (1 + 0.4 * o.run), R * 0.25, R * 0.13, -0.75, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(x - R * 0.04, y - R * 0.58 * (1 + 0.4 * o.run), Math.max(0.6, R * 0.07), 0, Math.PI * 2); c.fill();
+}
+
+/**
+ * A tiny goo droplet on the glass (a bead left on the streak, a droplet waiting below, a flung speck): a see-through
+ * creamy dot with an ink rim and a white glint (thick goo: an opaque cream bead, shaded low down).
+ * @param {CanvasRenderingContext2D} c context
+ * @param {number} x middle
+ * @param {number} y middle
+ * @param {number} r radius
+ * @param {{body: string, ink: string}} g goo colours
+ * @param {number} a alpha 0..1
+ * @returns {void}
+ */
+function drawTinyDrop(c, x, y, r, g, a) {
+  if (a <= 0.01 || r < 0.3) return;
+  const k = g.thick ?? 0;
+  c.globalAlpha = a;
+  c.fillStyle = rgba(g.body, 0.6 + 0.35 * k);
+  c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+  if (k > 0 && r > 1.4) { // a creamy bead: its yellowish shade low down
+    c.fillStyle = rgba(g.shade, 0.85 * k);
+    c.beginPath(); c.arc(x, y, r, 0.15, Math.PI - 0.15); c.fill();
+  }
+  c.strokeStyle = rgba(g.ink, 0.5 - 0.12 * k);
+  c.lineWidth = Math.max(0.7, r * 0.24);
+  c.stroke();
+  if (r > 1.1) {
+    c.fillStyle = 'rgba(255,255,255,0.9)';
+    c.beginPath(); c.arc(x - r * 0.34, y - r * 0.34, r * 0.32, 0, Math.PI * 2); c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+/**
+ * A gradient along a streak whose alpha follows how wet each point still is (the oldest, at the top, dries first).
+ * @param {CanvasRenderingContext2D} c context
+ * @param {{x: number, y: number, a: number}[]} pts the streak's points, oldest first, each with its wetness a
+ * @param {string} hex colour
+ * @param {number} k alpha at full wetness
+ * @returns {CanvasGradient} the gradient
+ */
+function wetGrad(c, pts, hex, k) {
+  const p0 = pts[0];
+  const p1 = pts[pts.length - 1];
+  const dx = p1.x - p0.x;
+  const dy = p1.y - p0.y;
+  const L2 = Math.max(1e-6, dx * dx + dy * dy);
+  const gr = c.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+  let last = -1;
+  for (const p of pts) {
+    const f = ((p.x - p0.x) * dx + (p.y - p0.y) * dy) / L2;
+    if (f <= last + 0.02 || f > 1) continue;
+    last = f;
+    gr.addColorStop(Math.max(0, f), rgba(hex, k * p.a));
+  }
+  gr.addColorStop(1, rgba(hex, k * p1.a));
+  return gr;
+}
+
+/**
+ * The wet streak one drop leaves (screen px): a see-through goo band of changing width, wider where it paused, with
+ * a soft darker edge and its own highlight line; it dries away from the top (thick goo: a creamy streak). Lighter
+ * graphics: the band only.
+ * @param {CanvasRenderingContext2D} c context
+ * @param {{x: number, y: number, w: number, a: number}[]} pts points oldest first (the last one at the drop)
+ * @param {object} g goo colours
+ * @param {boolean} lite Lighter graphics
+ * @returns {void}
+ */
+function drawStreak(c, pts, g, lite) {
+  const n = pts.length;
+  if (n < 2) return;
+  const L = [];
+  const Rt = [];
+  for (let i = 0; i < n; i += 1) {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(n - 1, i + 1)];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    const w = (pts[Math.max(0, i - 1)].w + pts[i].w * 2 + pts[Math.min(n - 1, i + 1)].w) / 4 * (i === 0 ? 0.5 : 1); // smoothed; a thinner top end
+    L.push([pts[i].x + nx * w, pts[i].y + ny * w]);
+    Rt.push([pts[i].x - nx * w, pts[i].y - ny * w]);
+  }
+  const ring = [...L, ...Rt.reverse()];
+  c.beginPath();
+  c.moveTo(ring[0][0], ring[0][1]);
+  for (let i = 1; i < ring.length - 1; i += 1) c.quadraticCurveTo(ring[i][0], ring[i][1], (ring[i][0] + ring[i + 1][0]) / 2, (ring[i][1] + ring[i + 1][1]) / 2);
+  c.lineTo(ring[ring.length - 1][0], ring[ring.length - 1][1]);
+  c.closePath();
+  const k = g.thick ?? 0; // thick goo: a creamy streak, not a clear water line
+  c.fillStyle = wetGrad(c, pts, k > 0 ? g.body : g.shade, (lite ? 0.55 : 0.5) + 0.35 * k);
+  c.fill();
+  if (lite) return;
+  c.lineWidth = 1;
+  c.strokeStyle = wetGrad(c, pts, k > 0 ? g.deep : g.ink, 0.28 + 0.22 * k);
+  c.stroke();
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.strokeStyle = wetGrad(c, pts, '#ffffff', 0.7); // the streak's own shine, a little left of its middle
+  c.lineWidth = Math.max(0.8, pts[n - 1].w * 0.28);
+  c.beginPath();
+  for (let i = 0; i < n; i += 1) {
+    const x = pts[i].x - pts[i].w * 0.36;
+    if (i) c.lineTo(x, pts[i].y); else c.moveTo(x, pts[i].y);
+  }
+  c.stroke();
+}
+
+/**
+ * A goo drop on the screen glass, v2 (screen px, in front of the zoom; owner 2026-10-31 "more realistic in the
+ * cartoony sense"): a lumpy splat with flung specks that gathers into a fat lens-like drop (pop-fx.js stepGlass moves
+ * it), bulging before it slides, its streak of changing width beaded with tiny droplets and drying from the top,
+ * droplets waiting below, a split-off drop; all fading out at the end of its life.
+ * @param {CanvasRenderingContext2D} c context (screen transform)
+ * @param {object} q the drop (pop-fx.js makeGlassDrop / stepGlass)
  * @returns {void}
  */
 export function drawGlassDrop(c, q) {
-  if (q.age < 0) return;
+  if (q.age < 0 || q.ph === undefined) return;
   const g = juicyGoo(q.goo);
-  const fade = Math.min(1, (q.life - q.age) / 1.2);
-  const hu = Math.min(1, q.age / 0.09);
-  const hitK = hu * hu * (3 - 2 * hu); // the splat: wide and flat as it hits, then rounding up
+  const fade = Math.max(0, Math.min(1, (q.life - q.age) / 0.9));
+  const D = GLASS_DROP;
+  const fling = Math.min(1, q.age / 0.1);
+  const flung = 1 - (1 - fling) ** 3;
   c.save();
-  if (q.trail.length > 1) { // the thin wet trail it leaves, see-through
-    c.lineCap = 'round';
-    c.lineJoin = 'round';
-    for (const [w, col, al] of [[0.8, g.shade, 0.35], [0.4, g.hi, 0.5]]) {
-      c.strokeStyle = col;
-      c.lineWidth = Math.max(1, q.r0 * w);
-      c.globalAlpha = al * fade;
-      c.beginPath();
-      q.trail.forEach((p, j) => (j ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
-      c.stroke();
+  c.globalAlpha = fade;
+  const kid = q.trail.find((p) => p.kid);
+  for (const h of [0, 1]) { // the streaks, under everything
+    const hd = h ? kid : q;
+    const pts = [];
+    for (const p of q.trail) if (p.w !== undefined && p.h === h) pts.push({ x: p.x, y: p.y, w: p.w, a: Math.max(0, 1 - (q.age - p.t) / D.DRY) ** 0.8 });
+    if (hd && !hd.gone && pts.length) {
+      const r = glassRadius(q.r0, hd.m);
+      pts.push({ x: hd.x, y: hd.y - r * 0.4, w: r * 0.5, a: 1 });
     }
+    if (pts.length >= 2) drawStreak(c, pts, g, q.lite);
   }
-  c.globalAlpha = 0.78 * fade;
-  for (const s of q.specks) drawGooBall(c, q.x0 + Math.cos(s.a) * q.r0 * s.d * hitK, q.y0 + Math.sin(s.a) * q.r0 * s.d * hitK, q.r0 * s.k, q.r0 * s.k * 0.85, 0, g, 0.8);
-  const moving = q.vy > 1 ? Math.min(1, q.vy / 40) : 0;
-  drawGooBall(c, q.x, q.y, q.r * (1.5 - 0.5 * hitK) * (1 - 0.1 * moving), q.r * (0.6 + 0.4 * hitK) * (1 + 0.15 * moving), 0, g);
+  for (const s of q.specks) { // the specks flung out as it hit, drying where they landed
+    const a = Math.max(0, Math.min(1, 1 - (q.age - 0.9) / 1));
+    drawTinyDrop(c, q.x0 + Math.cos(s.a) * q.r0 * s.d * flung, q.y0 + Math.sin(s.a) * q.r0 * s.d * flung, q.r0 * s.k * (0.7 + 0.3 * flung), g, a * fade);
+  }
+  for (const p of q.trail) {
+    if (p.b) drawTinyDrop(c, p.x, p.y, p.b, g, Math.max(0, Math.min(1, 1 - (q.age - p.t - 0.3) / (D.DRY + 0.4))) * fade);
+    else if (p.dot) drawTinyDrop(c, p.x, p.y, p.d, g, fade * Math.min(1, q.age / 0.25));
+  }
+  c.globalAlpha = fade;
+  const gather = Math.max(0, Math.min(1, (q.age - 0.04) / (D.GATHER - 0.04)));
+  const ease = gather * gather * (3 - 2 * gather);
+  const smash = 0.55 + 0.45 * Math.min(1, q.age / 0.05); // it smacks onto the glass
+  for (const hd of [q, kid]) {
+    if (!hd || hd.gone) continue;
+    const main = hd === q;
+    const R = glassRadius(q.r0, hd.m) * (main ? smash * (1 + 0.5 * (1 - ease)) : 1);
+    const run = hd.ph === 'slip' ? Math.min(1, hd.vy / (70 * Math.max(0.8, q.r0 / 10))) : 0;
+    drawLensDrop(c, hd.x, hd.y, R, { lump: main ? 1 - ease : 0, rim: q.rim, bulge: hd.bulge ?? 0, run, wob: main ? q.wob : 0, ph: q.age * 30 }, g, q.lite);
+  }
   c.restore();
 }
 

@@ -887,6 +887,7 @@
   "ui.menu.hello": "Hello, {name}!",
   "ui.menu.helloNoName": "Hello!",
   "ui.menu.continue": "Continue",
+  "ui.menu.backToFace": "Back to the face",
   "ui.menu.continueSub": "Chapter: {title}",
   "ui.menu.keepWorking": "Keep working",
   "ui.menu.keepWorkingSub": "Random customers, {pct}% pay",

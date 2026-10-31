@@ -953,6 +953,53 @@ export function musicMoodFor({ musicOn = true, screen = 'menu', request = null, 
 }
 
 /**
+ * Which menu button a round belongs to (SPEC D48: the round's Menu button pauses it, and that button brings it back).
+ * @param {{daily?: string, keepWorking?: boolean}|null} step the customer step, or null for free play
+ * @returns {'continue'|'keepWorking'|'daily'|'justPop'} the menu path
+ */
+export function roundPath(step) {
+  if (!step) return 'justPop';
+  return step.daily ? 'daily' : step.keepWorking ? 'keepWorking' : 'continue';
+}
+
+/**
+ * What a menu button does while a round may be paused (SPEC D48): 'resume' = back to the same face exactly as it was
+ * left (only the button the round belongs to); 'fresh' = its usual start (a new round then throws the paused one away).
+ * @param {string|null} pausedPath the paused round's menu path (roundPath), or null when none is paused
+ * @param {string} path the button's path ('continue', 'justPop', 'keepWorking' or 'daily')
+ * @returns {'resume'|'fresh'} what to do
+ */
+export function menuChoice(pausedPath, path) {
+  return pausedPath && pausedPath === path ? 'resume' : 'fresh';
+}
+
+/**
+ * How much time a hurry clock still has (ms) at a moment (SPEC D48: it stands still while the round is paused).
+ * @param {{left: number, since: number|null}|null} hurry the clock: left = ms still to go when it last went on, since =
+ *   when that was (null = already standing still, page hidden)
+ * @param {number} now the moment (ms, the same clock as since)
+ * @returns {number|null} ms left (0 when over), or null when there is no clock
+ */
+export function hurryLeftAt(hurry, now) {
+  if (!hurry) return null;
+  const left = Number(hurry.left) || 0;
+  if (hurry.since === null || hurry.since === undefined) return Math.max(0, left);
+  return Math.max(0, left - Math.max(0, (Number(now) || 0) - hurry.since));
+}
+
+/**
+ * Whether the owned tools changed while a round was paused (SPEC D48: then its tool bar is built again on return).
+ * @param {string[]|null} before the tools the round had
+ * @param {string[]|null} after the tools owned now
+ * @returns {boolean} true = a tool came or went
+ */
+export function toolsChanged(before, after) {
+  const a = new Set(before ?? []);
+  const b = new Set(after ?? []);
+  return a.size !== b.size || [...a].some((id) => !b.has(id));
+}
+
+/**
  * Changes the player's name (cleaned; empty keeps the old one).
  * @param {object} save the save
  * @param {string} name the new name

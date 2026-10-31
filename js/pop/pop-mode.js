@@ -674,7 +674,8 @@ export function createPopMode({
     return c.popEnd ?? clockSeconds(c.startAt, performance.now(), pause.since); // stands still while paused (hidden page B83, Field guide B48)
   }
 
-  let pause = { since: null, reasons: [] }; // why the round stands still: 'hidden' (phone call, app switch, lock screen, B83) and/or 'guide' (B48)
+  let pause = { since: null, reasons: [] }; // why the round stands still: 'hidden' (phone call, app switch, lock screen, B83), 'guide' (B48) and/or 'away' (the game's menu, D48)
+  let away = false; // the game took the scene off the page with its Menu button (D48): kept as it is until it comes back
   let pausedTotalMs = 0; // all the pauses that ended so far: the combo clock leaves them out so a chain never breaks over a pause
   /**
    * Stand still for a reason, or go on again. While paused the round clock (a hurry request, the daily "Beat the clock")
@@ -700,6 +701,9 @@ export function createPopMode({
     for (const b of stage.querySelectorAll('.pop-ow')) b.style.animationPlayState = isPaused(pause) ? 'paused' : '';
     if (isPaused(pause)) clearTimeout(back.timer); // the room stands still: no repaints, no plink
     else if (!on && back.w) paintBackdrop(); // and goes on
+    const c = current; // the hurry banner's ticker: off while paused (nothing runs, D48), on again after if the clock is still open
+    if (c && isPaused(pause)) { clearInterval(c.reqTimer); c.reqTimer = 0; }
+    else if (c && c.request?.type === 'hurry' && !c.requestEnded && !c.finished && !c.reqTimer) c.reqTimer = setInterval(() => drawRequest(c), 250);
     if (!on) drawRequest(current);
   }
 
@@ -874,7 +878,7 @@ export function createPopMode({
    * @returns {void}
    */
   function relayout() {
-    if (disposed) return;
+    if (disposed || away) return; // away (D48): off the page, nothing to measure; setAway(false) lays it out again
     paintBackdrop();
     const c = current;
     if (!c?.scene) return;
@@ -1205,7 +1209,11 @@ export function createPopMode({
       cfg.unlockedTools = Array.isArray(list) ? [...list] : null;
       buildToolBar(roundTools(cfg.unlockedTools));
       current?.scene?.setTools(toolIds);
-      pickTool(toolId); // press the button of the tool in hand (fingers when the old one is gone)
+      // press the button of the tool in hand (fingers when the old one is gone); the hint line keeps a first-time hint (D48)
+      for (const [k, b] of toolButtons) b.setAttribute('aria-pressed', String(k === toolId));
+      current?.scene?.setTool(toolId);
+      const step = current?.scene?.step() ?? 'pop';
+      if (step === 'pop' || step === 'wipe') paintHint(step);
     },
     /** Show a new face. @returns {void} */
     newFace: () => newFace(true),
@@ -1232,7 +1240,54 @@ export function createPopMode({
      * @returns {void}
      */
     setPaused(on) { setRoundPause('guide', Boolean(on)); },
-    /** Whether the round is frozen now (hidden page or open guide). @returns {boolean} true while paused */
+    /**
+     * The game's Menu button took the scene off the page, or put it back (SPEC D48: Menu pauses the round). Away = the
+     * same freeze as the Field guide (no frames, timers, room repaints or hurry ticker) and no size watching; back = it
+     * is laid out again for the stage as it is now (the phone may have turned) and goes on exactly where it stopped.
+     * Call setAway(false) after the scene is back in the page.
+     * @param {boolean} on true = away, false = back
+     * @returns {void}
+     */
+    setAway(on) {
+      const next = Boolean(on);
+      if (next === away || disposed) return;
+      away = next;
+      if (away) {
+        clearTimeout(resizeTimer);
+        watcher?.unobserve(stage);
+        globalThis.removeEventListener?.('resize', onResize);
+        setRoundPause('away', true);
+        return;
+      }
+      globalThis.addEventListener?.('resize', onResize);
+      watcher?.observe(stage);
+      setRoundPause('away', false);
+      relayout();
+    },
+    /** Whether the scene is away (SPEC D48). @returns {boolean} true while away */
+    away: () => away,
+    /**
+     * Settings changed while the scene was away (SPEC D48): the sound switch and effects volume, and Lighter graphics
+     * (the room and the face at the new sharpness). Gentle pops, the squeeze and the calm version stay as they were for
+     * the face in play (the next face uses the new ones).
+     * @param {{sound?: boolean, sfxVolume?: number, lowDetail?: boolean}} s the settings now
+     * @returns {void}
+     */
+    applySettings(s = {}) {
+      if (disposed) return;
+      if (typeof s.sound === 'boolean' && s.sound !== sound.isOn()) {
+        sound.setOn(s.sound);
+        head.querySelector('.pop-sound')?.replaceWith(soundSwitch()); // the switch's picture follows
+      }
+      if (Number.isFinite(s.sfxVolume)) sound.setVolume(s.sfxVolume);
+      if (typeof s.lowDetail === 'boolean' && s.lowDetail !== lighter) {
+        lighter = s.lowDetail;
+        if (!away) paintBackdrop();
+        const c = current;
+        if (c?.scene?.setRatio) { c.dpr = sceneRatio(globalThis.devicePixelRatio, lighter); c.scene.setRatio(c.dpr, faceTexture(c)); }
+      }
+    },
+    /** Whether the round is frozen now (hidden page, open guide or away). @returns {boolean} true while paused */
     paused: () => isPaused(pause),
     /**
      * Where the face in play is on screen (stage px, through the zoom): its middle, half width and height, and its two

@@ -8,7 +8,9 @@
 // customers at lower pay through the same customer flow, no story). From the career chapter on, every finished
 // customer's result screen opens with a before and after reveal, and the face goes into the Face album (T8.2, menu).
 // The save is written after every customer, purchase, scrub job, comic seen and setting change, so a reload goes on
-// exactly where the player was. All the rules are pure helpers in app-logic.js (tested in Node); this file only shows
+// exactly where the player was. A round's Menu button pauses the round (SPEC D48): it stays in memory, off the page and
+// standing still, and the menu button it came from ("Back to the face") brings back the same face; a new round, a reload
+// or another save throws it away. All the rules are pure helpers in app-logic.js (tested in Node); this file only shows
 // screens and passes what happened back to those helpers. All text comes from the string table (t).
 // Testing flags (page address): ?test (a throwaway in-memory save; nothing is written to the phone), with ?test also
 // ?chapter=N&customer=M (jump: customer M is next), ?money=500, ?rep=40, ?name=Maja, ?layers=lamp,plant or
@@ -112,6 +114,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   let screen = null; // the screen on show ({node, dispose})
   let pop = null; // the pop scene while a round or free play is on
   let guideOverlay = null; // the Field guide over the pop scene (T6.5), while it is open
+  // A round left with its Menu button (SPEC D48): kept in memory, off the page and standing still, until its menu button
+  // brings it back or a new round throws it away. {kind: 'pop'|'screen', path, live, leave, refresh?, music, hurry}
+  let parked = null;
+  let lastMusic = { screen: 'menu' }; // what setMusic last played for (a paused round gets it back)
   const sound = createSound({ sfxOn: save.settings.sound, musicOn: save.settings.music, sfxVolume: save.settings.sfxVolume }); // comics and menus
   const music = createMusic({ sound, volume: save.settings.musicVolume }); // background music (T6.1a), on the same audio as the sounds
   let hurryTimer = 0; // ends the hectic music when a hurry request's time is up
@@ -209,6 +215,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function setMusic(context) {
     clearTimeout(hurryTimer);
     hurry = null;
+    lastMusic = context;
     music.setMood(L.musicMoodFor({ musicOn: save.settings.music, ...context }));
   }
 
@@ -487,16 +494,106 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function showMenuScreen() {
     return show(createMenuScreen({
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
-      onContinue: () => { sound.unlock(); continueStory(); }, onFreePlay: startFreePlay, onComics: showComics, onGuide: () => showGuide(showMenu),
+      // A round paused with its Menu button (D48) comes back through its own button, labelled "Back to the face".
+      resumeOn: parked?.path ?? null,
+      onContinue: menuPath('continue', continueStory), onFreePlay: menuPath('justPop', startFreePlay), onComics: showComics, onGuide: () => showGuide(showMenu),
       onShop: () => showShop(showMenu), onStudio: () => showStudio(showMenu), onSettings: showSettings,
       onAbout: () => showAbout(showMenu), showShop: L.shopOpen(save), showStudio: L.shopOpen(save),
       showKeepWorking: L.keepWorkingOpen(save), keepWorkingPercent: L.KEEP_WORKING_PERCENT,
-      onKeepWorking: () => { sound.unlock(); keepWorking(); },
+      onKeepWorking: menuPath('keepWorking', keepWorking),
       // The daily challenge (T8.5): with Keep working, after the ending.
       showDaily: L.keepWorkingOpen(save), dailySub: L.keepWorkingOpen(save) ? dailyMenuLine() : null,
-      onDaily: () => { sound.unlock(); playDaily(); },
+      onDaily: menuPath('daily', playDaily),
       onAlbum: L.shopOpen(save) ? () => showAlbum(showMenu) : undefined, // the Face album (T8.2): from the career chapter on, like the shop
     }), { root: true });
+  }
+
+  /**
+   * A main menu button that may bring back a paused round (SPEC D48): the round's own button goes back to it, any
+   * other button starts as usual (app-logic.js menuChoice).
+   * @param {string} path the button's path ('continue', 'justPop', 'keepWorking' or 'daily')
+   * @param {() => void} start its usual start
+   * @returns {() => void} the tap handler
+   */
+  function menuPath(path, start) {
+    return () => {
+      sound.unlock();
+      if (L.menuChoice(parked?.path ?? null, path) === 'resume') resumeParked();
+      else start();
+    };
+  }
+
+  /**
+   * The round's Menu button (SPEC D48): the pop scene stands still and leaves the page but stays in memory (popped
+   * bumps, goo, wipe, meter, Ows, combo, request and hurry clock, tool, zoom), then the menu shows. Not in the short
+   * pause after a finished customer (the button is hidden then).
+   * @param {string} path the menu path that brings it back (app-logic.js roundPath)
+   * @param {() => void} leave this same action (Back and the Menu button after it comes back)
+   * @param {() => void} [refresh] brings the round up to date on return (tools bought, studio upgrades)
+   * @returns {void}
+   */
+  function parkPop(path, leave, refresh) {
+    if (!pop || pop.ending?.()) return;
+    closeGuideOverlay(false);
+    const live = pop;
+    pop = null;
+    live.setAway(true);
+    live.node.remove();
+    const left = L.hurryLeftAt(hurry, performance.now());
+    dropParked(); // never two paused rounds
+    parked = { kind: 'pop', path, live, leave, refresh, music: lastMusic, hurry: hurry && left !== null ? { request: hurry.request, left } : null };
+    showMenu();
+  }
+
+  /**
+   * A special mode's Menu button (torchlight, phone scroll; SPEC D48): its screen stands still and leaves the page but
+   * stays in memory, then the menu shows. A screen that cannot pause just goes to the menu (as before).
+   * @param {string} path the menu path that brings it back
+   * @param {() => void} leave this same action (Back and the Menu button after it comes back)
+   * @returns {void}
+   */
+  function parkScreen(path, leave) {
+    const live = screen;
+    if (!live || typeof live.setPaused !== 'function') { showMenu(); return; }
+    screen = null;
+    live.setPaused(true);
+    live.node.remove();
+    dropParked();
+    parked = { kind: 'screen', path, live, leave, music: lastMusic, hurry: null };
+    showMenu();
+  }
+
+  /**
+   * Bring the paused round back (SPEC D48): the same scene into the page, Settings changed meanwhile applied (sound,
+   * effects volume, Lighter graphics), tools bought meanwhile on the tool bar, then it goes on exactly where it stopped,
+   * with its music and the hurry clock's time that was left.
+   * @returns {void}
+   */
+  function resumeParked() {
+    const r = parked;
+    if (!r) return;
+    parked = null;
+    clear();
+    clearTimeout(midnightTimer);
+    if (r.kind === 'pop') pop = r.live;
+    else screen = r.live;
+    root.append(r.live.node);
+    screenChanged({ back: r.leave });
+    r.live.applySettings?.({ sound: Boolean(save.settings.sound), sfxVolume: save.settings.sfxVolume, lowDetail: Boolean(save.settings.lowDetail) });
+    r.refresh?.();
+    if (r.kind === 'pop') r.live.setAway(false);
+    else r.live.setPaused(false);
+    setMusic(r.music);
+    if (r.hurry) { hurry = { request: r.hurry.request, left: r.hurry.left, since: performance.now() }; planHurryEnd(); }
+    r.live.unlock?.();
+    if (r.kind === 'pop') r.live.node.querySelector('.pop-canvas')?.focus({ preventScroll: true });
+  }
+
+  /** Throw the paused round away, if there is one (a new round starts, a fresh or imported save; SPEC D48). @returns {void} */
+  function dropParked() {
+    const r = parked;
+    parked = null;
+    r?.live.dispose();
   }
 
   /**
@@ -661,6 +758,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     else if (step.type === 'special' && getChapter(step.chapter)?.special === 'phoneScroll') playPhoneScroll(done);
     else if (step.type === 'special') {
       // Fallback for a special mode with no screen yet (none in v1: torchlight T4.5, phoneScroll T4.6).
+      dropParked();
       show(createSpecialScreen({ t, reducedMotion: still(), titleKey: getChapter(step.chapter)?.titleKey, onContinue: done }));
     } else if (step.type === 'customer') showIntro(step);
     else {
@@ -678,10 +776,13 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playTorchlight(step, done) {
     sound.unlock();
+    dropParked(); // a new round: a paused one is thrown away (D48)
+    /** Menu: the night stands still and waits on the menu's Continue (D48). @returns {void} */
+    const leave = () => parkScreen('continue', leave);
     const tl = show(createTorchlightScreen({
       t, reducedMotion: still(), roundArgs: L.torchlightArgs(save, step.chapter, flags.seed),
-      popOptions: { storage: popStorage, sfxVolume: save.settings.sfxVolume, ...squeezeOptions(), ...detailOptions() }, onContinue: done, onMenu: showMenu,
-    }), { back: showMenu });
+      popOptions: { storage: popStorage, sfxVolume: save.settings.sfxVolume, ...squeezeOptions(), ...detailOptions() }, onContinue: done, onMenu: leave,
+    }), { back: leave });
     tl.unlock();
   }
 
@@ -693,7 +794,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playPhoneScroll(done) {
     sound.unlock();
-    show(createPhoneScrollScreen({ t, sound, seed: flags.seed, reducedMotion: still(), onContinue: done, onMenu: showMenu }), { back: showMenu });
+    dropParked(); // a new round: a paused one is thrown away (D48)
+    /** Menu: the feed stands still and waits on the menu's Continue (D48). @returns {void} */
+    const leave = () => parkScreen('continue', leave);
+    show(createPhoneScrollScreen({ t, sound, seed: flags.seed, reducedMotion: still(), onContinue: done, onMenu: leave }), { back: leave });
   }
 
   /**
@@ -702,6 +806,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showIntro(step) {
+    dropParked(); // a new customer: a round paused with Menu is thrown away (D48)
     // ?twist= (T8.3) and ?boss= (T8.4) only in test runs.
     // D46-29: on Prom Penny's party visits her second line says she brought the party lights.
     const args = withPartyLights(save, L.roundArgs(save, step, flags.seed, flags.test ? flags.twist : null, flags.test ? flags.boss : null));
@@ -737,12 +842,22 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    */
   function playRound(step, args) {
     clear();
+    dropParked(); // never two rounds (D48)
     if (args.twist) persist(addSeenTwists(save, [args.twist])); // she has met this twist: its guide card opens (T8.3)
     if (args.boss) persist(addSeenBosses(save, [args.boss.id])); // ... and this boss or event: its Events card (T8.4)
     pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...detailOptions(), ...guideOptions() });
     pop.mount(root);
-    addPopMenuButton(showMenu);
-    screenChanged({ back: showMenu }); // Back = the scene's Menu button (not in the end pause, B87)
+    let toolsNow = [...(args.unlockedTools ?? [])]; // the tools on the bar (a tool bought while paused is added on return, D48)
+    /** On return from the menu (D48): tools bought meanwhile on the bar, the studio's upgrades in the room. @returns {void} */
+    const refresh = () => {
+      const owned = [...economyFromSave(save).unlockedTools];
+      if (L.toolsChanged(toolsNow, owned)) { toolsNow = owned; pop?.setUnlockedTools(owned); }
+      if (args.room !== 'home') pop?.setTier(L.backdropTier(save), L.backdropLayers(save));
+    };
+    /** Menu (D48): the round stands still and waits; its menu button brings it back. @returns {void} */
+    const leave = () => parkPop(L.roundPath(step), leave, refresh);
+    addPopMenuButton(leave);
+    screenChanged({ back: leave }); // Back = the scene's Menu button (not in the end pause, B87)
     const paintGoal = args.daily ? addPopGoalChip(args.daily.goal) : null; // the daily goal in the header (T8.5)
     // An Ow spoils a "3 stars" or "No Ows" day at once: the chip says so (Try again starts it fresh).
     const goalHooks = paintGoal && OW_GOALS.includes(args.daily.goal.id) ? { onOw: () => paintGoal(true) } : {};
@@ -828,10 +943,15 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   /** Free play (SPEC section 6): random faces, the owned tools, never fails, changes no money or stats. @returns {void} */
   function startFreePlay() {
     clear();
+    dropParked(); // a paused round is thrown away (D48)
     pop = createPopMode({ t, storage: popStorage, sfxVolume: save.settings.sfxVolume, reducedMotion: still(), ...squeezeOptions(), ...detailOptions(), ...guideOptions() });
     pop.mount(root);
-    addPopMenuButton(showMenu);
-    screenChanged({ back: showMenu }); // Back = the scene's Menu button (B87)
+    /** On return from the menu (D48): the studio's upgrades in the room (free play has every tool already). @returns {void} */
+    const refresh = () => pop?.setTier(L.backdropTier(save), L.backdropLayers(save));
+    /** Menu (D48): free play stands still and waits; Just pop! brings the same face back. @returns {void} */
+    const leave = () => parkPop('justPop', leave, refresh);
+    addPopMenuButton(leave);
+    screenChanged({ back: leave }); // Back = the scene's Menu button (B87)
     sound.unlock();
     pop.unlock();
     setMusic({ screen: 'free' });
@@ -926,6 +1046,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       onImport: (text) => {
         const result = store.importText(text);
         if (result.ok) {
+          dropParked(); // another save: a paused round from the old one is thrown away (D48)
           save = result.save;
           sound.setOn(save.settings.sound);
           sound.setMusicOn(save.settings.music);
@@ -936,6 +1057,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
         s.update({ notice: { key: importNoticeKey(result) }, playerName: save.playerName, settings: save.settings });
       },
       onReset: () => { // a fresh save: bring the live sound and music switches in line with it too
+        dropParked(); // a fresh save: no paused round (D48)
         save = store.reset();
         sound.setOn(save.settings.sound);
         sound.setMusicOn(save.settings.music);
