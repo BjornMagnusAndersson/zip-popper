@@ -26,9 +26,9 @@ import { createInstallCard } from './install-card.js';
  *   (SPEC D48: 'continue', 'justPop', 'keepWorking' or 'daily'; null = none): its label says "Back to the face";
  *   continueKey = the main story button's label key ("Start the story" on a fresh save, A12; default "Continue");
  *   onFeedback = the small "Send feedback" link's tap (left out = no link); installMode = the install card to show
- *   ('ios', 'android' or null, SPEC D52); onInstall = its Install button (Android); onInstallDismiss = its "Not now"
+ *   ('ios', 'android', 'inapp' or null, SPEC D52); onInstall = its Install button (Android); onInstallDismiss = its "Not now"
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void,
- *   setInstall: (mode: 'ios'|'android'|null) => void, dispose: () => void}} the screen (setInstall shows, swaps or hides the install card)
+ *   setInstall: (mode: 'ios'|'android'|'inapp'|null) => void, dispose: () => void}} the screen (setInstall shows, swaps or hides the install card)
  */
 export function createMenuScreen({
   t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
@@ -105,9 +105,9 @@ export function createMenuScreen({
   // SPEC D52: the install card (if any) between the greeting and the buttons upright, so it is seen without scrolling
   // (sideways under the greeting), and the small "Send feedback" link under the buttons.
   const installSlot = el('div', 'app-menu__install');
-  /** Show, swap or hide the install card. @param {'ios'|'android'|null} mode which card (null = none) @returns {void} */
+  /** Show, swap or hide the install card. @param {'ios'|'android'|'inapp'|null} mode which card (null = none) @returns {void} */
   function setInstall(mode) {
-    const card = mode === 'ios' || mode === 'android'
+    const card = mode === 'ios' || mode === 'android' || mode === 'inapp'
       ? createInstallCard({ t, mode, signal: shell.signal, onInstall, onDismiss: onInstallDismiss }) : null;
     installSlot.replaceChildren(...(card ? [card] : []));
     installSlot.hidden = !card;

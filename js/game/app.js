@@ -17,7 +17,7 @@
 // ?layers=all (studio upgrades owned, T5.1a), ?album=demo (12 faces in the Face album, T8.2), ?twist=fidgety|ticklish|
 // sensitive|hurry (every customer gets that twist, T8.3), ?boss=hairday|nosestrip|golden|horn (every customer is that
 // boss or event and its tools are owned, T8.4), ?daily=YYYY-MM-DD (the daily challenge's date, T8.5) and
-// ?dailystreak=N (a streak of N days up to the day before), ?installhint=ios|android (the menu shows that install
+// ?dailystreak=N (a streak of N days up to the day before), ?installhint=ios|android|inapp (the menu shows that install
 // card, SPEC D52); ?seed=N (every face uses that seed, also without ?test); ?demo is handled by index.html (the old pop demo).
 // Public-test helpers (SPEC D52): the feedback form (menu and About; answers go to a Google Form, wait in the save's
 // outbox while offline, or go by mail), the install card on the menu, and the time on screen (save.playMs).
@@ -567,7 +567,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * The install card the menu shows now (SPEC D52, core/install-logic.js installHintMode): iPhone and iPad Safari, or
    * a waiting browser install prompt; not when installed, after "Not now", in a ?test run (unless ?installhint=) or on
    * a fresh save's first menu visit.
-   * @returns {'ios'|'android'|null} the card
+   * @returns {'ios'|'android'|'inapp'|null} the card
    */
   function menuInstallMode() {
     const nav = globalThis.navigator ?? {};

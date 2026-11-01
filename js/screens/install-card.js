@@ -1,5 +1,6 @@
 // The install hint pieces (SPEC D52): the small card on the menu (iPhone and iPad Safari: a Share icon and "tap Share,
-// then Add to Home Screen"; Android and Chrome: an Install button for the browser's own prompt; both with "Not now"),
+// then Add to Home Screen"; Android and Chrome: an Install button for the browser's own prompt; an app's built-in
+// browser such as Snapchat or Instagram: "open this page in Safari or Chrome first"; all with "Not now"),
 // and the "Install the game" card on the About screen, which explains the same at any time. Which card shows is
 // decided in core/install-logic.js; this file only draws. All text comes from the string table.
 
@@ -31,7 +32,7 @@ export function installIcon() {
 
 /**
  * The menu's install card.
- * @param {{t: (key: string, vars?: object) => string, mode: 'ios'|'android', signal: AbortSignal,
+ * @param {{t: (key: string, vars?: object) => string, mode: 'ios'|'android'|'inapp', signal: AbortSignal,
  *   onInstall?: () => void, onDismiss?: () => void}} o t = string function; mode = which card; signal = removes the
  *   listeners when the screen goes; onInstall = the Install button (Android); onDismiss = "Not now"
  * @returns {HTMLElement} the card
@@ -41,7 +42,8 @@ export function createInstallCard({ t, mode, signal, onInstall, onDismiss }) {
   card.setAttribute('aria-label', t('ui.install.label'));
   const pic = el('span', 'app-install__pic');
   pic.append(mode === 'ios' ? shareIcon() : installIcon());
-  const text = el('p', 'app-install__text', t(mode === 'ios' ? 'ui.install.ios' : 'ui.install.android'));
+  const textKey = { ios: 'ui.install.ios', inapp: 'ui.install.inapp' }[mode] ?? 'ui.install.android';
+  const text = el('p', 'app-install__text', t(textKey));
   const row = el('div', 'app-install__row');
   if (mode === 'android') row.append(button('app-btn app-btn--small app-btn--main app-install__go', t('ui.install.button'), () => onInstall?.(), signal));
   row.append(button('app-btn app-btn--small app-install__later', t('ui.install.notNow'), () => onDismiss?.(), signal));
@@ -51,7 +53,7 @@ export function createInstallCard({ t, mode, signal, onInstall, onDismiss }) {
 
 /**
  * The About screen's "Install the game" card: what to do on this phone, or that it is already installed.
- * @param {{t: (key: string, vars?: object) => string, mode: 'installed'|'ios'|'iosOther'|'android'|'other', signal: AbortSignal,
+ * @param {{t: (key: string, vars?: object) => string, mode: 'installed'|'ios'|'iosOther'|'inapp'|'android'|'other', signal: AbortSignal,
  *   onInstall?: () => void}} o t = string function; mode = core/install-logic.js aboutInstallMode; signal = removes the
  *   listeners; onInstall = the Install button (only when the browser's prompt is waiting)
  * @returns {HTMLElement} the card

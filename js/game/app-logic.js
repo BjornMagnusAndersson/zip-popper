@@ -157,8 +157,8 @@ export function parseFlags(search) {
     boss: isBoss(p.get('boss')) ? p.get('boss') : null, // ?boss=: force a boss or event customer (T8.4)
     daily: isDateKey(p.get('daily')) ? p.get('daily') : null, // ?daily=YYYY-MM-DD: the daily challenge's date (T8.5)
     dailyStreak: intOrNull(p.get('dailystreak')), // ?dailystreak=N: a streak of N up to the day before ?daily= (T8.5)
-    // ?installhint=ios|android: the menu always shows that install card (SPEC D52; screenshots and the links page)
-    installHint: ['ios', 'android'].includes(p.get('installhint')) ? p.get('installhint') : null,
+    // ?installhint=ios|android|inapp: the menu always shows that install card (SPEC D52; screenshots and the links page)
+    installHint: ['ios', 'android', 'inapp'].includes(p.get('installhint')) ? p.get('installhint') : null,
   };
 }
 
