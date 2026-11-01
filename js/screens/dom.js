@@ -68,7 +68,7 @@ export function starIcon(filled, size) {
 
 /**
  * Small cartoon icons used by the screens.
- * @param {'coin'|'lock'|'check'|'back'|'tool'|'studio'|'outfit'|'bulb'|'heart'} name which icon
+ * @param {'coin'|'lock'|'check'|'back'|'tool'|'studio'|'outfit'|'bulb'|'heart'|'chat'} name which icon
  * @returns {SVGElement} a 24 px svg (sized by CSS)
  */
 export function icon(name) {
@@ -83,6 +83,10 @@ export function icon(name) {
     outfit: [svg('path', { d: 'M8 4l-5 4 3 3 2-1.5V20h8v-10.5L18 11l3-3-5-4a4 4 0 0 1-8 0z', fill: '#ffd6e5', ...stroke })],
     bulb: [svg('path', { d: 'M12 3a6 6 0 0 0-3 11.2V17h6v-2.8A6 6 0 0 0 12 3z', fill: '#fff3b0', ...stroke }), svg('path', { d: 'M9.5 20.5h5', fill: 'none', ...stroke })],
     heart: [svg('path', { d: 'M12 20S4 14.5 4 9a4.2 4.2 0 0 1 8-1.6A4.2 4.2 0 0 1 20 9c0 5.5-8 11-8 11z', fill: '#ff7aa8', ...stroke })],
+    chat: [ // a speech bubble with a small heart (the feedback button, SPEC D52)
+      svg('path', { d: 'M5 4h14a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 19 17h-8l-5 4v-4H5a2.5 2.5 0 0 1-2.5-2.5v-8A2.5 2.5 0 0 1 5 4z', fill: '#fff', ...stroke, 'stroke-width': 2.4 }),
+      svg('path', { d: 'M12 14s-3.6-2.2-3.6-4.4a1.8 1.8 0 0 1 3.6-.6 1.8 1.8 0 0 1 3.6.6C15.6 11.8 12 14 12 14z', fill: '#ff7aa8', stroke: INK, 'stroke-width': 1.4, 'stroke-linejoin': 'round' }),
+    ],
   };
   return svg('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', class: `app-icon app-icon--${name}` }, shapes[name] ?? []);
 }

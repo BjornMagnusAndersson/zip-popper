@@ -5,7 +5,7 @@
 // State comes in, every tap goes out through a callback. update({playerName, chapterTitleKey}) refreshes the greeting
 // and the Continue line when the save changes.
 
-import { el, button, screenShell } from './dom.js';
+import { el, button, icon, screenShell } from './dom.js';
 import { mascotArt } from './mascot.js';
 import { createInstallCard } from './install-card.js';
 
@@ -114,7 +114,11 @@ export function createMenuScreen({
   }
   setInstall(installMode);
   const extra = el('div', 'app-menu__extra');
-  if (onFeedback) extra.append(button('app-menu__feedback', t('ui.menu.feedback'), () => onFeedback(), shell.signal));
+  if (onFeedback) {
+    const fb = button('app-menu__feedback', '', () => onFeedback(), shell.signal);
+    fb.append(icon('chat'), el('span', '', t('ui.menu.feedback')));
+    extra.append(fb);
+  }
   extra.hidden = !onFeedback;
 
   body.append(top, installSlot, list, extra);

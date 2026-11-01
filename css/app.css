@@ -870,10 +870,12 @@ button.app-albumtile:active { transform: translateY(2px); box-shadow: 1px 2px 0 
    pill buttons (a picked one turns mint with a dot), a 1 to 5 star row, text boxes; sideways two columns. */
 .app-menu__extra, .app-menu__install { display: grid; gap: 8px; justify-items: center; min-width: 0; }
 .app-menu__feedback {
-  min-height: 44px; padding: 4px 14px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 0.95rem; font-weight: 800;
-  color: var(--ink); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; cursor: pointer; touch-action: manipulation;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 18px 6px 12px; border: 3px solid var(--ink); border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 60%), #ffd6e5; box-shadow: 0 4px 0 var(--ink);
+  font: inherit; font-size: 1rem; font-weight: 900; color: var(--ink); cursor: pointer; touch-action: manipulation;
 }
-.app-menu__feedback:active { transform: translateY(1px); }
+.app-menu__feedback .app-icon { width: 24px; height: 24px; flex: none; }
+.app-menu__feedback:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
 .app-install {
   display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 10px; width: 100%; padding: 8px 10px 8px 8px;
   border-radius: 16px; border: 3px solid var(--ink); background: #fff3c4; box-shadow: 3px 4px 0 var(--shadow);
