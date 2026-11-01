@@ -40,7 +40,9 @@ if (params.has('demo')) {
 </script>
 <script type="module">
 import { registerServiceWorker } from './js/core/pwa.js';
+import { watchInstallPrompt } from './js/core/install.js';
 registerServiceWorker();
+watchInstallPrompt(); // keep the browser's install prompt for the menu's Install button (SPEC D52); it can come early
 </script>
 </body>
 </html>

@@ -59,6 +59,12 @@ export function defaultSave(now = Date.now()) {
     // Line memory (R6-lines, game/customer-lines.js): per regular id or walk-in name key, the visits and the line keys
     // said last time {visits, intro?, second?, result?}, so a return visit says other lines (old saves load {})
     customerLines: {},
+    // Public-test helpers (SPEC D52; old saves load these): playMs = time the game was on screen in all (ms, for the
+    // feedback form); installHintOff = "Not now" on the menu's install card; feedbackOutbox = feedback answers that
+    // could not be sent yet (offline), as {body, at}, sent at the next start or when the phone is online again.
+    playMs: 0,
+    installHintOff: false,
+    feedbackOutbox: [],
   };
 }
 
@@ -197,7 +203,22 @@ export function normalizeSave(raw, now = Date.now()) {
     seenTwists: words(s.seenTwists, d.seenTwists),
     seenBosses: words(s.seenBosses, d.seenBosses),
     customerLines: lineMemo(s.customerLines),
+    playMs: count(s.playMs, d.playMs),
+    installHintOff: flag(s.installHintOff, d.installHintOff),
+    feedbackOutbox: outboxList(s.feedbackOutbox),
   };
+}
+
+/**
+ * The feedback outbox (SPEC D52), cleaned: at most 5 entries of {body, at}, each body a non-empty text of at most 12000
+ * characters (the same limits as game/feedback-logic.js cleanOutbox).
+ * @param {unknown} v the stored list
+ * @returns {{body: string, at: number}[]} the outbox
+ */
+function outboxList(v) {
+  if (!Array.isArray(v)) return [];
+  return v.filter((e) => e && typeof e.body === 'string' && e.body.length > 0)
+    .map((e) => ({ body: e.body.slice(0, 12000), at: count(e.at, 0) })).slice(-5);
 }
 
 /**

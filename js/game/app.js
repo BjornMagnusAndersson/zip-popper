@@ -17,8 +17,10 @@
 // ?layers=all (studio upgrades owned, T5.1a), ?album=demo (12 faces in the Face album, T8.2), ?twist=fidgety|ticklish|
 // sensitive|hurry (every customer gets that twist, T8.3), ?boss=hairday|nosestrip|golden|horn (every customer is that
 // boss or event and its tools are owned, T8.4), ?daily=YYYY-MM-DD (the daily challenge's date, T8.5) and
-// ?dailystreak=N (a streak of N days up to the day before); ?seed=N (every face uses that
-// seed, also without ?test); ?demo is handled by index.html (the old pop demo).
+// ?dailystreak=N (a streak of N days up to the day before), ?installhint=ios|android (the menu shows that install
+// card, SPEC D52); ?seed=N (every face uses that seed, also without ?test); ?demo is handled by index.html (the old pop demo).
+// Public-test helpers (SPEC D52): the feedback form (menu and About; answers go to a Google Form, wait in the save's
+// outbox while offline, or go by mail), the install card on the menu, and the time on screen (save.playMs).
 
 import { t } from '../core/strings.js';
 import { createSaveStore } from '../core/save.js';
@@ -68,6 +70,14 @@ import {
   dailyTag, dailyPayout,
 } from './daily-logic.js';
 import { createDailyDoneScreen } from '../screens/daily-done.js';
+import { createFeedbackScreen } from '../screens/feedback.js';
+import { autoText, formBody, mailtoLink, sendRoute, outboxAdd, shouldFlush, guessPhone } from './feedback-logic.js';
+import { progressFromSave } from './chapter-logic.js';
+import { FEEDBACK_CONFIG } from '../core/feedback-config.js';
+import { postFeedback, flushOutbox } from '../core/feedback-net.js';
+import { VERSION } from '../core/version.js';
+import { isInstalled, installPlatform, installHintMode, aboutInstallMode } from '../core/install-logic.js';
+import { watchInstallPrompt, hasInstallPrompt, runInstallPrompt, onInstallChange, installedThisVisit } from '../core/install.js';
 
 /** The daily goals an Ow already spoils (the header chip says "missed" at the first Ow, T8.5). */
 const OW_GOALS = ['stars3', 'noOw'];
@@ -125,6 +135,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   // Browsers only allow sound after a tap: the first tap anywhere wakes the audio, and the music starts then.
   for (const type of ['click', 'touchend', 'keydown']) (root.ownerDocument ?? root).addEventListener(type, () => sound.unlock(), { passive: true });
   installVibrationSwitch();
+  watchInstallPrompt(); // index.html starts it already; this is a no-op then (SPEC D52)
+  let menuVisits = 0; // menu visits this session: the install card waits for the second one on a fresh save (SPEC D52)
+  let menuShown = null; // the menu screen on show (its install card follows the browser's install prompt), or null
+  let playSince = globalThis.document?.hidden ? null : performance.now(); // when the game last came on screen (null = hidden)
 
   /**
    * The pop scene keeps its sound switch in a storage; this one maps it onto the save's sound setting, so the switch
@@ -261,6 +275,23 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   globalThis.document?.addEventListener?.('visibilitychange', onPageVisibility);
   globalThis.addEventListener?.('pagehide', onPageVisibility);
   globalThis.addEventListener?.('pageshow', onPageVisibility);
+
+  /** The longest stretch counted as play time at once (a phone asleep without a hidden event must not count for days). */
+  const PLAY_STRETCH_MAX = 4 * 3600 * 1000;
+  /** The time on screen so far, in ms: the saved total plus the stretch running now. @returns {number} ms */
+  const playMsNow = () => (save.playMs ?? 0) + (playSince === null ? 0 : Math.min(PLAY_STRETCH_MAX, Math.max(0, performance.now() - playSince)));
+  /**
+   * The page was hidden or shown (SPEC D52, play time for the feedback form): hidden adds the stretch on screen to the
+   * save's total; shown starts a new stretch.
+   * @returns {void}
+   */
+  function onPlayVisibility() {
+    const hidden = globalThis.document?.hidden;
+    if (hidden && playSince !== null) { persist({ ...save, playMs: Math.round(playMsNow()) }); playSince = null; }
+    else if (!hidden && playSince === null) playSince = performance.now();
+  }
+  globalThis.document?.addEventListener?.('visibilitychange', onPlayVisibility);
+  globalThis.addEventListener?.('pagehide', onPlayVisibility);
 
   /** Take the screen or the pop scene that is on show away (and a round scene built ahead that was not used). @returns {void} */
   function clear() {
@@ -527,6 +558,52 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
 
   /** Build and show the main menu screen itself. @returns {object} the screen */
   function showMenuScreenNow() {
+    menuVisits += 1;
+    menuShown = showMenuScreenBuilt();
+    return menuShown;
+  }
+
+  /**
+   * The install card the menu shows now (SPEC D52, core/install-logic.js installHintMode): iPhone and iPad Safari, or
+   * a waiting browser install prompt; not when installed, after "Not now", in a ?test run (unless ?installhint=) or on
+   * a fresh save's first menu visit.
+   * @returns {'ios'|'android'|null} the card
+   */
+  function menuInstallMode() {
+    const nav = globalThis.navigator ?? {};
+    return installHintMode({
+      installed: isInstalled() || installedThisVisit(), platform: installPlatform(nav.userAgent, nav.maxTouchPoints), hasPrompt: hasInstallPrompt(),
+      dismissed: save.installHintOff, test: flags.test, force: flags.test ? flags.installHint : null, menuVisits,
+      storyStarted: (save.seenComics ?? []).includes('strip0'),
+    });
+  }
+
+  /** What the About screen's "Install the game" card says now (SPEC D52). @returns {string} core/install-logic.js aboutInstallMode */
+  function aboutInstall() {
+    const nav = globalThis.navigator ?? {};
+    return aboutInstallMode({
+      installed: isInstalled() || installedThisVisit(), platform: installPlatform(nav.userAgent, nav.maxTouchPoints), hasPrompt: hasInstallPrompt(),
+      force: flags.test ? flags.installHint : null,
+    });
+  }
+
+  /**
+   * The Install button (menu card or About, SPEC D52): the browser's own install prompt. Whatever the player chose there,
+   * the menu card goes (the prompt can be shown only once); "no thanks" counts as "Not now".
+   * @param {() => void} [after] what to redraw afterwards (the About screen)
+   * @returns {Promise<void>}
+   */
+  async function installNow(after) {
+    const outcome = await runInstallPrompt();
+    if (outcome !== 'accepted') persist({ ...save, installHintOff: true });
+    menuShown?.setInstall(null);
+    after?.();
+  }
+  // The browser's install prompt came (or went) while the menu shows: its card follows.
+  onInstallChange(() => { if (menuShown && screen === menuShown) menuShown.setInstall(menuInstallMode()); });
+
+  /** Build and show the main menu screen with every button. @returns {object} the screen */
+  function showMenuScreenBuilt() {
     return show(createMenuScreen({
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
       // A round paused with its Menu button (D48) comes back through its own button, labelled "Back to the face".
@@ -541,6 +618,9 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       showDaily: L.keepWorkingOpen(save), dailySub: L.keepWorkingOpen(save) ? dailyMenuLine() : null,
       onDaily: menuPath('daily', playDaily),
       onAlbum: L.shopOpen(save) ? () => showAlbum(showMenu) : undefined, // the Face album (T8.2): from the career chapter on, like the shop
+      // SPEC D52: the small "Send feedback" link and the install card under the buttons
+      onFeedback: () => showFeedback(showMenu), installMode: menuInstallMode(),
+      onInstall: () => installNow(), onInstallDismiss: () => { persist({ ...save, installHintOff: true }); menuShown?.setInstall(null); },
     }), { root: true });
   }
 
@@ -771,7 +851,76 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {void}
    */
   function showAbout(back) {
-    show(createAboutScreen({ t, reducedMotion: still(), onBack: back }), { back });
+    const again = () => showAbout(back); // the About screen again (after the install prompt, or Back from the feedback form)
+    const about = show(createAboutScreen({
+      t, reducedMotion: still(), onBack: back,
+      onFeedback: () => showFeedback(again), installMode: aboutInstall(), onInstall: () => installNow(() => { if (screen === about) again(); }),
+    }), { back });
+  }
+
+  /**
+   * What the game adds to feedback by itself (SPEC D52; game/feedback-logic.js autoText): version, screen and window
+   * size, progress, play time, Lighter graphics, app or browser, the browser's user agent, and a ?test run mark.
+   * @returns {object} the autoText info
+   */
+  function feedbackInfo() {
+    const p = progressFromSave(save);
+    const nav = globalThis.navigator ?? {};
+    return {
+      version: VERSION, ua: nav.userAgent ?? '', screenW: globalThis.screen?.width, screenH: globalThis.screen?.height,
+      w: globalThis.innerWidth, h: globalThis.innerHeight, chapter: p.chapter, customersDone: p.customersDone,
+      keepWorkingDone: save.keepWorkingDone, playMs: playMsNow(), lowDetail: Boolean(save.settings.lowDetail),
+      installed: isInstalled(), test: flags.test,
+    };
+  }
+
+  /**
+   * Send feedback answers (SPEC D52): to the Google Form when it is set up and the phone is online, else into the
+   * save's outbox (sent later), or 'email' when the form is not set up (the screen opens the mail app then).
+   * @param {object} answers the answers from the screen
+   * @returns {Promise<'sent'|'queued'|'email'>} how it went
+   */
+  async function sendFeedback(answers) {
+    const route = sendRoute({ formAction: FEEDBACK_CONFIG.formAction, online: globalThis.navigator?.onLine !== false });
+    if (route === 'email') return 'email';
+    const body = formBody(answers, autoText(feedbackInfo(), t), FEEDBACK_CONFIG, t);
+    if (!body) return 'email'; // the form address is there but no field ids yet
+    if (route === 'form' && await postFeedback(FEEDBACK_CONFIG.formAction, body)) return 'sent';
+    persist({ ...save, feedbackOutbox: outboxAdd(save.feedbackOutbox, body, Date.now()) });
+    return 'queued';
+  }
+
+  let flushing = false; // an outbox send is running
+  /**
+   * Send the answers waiting in the outbox (SPEC D52): at start and whenever the phone comes back online. The ones that
+   * went out leave the outbox; anything added meanwhile stays.
+   * @returns {Promise<void>}
+   */
+  async function flushFeedback() {
+    const waiting = save.feedbackOutbox ?? [];
+    if (!shouldFlush({ outbox: waiting, formAction: FEEDBACK_CONFIG.formAction, online: globalThis.navigator?.onLine !== false, busy: flushing })) return;
+    flushing = true;
+    try {
+      const left = await flushOutbox(waiting, FEEDBACK_CONFIG.formAction);
+      const sent = waiting.slice(0, waiting.length - left.length);
+      if (sent.length) persist({ ...save, feedbackOutbox: (save.feedbackOutbox ?? []).filter((e) => !sent.some((x) => x.body === e.body && x.at === e.at)) });
+    } finally { flushing = false; }
+  }
+  globalThis.addEventListener?.('online', () => { flushFeedback(); });
+
+  /**
+   * The feedback form (SPEC D52).
+   * @param {() => void} back where Back goes (the menu or About)
+   * @returns {void}
+   */
+  function showFeedback(back) {
+    const nav = globalThis.navigator ?? {};
+    const guess = guessPhone(nav.userAgent, nav.maxTouchPoints);
+    show(createFeedbackScreen({
+      t, reducedMotion: still(), phoneGuess: guess ? t(guess.key, guess.vars) : '', onBack: back, onMenu: showMenu,
+      onSend: sendFeedback,
+      mailFor: (answers) => mailtoLink(answers, { version: VERSION, email: FEEDBACK_CONFIG.email, auto: feedbackInfo() }, t),
+    }), { back });
   }
 
   /**
@@ -1188,5 +1337,6 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   }
 
   boot();
+  flushFeedback(); // answers left in the outbox last time go out now, when online (SPEC D52)
   return { get save() { return save; }, store };
 }

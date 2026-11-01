@@ -82,6 +82,13 @@ const PRECACHE = [
   './js/screens/album-logic.js',
   './js/screens/daily-done.js',
   './js/screens/diploma.js',
+  './js/screens/feedback.js',
+  './js/screens/install-card.js',
+  './js/game/feedback-logic.js',
+  './js/core/feedback-config.js',
+  './js/core/feedback-net.js',
+  './js/core/install-logic.js',
+  './js/core/install.js',
   './js/game/daily-logic.js',
   './js/data/daily.js',
   './css/daily.css',
@@ -189,7 +196,7 @@ const PRECACHE = [
   './assets/audio/sizzle.wav',
 ];
 
-const CACHE_VERSION = 'v111';
+const CACHE_VERSION = 'v112';
 const CACHE_NAME = `popper-${CACHE_VERSION}`;
 
 // On install: download every listed file into the new cache, fresh from the server (cache: 'reload' skips the
@@ -209,9 +216,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// On fetch: answer GET requests from the cache first, fall back to the network.
+// On fetch: answer GET requests from the cache first, fall back to the network. Anything else is left to the browser:
+// posts (the feedback form's answers to Google Forms, SPEC D52) and requests to other sites are never touched or cached.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then((hit) => hit || fetch(event.request)),
   );

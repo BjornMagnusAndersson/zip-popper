@@ -1,11 +1,13 @@
 // The main menu (T3.1a): Continue (shows the current chapter's title), Keep working (T5.4, only after the ending),
 // Daily challenge (T8.5, with Keep working), Free play, Comics, Field guide (T6.5, when the game passes onGuide), Face album (T8.2, when the game passes onAlbum),
-// Shop, Your studio (T5.1c), Settings, About.
+// Shop, Your studio (T5.1c), Settings, About. Under the buttons (SPEC D52): the install card when the game passes one
+// (core/install-logic.js decides) and a small, low-key "Send feedback" link.
 // State comes in, every tap goes out through a callback. update({playerName, chapterTitleKey}) refreshes the greeting
 // and the Continue line when the save changes.
 
-import { el, screenShell } from './dom.js';
+import { el, button, screenShell } from './dom.js';
 import { mascotArt } from './mascot.js';
+import { createInstallCard } from './install-card.js';
 
 /**
  * Build the main menu.
@@ -22,13 +24,17 @@ import { mascotArt } from './mascot.js';
  *   "Daily challenge" under it (T8.5), dailySub = its second line as {key, vars} (today's goal and the streak, or
  *   "Done today"), onDaily = its tap; resumeOn = which button goes back to a round left with the round's Menu button
  *   (SPEC D48: 'continue', 'justPop', 'keepWorking' or 'daily'; null = none): its label says "Back to the face";
- *   continueKey = the main story button's label key ("Start the story" on a fresh save, A12; default "Continue")
- * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void, dispose: () => void}} the screen
+ *   continueKey = the main story button's label key ("Start the story" on a fresh save, A12; default "Continue");
+ *   onFeedback = the small "Send feedback" link's tap (left out = no link); installMode = the install card to show
+ *   ('ios', 'android' or null, SPEC D52); onInstall = its Install button (Android); onInstallDismiss = its "Not now"
+ * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void,
+ *   setInstall: (mode: 'ios'|'android'|null) => void, dispose: () => void}} the screen (setInstall shows, swaps or hides the install card)
  */
 export function createMenuScreen({
   t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
   showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60, onAlbum,
   showDaily = false, dailySub = null, onDaily, resumeOn = null, continueKey = 'ui.menu.continue',
+  onFeedback, installMode = null, onInstall, onInstallDismiss,
 }) {
   /** The label of a button that may go back to a paused round (D48). @param {string} path its path @param {string} key its own label key @returns {string} the label */
   const label = (path, key) => t(resumeOn === path ? 'ui.menu.backToFace' : key);
@@ -96,12 +102,28 @@ export function createMenuScreen({
   }
   render({ playerName, chapterTitleKey });
 
-  body.append(top, list);
+  // SPEC D52: the install card (if any) between the greeting and the buttons upright, so it is seen without scrolling
+  // (sideways under the greeting), and the small "Send feedback" link under the buttons.
+  const installSlot = el('div', 'app-menu__install');
+  /** Show, swap or hide the install card. @param {'ios'|'android'|null} mode which card (null = none) @returns {void} */
+  function setInstall(mode) {
+    const card = mode === 'ios' || mode === 'android'
+      ? createInstallCard({ t, mode, signal: shell.signal, onInstall, onDismiss: onInstallDismiss }) : null;
+    installSlot.replaceChildren(...(card ? [card] : []));
+    installSlot.hidden = !card;
+  }
+  setInstall(installMode);
+  const extra = el('div', 'app-menu__extra');
+  if (onFeedback) extra.append(button('app-menu__feedback', t('ui.menu.feedback'), () => onFeedback(), shell.signal));
+  extra.hidden = !onFeedback;
+
+  body.append(top, installSlot, list, extra);
   shell.node.append(body);
   return {
     node: shell.node,
     /** Refresh the greeting and the Continue line. @param {{playerName?: string, chapterTitleKey?: string}} data new data @returns {void} */
     update(data) { render(data); },
+    setInstall,
     dispose: shell.dispose,
   };
 }
