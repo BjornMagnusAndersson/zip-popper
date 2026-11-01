@@ -15,6 +15,7 @@ import { faceGeometry, faceMap } from '../pop/logic.js';
 import { faceLayout, recipeInputs } from '../pop/prep-logic.js';
 import { drawFace } from '../pop/face.js';
 import { makeCanvas, drawPimple, drawDecoy, drawStripDots } from '../pop/art.js';
+import { backdropPalette } from '../pop/backdrop.js';
 import { makeFxLayer } from '../fx/fx-layer.js';
 import { makeRevealSparkle } from '../fx/reveal-fx.js';
 import { RESULT_FX } from '../fx/celebrate-logic.js';
@@ -109,13 +110,16 @@ function spotsOf(lay) {
  * @param {number} w picture width in CSS px
  * @param {number} h picture height in CSS px
  * @param {number} dpr device pixels per CSS pixel
+ * @param {string} [room] the round's room: 'home' paints the living room's wall instead of the plain mint one (A5)
  * @returns {HTMLCanvasElement} the picture
  */
-function plainPortrait(setup, w, h, dpr) {
+function plainPortrait(setup, w, h, dpr, room = 'studio') {
   const { canvas, ctx } = makeCanvas(w, h, dpr);
   const round = faceLayout(recipeInputs(setup)); // where the round puts everything
   const face = faceGeometry(w, h, setup.spec);
-  drawFace(ctx, face, setup.spec, { mood: 'grim', redness: 0.6, seed: setup.seed, dpr });
+  const home = room === 'home'; // A5: a round at home gets the living room's peach wall, not the mint tiles
+  if (home) homeWallPaint(ctx, w, h);
+  drawFace(ctx, face, setup.spec, { mood: 'grim', redness: 0.6, seed: setup.seed, dpr, background: !home });
   const m = faceMap(round.face, face);
   ctx.save();
   ctx.transform(m.s, 0, 0, m.s, m.tx, m.ty);
@@ -129,6 +133,28 @@ function plainPortrait(setup, w, h, dpr) {
 }
 
 /**
+ * The living room's wall behind a portrait (A5): the home backdrop's peach gradient with its soft stripes
+ * (pop/backdrop.js palette 'home'), so a round at home never shows the clinic-like mint tiles.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {number} w width
+ * @param {number} h height
+ * @returns {void}
+ */
+function homeWallPaint(ctx, w, h) {
+  const pal = backdropPalette('home');
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, pal.wallTop);
+  g.addColorStop(1, pal.wallBottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  const step = Math.max(14, w / 9);
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = pal.stripes;
+  for (let x = step * 0.25; x < w; x += step) ctx.fillRect(x, 0, step * 0.38, h);
+  ctx.globalAlpha = 1;
+}
+
+/**
  * The customer intro's portrait WITH the round's bumps (B59): every customer shows the bumps, nose dots and moles the
  * round will have, at the same spots (the recipe carries the round's stage size; album-logic.js faceSetup). A boss or
  * event keeps the reveal's BEFORE framing (head and shoulders filling the picture); everyone else the intro's plain
@@ -137,12 +163,13 @@ function plainPortrait(setup, w, h, dpr) {
  * @param {string} label what screen readers say
  * @param {number} [w] picture width in CSS px
  * @param {number} [h] picture height in CSS px
- * @param {{plain?: boolean}} [o] plain = the plain intro framing (a normal customer)
+ * @param {{plain?: boolean, room?: string}} [o] plain = the plain intro framing (a normal customer); room = the
+ *   round's room ('home' = the living room's peach wall behind a plain portrait, A5)
  * @returns {HTMLCanvasElement} the picture (class app-intro__face, as the plain intro portrait)
  */
 export function bumpPortrait(setup, label, w = 220, h = 240, o = {}) {
   const canvas = o.plain === true
-    ? plainPortrait(setup, w, h, Math.min(2, globalThis.devicePixelRatio || 1))
+    ? plainPortrait(setup, w, h, Math.min(2, globalThis.devicePixelRatio || 1), o.room)
     : faceCanvas({ ...revealFaces(setup).before, mood: 'grim', redness: 0.6 }, w, h);
   canvas.className = 'app-intro__face';
   canvas.setAttribute('role', 'img');

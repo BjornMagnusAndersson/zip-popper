@@ -1,5 +1,5 @@
 // The phone-scroll special mode (T4.6, chapter 4 "Rock bottom"; replaces the Coming soon screen for this chapter).
-// 2:42 am on the sofa (as in strip 4): a close-up of her phone, its blue glow on her face, her tea going cold on the side table. A feed of
+// 2:42 am on the sofa (as in strip 4): a close-up of her phone, its blue glow on her face, her tea going cold on the sofa arm. A feed of
 // cartoon face videos scrolls by on its own (game/phonescroll-logic.js says when); she can only flick slowly (or tap
 // Next) and tap the tiny bumps on each video, pop-it style: tiny pops, soft sounds, no score, no money, no failing.
 // Likes tick up on the other people's videos, the "videos watched" counter and the phone clock creep up. After the
@@ -18,6 +18,8 @@ import {
 
 /** How often the screen checks the clock (likes, auto scroll), in ms. */
 const TICK_MS = 250;
+/** The mug's cream colour, as in strips 4 and 4b (B9). */
+const MUG_CREAM = '#fff8ee';
 /** How long the tea's speech bubble stays up (ms). */
 const TEA_MS = 3800;
 /** How far a finger must flick up (px) to go to the next video. */
@@ -100,7 +102,7 @@ function videoFace(card) {
 }
 
 /**
- * Her cup of tea on the side table: the mug has a little face; it drops as the tea goes cold (steam only above 0.3
+ * Her cup of tea on the sofa's armrest (B9: the cream mug with a pink dot, as strips 4 and 4b draw it): the mug has a little face; it drops as the tea goes cold (steam only above 0.3
  * warmth; in chapter 4 the tea starts at 0.3, already cold, SPEC D32b).
  * @returns {{node: SVGElement, set: (warmth: number) => void}} the mug and how to show its warmth (1 hot .. 0 cold)
  */
@@ -110,15 +112,16 @@ function teaMug() {
     d: `M${36 + i * 12} 30 c-6 -7 6 -11 0 -18 c-5 -6 4 -9 1 -14`, fill: 'none', stroke: '#e9eef8', 'stroke-width': 3.2,
     'stroke-linecap': 'round', class: `ps-steam__wisp ps-steam__wisp--${i}`,
   })));
-  const body = svg('path', { d: 'M24 38 L28 88 Q30 94 36 94 L64 94 Q70 94 72 88 L76 38Z', fill: '#f2a0c0', ...ink });
+  const body = svg('path', { d: 'M24 38 L28 88 Q30 94 36 94 L64 94 Q70 94 72 88 L76 38Z', fill: MUG_CREAM, ...ink });
   const surface = svg('ellipse', { cx: 50, cy: 38, rx: 26, ry: 6, fill: '#a8673a', ...ink });
   const mouth = svg('path', { d: '', fill: 'none', ...ink, 'stroke-width': 2.6 });
   const shiver = svg('path', { d: 'M14 52 l-6 -3 M14 62 l-7 0 M86 52 l6 -3 M86 62 l7 0', fill: 'none', ...ink, 'stroke-width': 2.2, opacity: 0 });
   const node = svg('svg', { viewBox: '0 0 100 100', class: 'ps-tea__mug', 'aria-hidden': 'true' }, [
     steam,
     svg('path', { d: 'M75 50 C94 48 94 78 72 76', fill: 'none', ...ink, 'stroke-width': 7 }),
-    svg('path', { d: 'M75 50 C94 48 94 78 72 76', fill: 'none', stroke: '#f2a0c0', 'stroke-width': 2.6 }),
+    svg('path', { d: 'M75 50 C94 48 94 78 72 76', fill: 'none', stroke: MUG_CREAM, 'stroke-width': 2.6 }),
     body, surface,
+    svg('ellipse', { cx: 37, cy: 81, rx: 8, ry: 6.5, fill: '#ff9cbc', opacity: 0.85 }), // the strip's pink dot
     svg('circle', { cx: 42, cy: 62, r: 2.6, fill: INK }), svg('circle', { cx: 58, cy: 62, r: 2.6, fill: INK }),
     mouth, shiver,
   ]);
@@ -128,7 +131,7 @@ function teaMug() {
     set(w) {
       steam.setAttribute('opacity', String(Math.max(0, w - 0.3).toFixed(2)));
       surface.setAttribute('fill', w > 0.5 ? '#a8673a' : w > 0.2 ? '#97735a' : '#8c8a86');
-      body.setAttribute('fill', w > 0.2 ? '#f2a0c0' : '#c9d6f0');
+      body.setAttribute('fill', w > 0.2 ? MUG_CREAM : '#e4ebf6'); // stone cold: a cool tint on the cream
       mouth.setAttribute('d', w > 0.6 ? 'M44 72 Q50 77 56 72' : w > 0.25 ? 'M44 74 L56 74' : 'M43 76 Q46 72 50 75 Q54 72 57 76');
       shiver.setAttribute('opacity', w <= 0.12 ? '1' : '0');
     },
@@ -196,7 +199,7 @@ export function createPhoneScrollScreen({ t, sound, seed = null, reducedMotion =
   screenEl.append(track);
   phone.append(status, screenEl);
 
-  // The side table with the tea, and the foot: the how-to line and Next.
+  // The sofa arm with the tea (B9), and the foot: the how-to line and Next.
   const side = el('div', 'ps-side');
   const tea = el('div', 'ps-tea');
   tea.setAttribute('role', 'img');

@@ -11,6 +11,9 @@ export const STRIP = {
   id: 'mplant',
   title: 'comic.mplant.title',
   dressed: true, // she wears her best owned outfit here (T5.2, app-logic.js comicOutfit)
+  // B1: her studio as she owns it (ring light, pink chair, paint, new sign follow the shop); the new plant is the strip's
+  // own layer and never droops (droop: false), even when the strip plays before the plant's scrub job.
+  studio: 'owned',
   panels: [
     {
       // 1. Shop day: she lifts the new plant above her head like a trophy. Light, sparkles, a cheer.
@@ -20,7 +23,7 @@ export const STRIP = {
           studio(1600, 900, { floorY: 600, doorX: 0.08, windowX: 0.42, leakX: 0.7, bulbX: 0.56, signX: 0.88 }),
           { art: 'bucket', x: 1120, y: 830, scale: 0.5 },
           // B10: the plant sits in her hands (pose 'lift'), drawn behind her so her hands grip the pot's sides.
-          { art: 'plant', x: 760, y: 462, scale: 1.05 },
+          { art: 'plant', x: 760, y: 462, scale: 1.05, droop: false },
           { id: 'her', art: 'heroine', x: 760, y: 900, scale: 0.75, pose: 'lift', expr: 'bliss' },
           { art: 'sparkles', x: 760, y: 230, r: 240 },
         ],
@@ -38,7 +41,7 @@ export const STRIP = {
       scene: {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.5, door: false, leak: false, sign: false, bulb: false }),
-          { art: 'plant', x: 400, y: 580, scale: 0.95, eyes: 'sad' },
+          { art: 'plant', x: 400, y: 580, scale: 0.95, eyes: 'sad', droop: false },
           { id: 'greta', art: 'greta', x: 140, y: 650, scale: 0.8, pose: 'bust', expr: 'sad', look: 1 },
           { id: 'penny', art: 'penny', x: 660, y: 650, scale: 0.8, pose: 'bust', expr: 'shocked', flip: true },
         ],
@@ -55,7 +58,7 @@ export const STRIP = {
       scene: {
         layers: [
           studio(800, 600, { floorY: 470, windowX: 0.82, door: false, leakX: 0.12, sign: false, bulb: false }),
-          { art: 'plant', x: 560, y: 580, scale: 0.9, eyes: 'smug', scarf: '#e8505b' },
+          { art: 'plant', x: 560, y: 580, scale: 0.9, eyes: 'smug', scarf: '#e8505b', droop: false },
           { id: 'insp', art: 'inspector', x: 230, y: 700, scale: 0.75, pose: 'point', hold: 'magnifier', expr: 'neutral', look: 1 },
         ],
       },
@@ -70,7 +73,7 @@ export const STRIP = {
       scene: {
         layers: [
           studio(1000, 1000, { floorY: 640, windowX: 0.78, door: false, leak: false, sign: false, bulbX: 0.22 }),
-          { art: 'plant', x: 300, y: 960, scale: 1.25, eyes: 'wide', scarf: '#e8505b', bud: true, sweat: true },
+          { art: 'plant', x: 300, y: 960, scale: 1.25, eyes: 'wide', scarf: '#e8505b', bud: true, sweat: true, droop: false },
           { art: 'sparkles', x: 362, y: 560, r: 70 },
           { id: 'her', art: 'heroine', x: 770, y: 1010, scale: 0.85, pose: 'pop', expr: 'scheming', look: -1 },
         ],

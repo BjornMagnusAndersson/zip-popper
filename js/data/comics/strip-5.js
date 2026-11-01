@@ -258,7 +258,7 @@ export const STRIP = {
           studio(1600, 900, { floorY: 600, windowX: 0.85, door: false, leakX: 0.264, signX: 0.64, signTilt: 26, bulbX: 0.5, plantEyes: 'smug', lamp: false }),
           { id: 'insp', art: 'inspector', x: 520, y: 880, scale: 0.8, pose: 'stand', hold: 'clipboard', expr: 'neutral', flip: true },
           { art: 'drip', x: 423, y: 578, r: 18, splash: true },
-          { id: 'her', art: 'heroine', x: 1000, y: 880, scale: 0.8, pose: 'wave', hold: 'gloves', expr: 'bliss', flip: true },
+          { id: 'her', art: 'heroine', x: 1000, y: 880, scale: 0.8, pose: 'wave', hold: 'glovesSealed', expr: 'bliss', flip: true }, // still sealed: the scare strip finds it unopened (audit B5)
         ],
       },
       camera: { move: 'pullOut', focus: [800, 450], amount: 0.08, ms: 3000 },

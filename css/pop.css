@@ -145,6 +145,17 @@
 .pop-req--done .pop-req__state::before { content: "\2713  "; }
 .pop-req--missed { background: #e4dedb; color: #5b4f4a; }
 .pop-req--missed .pop-req__text { text-decoration: line-through; }
+/* A2, chapter 2: the closed visor over his face drops from his forehead with a little bounce, then slides off with him
+   (the storm rule below comes later, so it takes over). */
+.pop-visor { pointer-events: none; }
+.pop-visor--slam { animation: pop-visor-slam 0.32s cubic-bezier(0.5, 0, 0.75, 0) both; }
+@keyframes pop-visor-slam {
+  0% { transform: translateY(-14%); opacity: 0; }
+  20% { opacity: 1; }
+  70% { transform: translateY(0); }
+  85% { transform: translateY(-1.5%); }
+  100% { transform: translateY(0); }
+}
 /* The customer storms off (SPEC D15): the face huffs off to the side; with reduced motion it only fades. */
 .pop-canvas--storm { pointer-events: none; animation: pop-storm 0.7s ease-in forwards; }
 @keyframes pop-storm {
@@ -286,6 +297,10 @@
 .tl-phone::after {
   content: ''; position: absolute; right: 8%; bottom: 6%; width: 44px; height: 80px; border-radius: 10px;
   background: #e9f5ff; border: 5px solid #23283a; box-shadow: 0 0 40px 16px rgba(205, 232, 255, 0.75); transform: rotate(-14deg);
+}
+/* A10: on a narrow phone (320 px) the phone drawing reached over Continue: smaller and further into the corner. */
+@media (max-width: 359px) {
+  .tl-phone::after { right: 3%; bottom: 4%; width: 34px; height: 62px; border-width: 4px; }
 }
 @keyframes tl-phone-on { from { opacity: 0; } to { opacity: 1; } }
 .tl-caught {

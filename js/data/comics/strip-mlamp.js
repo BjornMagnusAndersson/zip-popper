@@ -6,12 +6,12 @@
 // Format: docs/COMIC-FORMAT.md.
 
 /**
- * The dingy studio at night (tier 0; the plant wears Greta's scarf). newSign: false = always the old sign, even after
- * the shop's new sign (SPEC D47): the joke is the stain on it.
+ * The studio at night (the plant wears Greta's scarf). The joke is the stain on the sign: the old sign keeps its stain,
+ * and once the shop's new sign is in it has a small smudge in the same spot (signSmudge, SPEC D50, INTERVIEW 40 a).
  * @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer
  */
 const studio = (w, h, o = {}) => ({
-  art: 'room', kind: 'studio', w, h, sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true, plantScarf: '#e8505b', newSign: false, ...o,
+  art: 'room', kind: 'studio', w, h, sky: ['#10153a', '#2a3470'], cloud: false, moon: true, stars: true, plantScarf: '#e8505b', signSmudge: true, ...o,
 });
 
 /** A see-through dark sheet over the whole panel (the light is off). @param {number} w width @param {number} h height @param {number} [a] how dark, 0..1 @returns {object} layer */

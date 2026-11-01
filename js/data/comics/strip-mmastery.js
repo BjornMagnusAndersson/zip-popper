@@ -107,7 +107,7 @@ export const STRIP = {
           // The stopwatch first, then Nils, so his raised fist grips it (story audit 2026-10-29: it used to float).
           ...stopwatch(452, 486, 62, 0),
           { id: 'nils', art: 'nils', x: 300, y: 870, scale: 0.75, pose: 'sitLift', expr: 'proud', look: 1 },
-          { art: 'chair', x: 1260, y: 870, scale: 0.75, color: '#9a8f6a' },
+          { art: 'chair', x: 1260, y: 870, scale: 0.75, color: '#9a8f6a', wingback: false }, // B7: she owns one pink chair (Nils has it)
           { id: 'greta', art: 'greta', x: 1260, y: 870, scale: 0.75, pose: 'sit', expr: 'happy', look: -1 },
           ...knitting(1260, 690, 0.9),
           // Popping hands ready, no tool: this strip can play before the tweezers are bought (story audit 2026-10-29).

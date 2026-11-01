@@ -15,7 +15,7 @@ import {
   MASTER_LEVEL, MASTERY_LEVELS,
 } from '../data/economy-data.js';
 import { pickRequest, hurryLimit } from './requests.js';
-import { customerLines, hurryLineRequest, recordLines } from './customer-lines.js';
+import { customerLines, hurryLineRequest, recordLines, avoidLastName } from './customer-lines.js';
 import { dailyFor, dailySpec, dailyRequest, isDateKey, addDays } from './daily-logic.js';
 import { twistFor, shownTwist, describeTwist, isTwist, TWIST_IDS, CAREER_HURRY } from '../data/twists.js';
 import { bossFor, bossSpec, describeBoss, isBoss, BOSS_IDS, BOSSES } from '../data/bosses.js';
@@ -26,7 +26,7 @@ import { TOOL_IDS, GLOVES } from '../data/tools.js';
 import { defaultSave, normalizeSave, sanitizeName, clampVolume } from '../core/save.js';
 import { factForCustomer } from '../data/facts.js';
 import { pinVisit, pinIntroKey } from './pin-jar.js';
-import { serviceAskKey } from './service-asks.js';
+import { serviceAskKey, SERVICE_ASKS } from './service-asks.js';
 import { GUIDE_KINDS } from '../screens/guide-logic.js';
 import { demoAlbum } from '../screens/album-logic.js';
 import { STRIP as strip0, STRIP_BAN as strip0b } from '../data/comics/strip-0.js';
@@ -212,9 +212,11 @@ export function comicOutfit(strip, save) {
  *   pick Q14 c, 2026-10-29).
  * - paint, newSign: in `studio: 'owned'` strips the wall paint and the new shiny sign follow the shop as well (SPEC
  *   D47, widening Q14 c), once bought and scrubbed like the others. Nothing bought = the strip exactly as written.
+ * - booksSeen: in `studio: 'owned'` strips, the books strip has been seen (SPEC D50, INTERVIEW 41): a later replay of
+ *   the leak strip gives her husband the six plumes and the cape books revealed (layers say so with `owned.booksSeen`).
  * @param {object|null} strip the strip data
  * @param {object} save the save
- * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean, paint?: boolean, newSign?: boolean}|null}
+ * @returns {{gloves: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean, paint?: boolean, newSign?: boolean, booksSeen?: boolean}|null}
  *   what to draw, or null = draw the strip as it is
  */
 export function comicStudio(strip, save) {
@@ -224,7 +226,7 @@ export function comicStudio(strip, save) {
   const leak = !LEAK_STORY_STRIPS.includes(strip.id) && layers.includes('leakFix') ? { leakFixed: true } : {};
   if (strip.studio !== 'owned') return gloves || leak.leakFixed ? { gloves, ...leak } : null;
   return { gloves, livingPlant: layers.includes('plant'), ringLight: layers.includes('lamp'), pinkChair: layers.includes('chair'),
-    paint: layers.includes('wallPaint'), newSign: layers.includes('sign'), ...leak };
+    paint: layers.includes('wallPaint'), newSign: layers.includes('sign'), booksSeen: (save?.seenComics ?? []).includes('books'), ...leak };
 }
 
 /** Strips that always draw the leak, even after "Fix the leak": opening day (strip 5) and the fix itself (mleak). */
@@ -298,6 +300,40 @@ export function nextStep(save) {
  */
 export function chapterTitleKey(save) {
   return getChapter(progressFromSave(save).chapter)?.titleKey ?? 'chapter.0.title';
+}
+
+/**
+ * The label of the menu's main story button (A12): "Start the story" on a fresh save (chapter 0 with its strip not
+ * seen yet), "Continue" once anything has started.
+ * @param {object} save the save
+ * @returns {string} string key
+ */
+export function continueLabelKey(save) {
+  const fresh = progressFromSave(save).chapter === 0 && !(save?.seenComics ?? []).includes('strip0');
+  return fresh ? 'ui.menu.startStory' : 'ui.menu.continue';
+}
+
+/**
+ * Whether a customer has asked for more services yet (C7): the first ask comes from career customer 3
+ * (game/service-asks.js SERVICE_ASKS), so the shop's "Coming soon" card ("your customers keep asking") shows only once
+ * that customer is done, or after the ending (Keep working).
+ * @param {object} save the save
+ * @returns {boolean} true = the card may show
+ */
+export function servicesAsked(save) {
+  if (save?.endingSeen || (save?.keepWorkingDone ?? 0) > 0) return true;
+  const p = progressFromSave(save);
+  return p.chapter > SERVICE_ASKS.chapter || (p.chapter === SERVICE_ASKS.chapter && p.customersDone >= SERVICE_ASKS.careerN[0]);
+}
+
+/**
+ * Where the title screen's tap goes (SPEC D51, INTERVIEW 38): the name screen on a first start (no name yet), the
+ * menu otherwise. The title always comes first.
+ * @param {object} save the save
+ * @returns {'name'|'menu'} the next screen
+ */
+export function afterTitle(save) {
+  return save?.playerName ? 'menu' : 'name';
 }
 
 /**
@@ -545,9 +581,11 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
       ?? pickRequest(spec, holds, seed + 101, requestNumber);
   }
   const twist = shownTwist(own, request);
-  const boss = describeBoss(bossId);
+  const boss = describeBoss(bossId, { ownedTools: unlockedTools }); // a hint naming a tool she lacks says "from the shop" (C6)
+  // C8: a walk-in never has the same name as the customer just before (and never their intro line, customerLines).
+  const who = avoidLastName(save, spec.customer, seed);
   // R6-lines: this visit's lines (first visit or return, a clock joke only with a real clock, never the same twice).
-  const lines = customerLines(save, spec.customer, {
+  const lines = customerLines(save, who, {
     seed, step, timed: request?.type === 'hurry', hurryLine: request?.line ? { tier: request.tier, missPenalty: request.missPenalty } : null,
   });
   // The pin jar (owner 2026-10-28): now and then a customer brings a pin from home and says so first (game/pin-jar.js).
@@ -555,7 +593,7 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
   const introKey = pin ? pinIntroKey(save.pinJar ?? 0) : lines.introKey;
   // Now and then a customer asks if the studio does facials yet (a hint of later services, game/service-asks.js).
   const ask = serviceAskKey(step, { boss: bossId, regular: Boolean(spec.customer?.regular), pin, timed: request?.type === 'hurry' });
-  const customer = { ...spec.customer, introKey, deadlineKey: ask ?? lines.secondKey, resultKeys: { ...lines.resultKeys } };
+  const customer = { ...who, introKey, deadlineKey: ask ?? lines.secondKey, resultKeys: { ...lines.resultKeys } };
   return {
     // Gloves (SPEC D32e): once she owns them her fingertips are blue and the customer relaxes a bit (data/tools.js GLOVES).
     customer, lines, bumpCount: spec.bumpCount, allowedTypes: [...spec.allowedTypes],
@@ -564,7 +602,7 @@ export function roundArgs(save, step, forcedSeed = null, forcedTwist = null, for
     seed, holdFactors, roughReductions, unlockedTools,
     request, room: backdropRoom(step.chapter), tier: backdropTier(save),
     layers: backdropLayers(save), pins: save.pinJar ?? 0, pin, career: true,
-    decoys, customerNameKey: spec.customer?.nameKey ?? null, skipCost: skipPenaltyNow(save),
+    decoys, customerNameKey: who?.nameKey ?? null, skipCost: skipPenaltyNow(save),
     // A story round before the studio opens (Hubby, chapters 0 to 4) has no "Next customer" after a storm-off, only
     // Try again: skipping him would jump to the ban strip without a pop (owner 2026-10-29, R8 R5).
     retryOnly: !paysMoney(step),
@@ -627,7 +665,8 @@ export function freeArgs(save, forcedSeed = null) {
 export function torchlightArgs(save, chapter, forcedSeed = null) {
   const { holdFactors, roughReductions } = masteryTables(save);
   return {
-    customer: HUSBAND, bumpCount: TORCHLIGHT_ROUND.bumpCount, allowedTypes: [...TORCHLIGHT_ROUND.allowedTypes],
+    // his bumps sit on the forehead, nose and jaw this time, not chapter 0's chin and cheeks (D51, characters.js NIGHT_ZONES)
+    customer: { ...HUSBAND, face: { ...HUSBAND.face, spots: 'night' } }, bumpCount: TORCHLIGHT_ROUND.bumpCount, allowedTypes: [...TORCHLIGHT_ROUND.allowedTypes],
     difficulty: TORCHLIGHT_ROUND.difficulty, seed: roundSeed(chapter, 1, forcedSeed), holdFactors, roughReductions,
     unlockedTools: [...economyFromSave(save).unlockedTools], request: null, room: 'home', tier: 0, career: false,
     decoys: false, mood: 'sleep',
@@ -748,6 +787,8 @@ export function applyRound(save, payload, step) {
   const pinTaken = !failed && step?.pin === true; // a pin visit: the pin goes into the jar (game/pin-jar.js)
   const jar = (save.pinJar ?? 0) + (pinTaken ? 1 : 0);
   const base = { ...economyToSave(save, after), ...moved, pendingStrips: [...strips], pinJar: jar }; // strips kept until played (B4)
+  // A paying customer who stormed off for good counts for the books strip's "ran away" line (SPEC D50; not the daily).
+  if (failed && paysMoney(step) && !step?.daily) base.stormOffs = (save.stormOffs ?? 0) + 1;
   const next = recordLines(failed ? base : addPendingDiplomas(base, roundSkills(before, after, payload.cleanBumpTypes ?? []).mastered), step?.lines, said, failed); // new Master diplomas too (B93)
   // Nose dots left on: the customer says so instead (owner 2026-10-28); the line memory keeps the usual line.
   const shown = !failed && payload.stripLeft === true ? noseLeftKey(step) : said;
@@ -792,6 +833,18 @@ export function skillNews(skills) {
 }
 
 /**
+ * The skill lines the result screen shows for this step (SPEC D51, INTERVIEW 36): the clean pops always count, but
+ * the mastery lines only show from chapter 5 on (the career, Keep working, the daily), never in the story rounds before
+ * the studio (Hubby's "5 more clean pops to level 1" right before the ban strip read wrong).
+ * @param {ReturnType<typeof roundSkills>|null|undefined} skills applyRound's skills
+ * @param {{chapter?: number, keepWorking?: boolean, daily?: string}} step the customer step
+ * @returns {ReturnType<typeof skillNews>} the lines (empty before chapter 5)
+ */
+export function resultSkillNews(skills, step) {
+  return paysMoney(step) ? skillNews(skills) : [];
+}
+
+/**
  * The books strip's first caption ({studioNow}) follows what she has done to the studio (SPEC D47, INTERVIEW 35):
  * nothing scrubbed in yet = as written ("still shabby"), some upgrades = "a little less shabby every day", the wall
  * paint and the new sign both in = "starting to look like a real one".
@@ -804,7 +857,30 @@ export function booksCaptionKey(layers) {
 }
 
 /**
- * The extra {placeholders} a strip's texts need: the books strip's first caption (booksCaptionKey) and the Tool mastery strip: {kind} = the kind of bump she got
+ * The books strip's first line ({ranAway}, SPEC D50, INTERVIEW 42): "Only a few ran away." when a paying customer has
+ * stormed off for good (save.stormOffs; older saves without it: a customer whose last visit was a storm-off), else
+ * "Nobody ran away! ...this time."
+ * @param {object} save the save
+ * @returns {string} string key
+ */
+export function booksRanAwayKey(save) {
+  const memoFail = Object.values(save?.customerLines ?? {}).some((m) => m?.failed === true);
+  return (save?.stormOffs ?? 0) > 0 || memoFail ? 'comic.books.p1.herFew' : 'comic.books.p1.herNone';
+}
+
+/**
+ * The apron strip's last line ({signLine}, SPEC D50, INTERVIEW 39): behind the fallen sign is the only clean bit of the
+ * dingy wall, or, once the wall paint is in, the only DUSTY bit of the fresh paint.
+ * @param {object} save the save
+ * @returns {string} string key
+ */
+export function apronSignKey(save) {
+  return backdropLayers(save).includes('wallPaint') ? 'comic.mapron.p4.herDusty' : 'comic.mapron.p4.herClean';
+}
+
+/**
+ * The extra {placeholders} a strip's texts need: the books strip's first caption (booksCaptionKey) and first line
+ * (booksRanAwayKey), the apron strip's sign line (apronSignKey) and the Tool mastery strip: {kind} = the kind of bump she got
  * Skilled at (the most trained kind; on a replay, the most trained kind now), {level} and {max} = that kind's level now
  * and the Master level, {pct} = how much faster that level pops, {levelName} and {levelCaps} = the level's name ("Skilled",
  * "Master"; B93 8: a replay names the level the kind has by then, not always Skilled) and {more} = what comes next.
@@ -813,7 +889,8 @@ export function booksCaptionKey(layers) {
  * @returns {{keys: Record<string, string>, values: Record<string, number>}} placeholders to translate, and plain ones
  */
 export function stripVars(id, save) {
-  if (id === 'books') return { keys: { studioNow: booksCaptionKey(backdropLayers(save)) }, values: {} };
+  if (id === 'books') return { keys: { studioNow: booksCaptionKey(backdropLayers(save)), ranAway: booksRanAwayKey(save) }, values: {} };
+  if (id === 'mapron') return { keys: { signLine: apronSignKey(save) }, values: {} };
   if (id !== STRIP_FIRST_MASTERY) return { keys: {}, values: {} };
   const state = economyFromSave(save);
   let best = null;

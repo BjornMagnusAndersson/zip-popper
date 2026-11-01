@@ -41,6 +41,7 @@ export const FALLBACK_BOSS = 'golden';
  *   at most BOSS_MAX_DIFFICULTY.
  * - reward: flat = bonus coins; payScale = kind -> pay multiplier for those clean pops (2 = double pay on hairs, the
  *   extra half is the bonus); popScale = multiplier on all pop coins (1.5 = half the pops line again as a bonus).
+ * - hintTool: (optional) a tool its hint names; while she does not own it the hint is .hintShop instead (C6).
  * String keys: boss.<id>.name (pill, chip, guide card, album), .line (a funny line on the intro pill), .hint (the tip
  * on the intro pill and the pop scene's hint line before the first pop), .reward (what she gets, on the intro pill),
  * .bonus (the coin row on the result screen), .tip (the guide card).
@@ -57,6 +58,7 @@ export const BOSSES = {
   golden: { // relaxed: no timer (a boss never has a request), a softer meter
     kind: 'event', needs: [], mix: { gold: 4, whitehead: 5 }, stripAlways: false, grownHorns: 0,
     accessory: 'tiara', difficulty: 0.8, reward: { flat: 0, payScale: null, popScale: 1.25 },
+    hintTool: 'cottonPad', // its hint names the cotton pad: "from the shop" while she has none (C6, describeBoss)
   },
   horn: { // Big Evil Horn: two horns grown big plus reds; the warm cloth is the way in, so it needs one (D27c, B75)
     kind: 'boss', needs: ['warmCloth'], mix: { horn: 2, red: 4, whitehead: 2 }, stripAlways: false, grownHorns: 1.2,
@@ -235,16 +237,21 @@ export function bossBonus(id, cleanBumpTypes = [], popCoins = 0) {
 
 /**
  * The string keys an event shows (intro pill, pop scene chip, result row, guide card).
+ * An event whose hint names a tool (hintTool) says "from the shop" while she does not own it (C6: Golden Day is the
+ * no-tools fallback, so its "a cotton pad makes it shine!" must not sound like she has one); give o.ownedTools for that.
  * @param {string|null} id an event id
+ * @param {{ownedTools?: string[]}} [o] the tools she owns (left out = the plain hint)
  * @returns {{id: string, kind: string, labelKey: string, nameKey: string, lineKey: string, hintKey: string,
  *   rewardKey: string, bonusKey: string, tipKey: string}|null} the keys, or null for no event
  */
-export function describeBoss(id) {
+export function describeBoss(id, o = {}) {
   if (!isBoss(id)) return null;
   const kind = BOSSES[id].kind;
+  const tool = BOSSES[id].hintTool;
+  const shop = Boolean(tool) && Array.isArray(o.ownedTools) && !o.ownedTools.includes(tool); // the hint's tool not owned yet
   return {
     id, kind, labelKey: kind === 'boss' ? 'boss.label.boss' : 'boss.label.event', nameKey: `boss.${id}.name`,
-    lineKey: `boss.${id}.line`, hintKey: `boss.${id}.hint`, rewardKey: `boss.${id}.reward`, bonusKey: `boss.${id}.bonus`,
+    lineKey: `boss.${id}.line`, hintKey: shop ? `boss.${id}.hintShop` : `boss.${id}.hint`, rewardKey: `boss.${id}.reward`, bonusKey: `boss.${id}.bonus`,
     tipKey: `boss.${id}.tip`,
   };
 }

@@ -93,7 +93,9 @@ export function makeRoomFx(o) {
     parts.push(makeLamps({
       ...base, lamp: room.lamp, ring: room.ring, candle: plan.candle ? room.candle : null, diffuser: plan.diffuser ? room.diffuser : null,
       moth: plan.moth, dim: where === 'view', calm: Boolean(o.reduced), off: plan.bulbOff,
-      softRing: where === 'pop', // the pop scene: no bright ring halo behind the zoom buttons (audit A5)
+      // the pop scene: no bright ring halo behind the zoom buttons (audit A5); the spa's studio view too (C11: on the
+      // bright spa wall the halo was one big white glare over the sink, the ring itself lost in it)
+      softRing: where === 'pop' || plan.tier === 2,
       under: where === 'pop', // the pop scene draws the dingy bulb's halo under its bulb (under), the bulb stays crisp
     }));
     if (plan.dust > 0) {

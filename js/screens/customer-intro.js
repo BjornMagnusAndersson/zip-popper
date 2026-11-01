@@ -90,14 +90,31 @@ export function createCustomerIntroScreen({
     hint.append(icon('bulb'), el('span', '', t(hintKey)));
     right.append(hint);
   }
-  right.append(button('app-btn app-btn--main app-btn--big app-intro__start', t('ui.intro.start'), () => onStart?.(), shell.signal));
+  const start = button('app-btn app-btn--main app-btn--big app-intro__start', t('ui.intro.start'), () => onStart?.(), shell.signal);
+  right.append(start);
   if (onMenu) right.append(button('app-btn app-btn--small app-intro__menu', t('ui.intro.menu'), () => onMenu(), shell.signal));
   body.append(left, right);
   shell.node.append(body);
+  /**
+   * C2 follow-up: Start is sticky at the bottom of a tall intro; while it covers cards that are still below, a soft
+   * fade above it (CSS app-intro--more) says there is more to scroll to. Gone once Start is back in its own place.
+   * @returns {void}
+   */
+  const updateMore = () => {
+    const next = start.nextElementSibling;
+    const stuck = next
+      ? next.getBoundingClientRect().top - start.getBoundingClientRect().bottom > 20 // pushed up away from the Menu button
+      : body.scrollHeight - body.clientHeight - body.scrollTop > 2;
+    body.classList.toggle('app-intro--more', stuck);
+  };
+  body.addEventListener('scroll', updateMore, { passive: true, signal: shell.signal });
+  window.addEventListener('resize', updateMore, { signal: shell.signal });
+  const watcher = typeof ResizeObserver === 'function' ? new ResizeObserver(updateMore) : null;
+  watcher?.observe(body);
   // A boss or event: the stage moment behind the cards (never for a normal customer; stops with the screen).
   const stage = boss ? startIntroStage({ host: shell.node, portrait: frame, bossId: boss.id, reduced: reducedMotion, lite: lowDetail, playSound }) : null;
   /** Stop the stage moment and take the screen away. @returns {void} */
-  const dispose = () => { stage?.stop(); shell.dispose(); };
+  const dispose = () => { stage?.stop(); watcher?.disconnect(); shell.dispose(); };
   /**
    * Whether the boss or event stage moment is still playing (the game waits with building the face ahead, B99(4), so
    * the moment never stutters). False for a normal customer and for the still (reduced motion) picture.

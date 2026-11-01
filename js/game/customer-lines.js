@@ -16,6 +16,7 @@ import { REGULARS, GENERIC_COUNTS, genericKey, makeRng } from '../data/customers
 import { CHAPTERS } from '../data/chapters.js';
 import {
   REGULAR_LINE_COUNTS, OLD_STYLE_KINDS, WALK_IN_LINES, HUSBAND_ASIDES, HURRY_LINE, HURRY_LINE_TIERS, AGAIN_LINES, PARTY_LINES,
+  LINE_NEEDS,
 } from '../data/customer-lines.js';
 import { hurryLimit } from './requests.js';
 import { progressFromSave } from './chapter-logic.js';
@@ -202,17 +203,82 @@ export function metBefore(save, customer, step = null, seed = undefined) {
 
 /**
  * Picks one key from a list with the face seed, leaving out the key said last visit (when there is another).
+ * avoid may also be a list (C8: this customer's last line AND the line the customer just before said), left out one
+ * by one while another key is left.
  * @param {string[]} pool the keys to choose from
  * @param {number} seed the face seed
  * @param {number} salt a number per line slot (SALT)
- * @param {string|undefined} avoid the key said last time
+ * @param {string|undefined|(string|null|undefined)[]} avoid the key said last time (or several keys)
  * @returns {string|null} a key, or null for an empty pool
  */
 export function pickLine(pool, seed, salt, avoid) {
-  const list = pool.length > 1 && avoid ? pool.filter((k) => k !== avoid) : pool;
+  let list = pool;
+  for (const a of (Array.isArray(avoid) ? avoid : [avoid]).filter(Boolean)) {
+    const rest = list.filter((k) => k !== a);
+    if (rest.length) list = rest;
+  }
   if (!list.length) return null;
   const r = makeRng((Math.floor(Number(seed)) || 0) * 31 + salt)();
   return list[Math.min(list.length - 1, Math.floor(r * list.length))];
+}
+
+/**
+ * Whether a line fits the save right now (C17, data/customer-lines.js LINE_NEEDS): no humming along with the music off,
+ * no cotton pads before she owns one, no "Same chair?" after the Better chair is bought.
+ * @param {object} save the save
+ * @param {string} key the line's string key
+ * @returns {boolean} true = it may be said
+ */
+export function lineFits(save, key) {
+  const need = LINE_NEEDS[key];
+  if (!need) return true;
+  if (need.music && save?.settings?.music === false) return false;
+  if (need.tool && !(save?.unlockedTools ?? []).includes(need.tool)) return false;
+  if (need.noLayer && (save?.studioLayers ?? []).includes(need.noLayer)) return false;
+  return true;
+}
+
+/**
+ * The lines of a pool that fit the save (lineFits); the whole pool when none does.
+ * @param {object} save the save
+ * @param {string[]} pool the keys
+ * @returns {string[]} the keys to pick from
+ */
+function fitting(save, pool) {
+  const ok = pool.filter((k) => lineFits(save, k));
+  return ok.length ? ok : pool;
+}
+
+/**
+ * The visit just before this one: the newest entry of the line memory (finished or skipped visits only, so Try again
+ * never counts). nameKey = a walk-in's name key (from its memory id), null for a regular.
+ * @param {object} save the save
+ * @returns {{id: string, nameKey: string|null, intro: string|null}|null} the last visit, or null for none
+ */
+export function lastVisit(save) {
+  const memo = save?.customerLines ?? {};
+  const ids = Object.keys(memo);
+  if (!ids.length) return null;
+  const id = ids[ids.length - 1];
+  const hash = id.indexOf('#');
+  return { id, nameKey: hash > 0 ? id.slice(0, hash) : null, intro: memo[id]?.intro ?? null };
+}
+
+/**
+ * A walk-in with the same name as the customer just before (but another face) gets the next walk-in name instead (C8:
+ * two "Marta the Mailperson"s in a row read like a mistake). Regulars and anyone else come back unchanged.
+ * @param {object} save the save
+ * @param {object} customer the customer (data/customers.js shape)
+ * @param {number} seed the face seed of this visit
+ * @returns {object} the customer (a copy with another nameKey when it had to change)
+ */
+export function avoidLastName(save, customer, seed) {
+  if (!customer || customer.regular || REGULARS.some((r) => r.id === customer.id)) return customer;
+  const last = lastVisit(save);
+  if (!last?.nameKey || last.nameKey !== customer.nameKey || last.id === lineId(customer, seed)) return customer;
+  const m = /\.(\d+)$/.exec(String(customer.nameKey));
+  const n = m ? Number(m[1]) : 0;
+  return { ...customer, nameKey: genericKey('name', (n % GENERIC_COUNTS.name) + 1) };
 }
 
 /**
@@ -254,8 +320,10 @@ export function customerLines(save, customer, { seed, step = null, timed = false
   if (hurryLine) intros = hurryIntroKeys();
   const resultKeys = {};
   for (const r of REACTION_KINDS) resultKeys[r] = pickLine(results[r], seed, SALT[r], memo.result);
+  const before = lastVisit(save)?.intro; // never the intro the customer just before said (C8)
   return {
-    id, introKey: pickLine(intros, seed, SALT.intro, memo.intro), secondKey: pickLine(seconds, seed, SALT.second, memo.second),
+    id, introKey: pickLine(fitting(save, intros), seed, SALT.intro, [memo.intro, before]),
+    secondKey: pickLine(fitting(save, seconds), seed, SALT.second, memo.second), // C17: only lines that fit the save
     resultKeys, met, hurryLine,
   };
 }

@@ -73,10 +73,20 @@ const ZONE = {
   cheekR: { name: 'cheekR', u: [0.46, 0.68], v: [0.08, 0.3] },
   forehead: { name: 'forehead', u: [-0.14, 0.14], v: [-0.7, -0.5] },
   temple: { name: 'temple', u: [0.4, 0.62], v: [-0.68, -0.52] },
+  // Low on the jaw, just above the beard line on one side (the beard covers the rest of the jaw): A8 (strip 2's bump
+  // and chink sit low on his jaw) and the torchlight night (A7).
+  jawL: { name: 'jawL', u: [-0.62, -0.46], v: [0.27, 0.36] },
+  jawR: { name: 'jawR', u: [0.46, 0.62], v: [0.27, 0.36] },
 };
-/** The zone order at home (chin, both cheeks, then the rest) and in armor (chin and nose, the open front only). */
+/** The zone order at home (chin, both cheeks, then the rest) and in armor (chin, then low on the jaw, A8). */
 export const BEARD_ZONES = [ZONE.chin, ZONE.cheekL, ZONE.cheekR, ZONE.nose, ZONE.forehead, ZONE.temple];
-export const ARMOR_ZONES = [ZONE.chin, ZONE.nose, ZONE.cheekL, ZONE.cheekR];
+export const ARMOR_ZONES = [ZONE.chin, ZONE.jawL, ZONE.nose, ZONE.cheekR];
+/**
+ * The torchlight night (chapter 1, SPEC D51, INTERVIEW 37): four nights after the "So smooth" chin of strip 0b the new
+ * bumps sit in other spots (forehead, nose, jaw), never the chin and both cheeks of chapter 0 again. Face spec option
+ * `spots: 'night'`.
+ */
+export const NIGHT_ZONES = [ZONE.forehead, ZONE.nose, ZONE.jawR, ZONE.temple, ZONE.cheekL];
 
 /** How far the beard's wavy top edge pokes up above BEARD_TOP (face units), kept clear of bumps too. */
 export const BEARD_FUZZ = 0.03;
@@ -188,7 +198,7 @@ export function characterLayout(spec) {
       } else boxes.push([u0, top, u1, bottom]);
     }
   }
-  const zones = spec?.beard ? (armor ? ARMOR_ZONES : BEARD_ZONES) : null;
+  const zones = spec?.beard ? (armor ? ARMOR_ZONES : spec.spots === 'night' ? NIGHT_ZONES : BEARD_ZONES) : null;
   if (!armor) return { hairline: null, crown: spec?.tuft ? TUFT_CROWN : null, boxes, zones };
   for (let i = -13; i < 11; i += 1) { // the cheek guards, both sides, in slices 0.1 high
     const v0 = i / 10;

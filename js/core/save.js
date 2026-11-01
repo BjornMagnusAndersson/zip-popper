@@ -38,6 +38,7 @@ export function defaultSave(now = Date.now()) {
     // Economy fields (T3.2, docs/ECONOMY.md section 8). Added without a version bump: older saves simply get these defaults.
     reputation: 0,
     skipStreak: 0, // "Next customer" after a fail, in a row; a finished customer resets it
+    stormOffs: 0, // paying customers who stormed off for good ("Next customer" after a fail), for the books strip's line (SPEC D50)
     mastery: {}, // clean pops per bump type
     items: {}, // bought shop items: id -> { needsScrub } (a studio upgrade shows only after its scrub job)
     threeStarDone: false, // a 3-star customer has happened (for the `mstar` strip)
@@ -176,6 +177,7 @@ export function normalizeSave(raw, now = Date.now()) {
     squeezeHintSeen: flag(s.squeezeHintSeen, d.squeezeHintSeen),
     reputation: count(s.reputation, d.reputation),
     skipStreak: count(s.skipStreak, d.skipStreak),
+    stormOffs: count(s.stormOffs, d.stormOffs),
     mastery: countTable(s.mastery),
     items: itemTable(s.items),
     threeStarDone: flag(s.threeStarDone, d.threeStarDone),
@@ -211,6 +213,7 @@ function lineMemo(v) {
     if (id.length > 60 || id === '__proto__' || !e || typeof e !== 'object') continue;
     const entry = { visits: count(e.visits, 0) };
     for (const k of ['intro', 'second', 'result']) if (shortText(e[k], 60)) entry[k] = e[k];
+    if (e.failed === true) entry.failed = true; // the last visit was a storm-off (D32f "hello again"; the books line, D50)
     out[id] = entry;
   }
   return out;

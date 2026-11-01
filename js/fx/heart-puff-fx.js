@@ -79,6 +79,17 @@ function paintHeart(c, S, cols) {
   c.beginPath(); c.arc(x + w * 0.2, y + w * 0.5, w * 0.035, 0, TAU); c.fill();
 }
 
+/**
+ * How big the heart puff may be (A4): 1 = full size when there is room for it above the title (about 2.2 star sizes),
+ * smaller on a short screen, but never below 0.6.
+ * @param {number} room px from the top of the layer to the top of the title
+ * @param {number} starSize the stars' size in px
+ * @returns {number} the size factor, 0.6..1
+ */
+export function heartPuffFit(room, starSize) {
+  return clamp(room / (starSize * 2.2), 0.6, 1);
+}
+
 /** Ease out with a little overshoot (a pop-in). @param {number} u 0..1 @returns {number} eased */
 function backOut(u) {
   const k = clamp(u, 0, 1) - 1;
@@ -104,7 +115,11 @@ export function makeHeartPuff(o) {
   const { kit } = o;
   const rand = rng(o.seed ?? 33);
   const O = o.from;
-  const S = clamp(O.h || 72, 46, 96); // the stars' size: everything is measured by it (not too tiny on a small sideways screen)
+  const S0 = clamp(O.h || 72, 46, 96); // the stars' size: everything is measured by it (not too tiny on a small sideways screen)
+  // A4: on a short screen (320x568) there is little room above the title: the whole puff a bit smaller there, so the
+  // hearts stay on the screen and the big heart sits above "Perfect!" instead of over it.
+  const fit = heartPuffFit(o.top ?? O.y - S0, S0);
+  const S = S0 * fit;
   const sc = S / 72;
   const n = heartPuffCount({ lite: o.lite, still: o.still });
   const imgs = HEARTS.map((cols, i) => kit.sprite(`hp-heart:${i}`, 48, 48, (c, w) => paintHeart(c, w, cols)));
@@ -113,7 +128,8 @@ export function makeHeartPuff(o) {
   const sparkW = kit.sprite('hp-spark-w', 32, 32, (c, w) => paintSparkle(c, w, '255,246,226'));
   const bigSize = S * 0.98;
   // where the big heart settles: above the title (or above the stars), never off the top of the screen
-  const bigY = Math.max(bigSize * 0.6, Math.min(O.y - S * 1.15, (o.top ?? O.y - S) - bigSize * 0.36));
+  // (shrunk to fit: wholly above the title, so its beat never swells over the word)
+  const bigY = Math.max(bigSize * 0.6, Math.min(O.y - S * 1.15, (o.top ?? O.y - S) - bigSize * (fit < 1 ? 0.52 : 0.36)));
   const puffs = [];
   const hearts = [];
   const sparkles = [];
@@ -191,6 +207,7 @@ export function makeHeartPuff(o) {
     const half = p.size / 2;
     if (p.x < half) { p.x = half; p.vx = Math.abs(p.vx) * 0.3; }
     if (p.x > W - half) { p.x = W - half; p.vx = -Math.abs(p.vx) * 0.3; }
+    if (p.y < half) { p.y = half; p.vy = Math.abs(p.vy) * 0.3; } // A4: never off the top of the screen
     const calm = smooth(1 - Math.hypot(p.vx, p.vy) / (240 * sc));
     const swing = Math.sin(p.age * p.sw + p.ph);
     p.sx = swing * p.sway * calm;

@@ -253,6 +253,18 @@ export function addAlbumFace(list, entry, max = ALBUM_MAX) {
 }
 
 /**
+ * Whether a boss or event stamp is new: no album entry has it yet (C13: the result says "New stamp" only the first
+ * time per event; call this BEFORE recordFace puts the face in).
+ * @param {object[]|undefined} list the album (save.albumFaces)
+ * @param {string|null|undefined} stamp the event id
+ * @returns {boolean} true = a stamp and not in the album yet
+ */
+export function stampIsNew(list, stamp) {
+  if (typeof stamp !== 'string' || !stamp) return false;
+  return !(Array.isArray(list) ? list : []).some((e) => e?.stamp === stamp);
+}
+
+/**
  * The save after a finished customer, with their face put into the album (a new save; the one given is not changed).
  * Nothing changes for a customer who stormed off, or outside the career and Keep working (revealOn).
  * @param {object} save the save (after applyRound)

@@ -71,6 +71,8 @@
 .comic-end__text {
   margin: 0; padding: 10px 22px; color: #2a211d; background: #ffe08a; border: 3px solid #2a211d; border-radius: 10px;
   font-size: 1.4rem; font-weight: 900; transform: rotate(-2deg); box-shadow: 5px 6px 0 rgba(20, 12, 18, 0.55);
+  /* a longer end title (strip 0 part 1, audit A13) wraps inside the screen instead of running off the edges */
+  max-width: calc(100% - 40px); box-sizing: border-box; text-align: center; line-height: 1.25;
 }
 .comic-end__more { /* a strip's own end-card line (the Tool mastery strip explains the skill ladder, R8i) */
   margin: 0 16px; max-width: 30rem; padding: 12px 18px; color: #2a211d; background: #fff7e6; border: 3px solid #2a211d;

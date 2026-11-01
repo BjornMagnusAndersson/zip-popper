@@ -153,6 +153,9 @@ export function bumpTypesForChapter(chapter) {
   return ['whitehead', 'red', 'blackhead', 'big', 'gold'];
 }
 
+/** Accessories that belong to one regular and never go on a random face (Cleo's clown nose, Pete's pilot cap, C14). */
+export const RESERVED_ACCESSORIES = ['clown-nose', 'pilot-cap'];
+
 /**
  * Builds a generic customer from a seed: the same seed and chapter always give the same customer.
  * Later chapters give more bumps and more bump types. Text is only keys.
@@ -170,6 +173,9 @@ export function makeCustomer(seed, { chapter = 2 } = {}) {
     // Random faces never get the clown nose (owner: it reads as a giant bump); only Clown Cleo wears one.
     if (a !== 'clown-nose' && !accessories.includes(a)) accessories.push(a);
   }
+  // Nor the pilot cap (C14: Baker Ben in it looked like a second Pilot Pete): taken off AFTER the picks, so the random
+  // numbers (and so every name and line of the fixed career faces) stay as they were.
+  for (let i = accessories.length - 1; i >= 0; i -= 1) if (RESERVED_ACCESSORIES.includes(accessories[i])) accessories.splice(i, 1);
   const face = {
     shape: pick(rng, FACE_PARTS.shape),
     skinTone: pick(rng, FACE_PARTS.skinTone),

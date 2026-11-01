@@ -55,7 +55,7 @@ import {
 import { createDiplomaScreen } from '../screens/diploma.js';
 import { createReveal, bumpPortrait } from '../screens/reveal.js';
 import { createAlbumScreen } from '../screens/album.js';
-import { faceSetup, recordFace, revealOn, stripFriendsMet } from '../screens/album-logic.js';
+import { faceSetup, recordFace, revealOn, stripFriendsMet, stampIsNew } from '../screens/album-logic.js';
 import { describeTwist } from '../data/twists.js';
 import { describeBoss } from '../data/bosses.js';
 import { isPartyDay } from '../fx/stage-logic.js';
@@ -459,7 +459,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
    * @returns {HTMLCanvasElement} the picture
    */
   function introPortrait(args, stage, label) {
-    return bumpPortrait(faceSetup(args, stage), label, 220, 240, { plain: !args.boss });
+    return bumpPortrait(faceSetup(args, stage), label, 220, 240, { plain: !args.boss, room: args.room }); // home rounds: the living room wall (A5)
   }
 
   /** First start: ask for the name, then the menu. @returns {void} */
@@ -472,7 +472,9 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
 
   /** The title screen. @returns {void} */
   function showTitle() {
-    show(createTitleScreen({ t, reducedMotion: still(), onStart: () => { sound.unlock(); showMenu(); }, onAbout: () => showAbout(showTitle) }), { root: true });
+    // Tap: the name screen on a first start (no name yet, D51), the menu otherwise.
+    const onStart = () => { sound.unlock(); if (L.afterTitle(save) === 'name') showName(); else showMenu(); };
+    show(createTitleScreen({ t, reducedMotion: still(), onStart, onAbout: () => showAbout(showTitle) }), { root: true });
   }
 
   /**
@@ -529,6 +531,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       t, reducedMotion: still(), playerName: save.playerName, chapterTitleKey: L.chapterTitleKey(save),
       // A round paused with its Menu button (D48) comes back through its own button, labelled "Back to the face".
       resumeOn: parked?.path ?? null,
+      continueKey: L.continueLabelKey(save), // "Start the story" on a fresh save (A12)
       onContinue: menuPath('continue', continueStory), onFreePlay: menuPath('justPop', startFreePlay), onComics: showComics, onGuide: () => showGuide(showMenu),
       onShop: () => showShop(showMenu), onStudio: () => showStudio(showMenu), onSettings: showSettings,
       onAbout: () => showAbout(showMenu), showShop: L.shopOpen(save), showStudio: L.shopOpen(save),
@@ -863,7 +866,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       // a boss or event's stage moment (D45): fewer particles with Lighter graphics, the spotlight's clunk
       lowDetail: Boolean(save.settings.lowDetail), playSound: (name, o) => sound.play(name, o),
       twist: hurry ? { ...twist, lineKey: req.key, lineVars: req.vars, hintKey: null } : twist,
-      boss: describeBoss(args.boss?.id ?? null), // a boss or event customer's gold pill (T8.4)
+      boss: describeBoss(args.boss?.id ?? null, { ownedTools: args.unlockedTools }), // a boss or event customer's gold pill (T8.4); C6: tool hints
       step: goal ? { key: 'ui.daily.pill', vars: { goal: t(goal.nameKey) } }
         : step.keepWorking ? { key: 'ui.keepWorking.step', n: step.n } : step.total > 1 ? { n: step.n, total: step.total } : null,
       portrait: holder,
@@ -998,6 +1001,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     const stamp = out.boss ?? daily?.milestone?.stamp ?? null; // a boss stamp (T8.4) or a streak milestone stamp (T8.5)
     // T8.2: a finished career or Keep working customer gets the before and after reveal and goes into the album.
     const face = args && !out.failed && revealOn(step) ? faceSetup(args, startStage ?? popStageSize(), payload) : null; // payload: nose strip peeled?
+    const newStamp = stampIsNew(save.albumFaces, stamp); // "New stamp" only the first time per event (C13)
     // The save also lists the milestone strips still to play (B4), so closing the app now loses none.
     persist(recordFace(daily ? daily.save : out.save, { step, customer: args?.customer, setup: face, stars: out.stars, failed: out.failed, stamp }));
     /** Play the waiting milestone strips once, forget them, then go on. @param {() => void} then what comes after @returns {void} */
@@ -1013,13 +1017,13 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
       factKey: out.factKey, reactionKey: out.reactionKey, playerName: playerName(),
       tagKey: tag?.key ?? null, tagVars: tag?.vars ?? {},
       // "New stamp!" for a boss (T8.4) or a streak milestone (T8.5; its name key is boss.<stamp>.name, as in the album).
-      stampKey: stamp && face ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
+      stampKey: stamp && face && newStamp ? (out.boss ? describeBoss(out.boss)?.nameKey ?? null : `boss.${stamp}.name`) : null,
       reveal: face ? createReveal({ t, setup: face, reducedMotion: still(), name: args.customerNameKey ? t(args.customerNameKey) : '', lowDetail: Boolean(save.settings.lowDetail) }) : null,
       tier: args?.tier ?? 0, lowDetail: Boolean(save.settings.lowDetail), // D45: petals in the spa; Lighter graphics = fewer pieces
       party: isPartyDay(args), // Penny's party visits: 3 stars throw confetti, in the spa too (R2, D46-28)
       // a story round before the studio (Hubby, chapter 0): her heart puff instead of confetti, with its sound (D46-25)
       story: !L.paysMoney(step), playSound: (name) => sound.play(name),
-      skills: L.skillNews(out.skills), // D34: "Level up!" or how many clean pops the next level needs
+      skills: L.resultSkillNews(out.skills, step), // D34: "Level up!" or how many clean pops the next level needs (from chapter 5, D51)
       pinCount: out.pinJar ?? null, // "Pin taken away! Pin jar: n" after a pin visit
       onContinue: () => afterResult(onward),
       onShop: L.shopOpen(save) ? () => afterResult(() => showShop(onward)) : undefined,
@@ -1074,6 +1078,7 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
   function showShop(back, tab = 'tools') {
     const shop = show(createShopScreen({
       t, reducedMotion: still(), state: economyFromSave(save), tab, onBack: back,
+      showSoon: L.servicesAsked(save), // "Coming soon" only after the first customer asked for more services (C7)
       onStudio: () => showStudio(() => showShop(back, 'studio')),
       onBuy: (id) => {
         const out = L.buyItem(save, id);
@@ -1177,10 +1182,9 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     }), { back: showMenu });
   }
 
-  /** The first screen: the name screen on a first start, the title otherwise. @returns {void} */
+  /** The first screen: always the title (D51: a first start sees the game's name before the name screen). @returns {void} */
   function boot() {
-    if (!save.playerName) showName();
-    else showTitle();
+    showTitle();
   }
 
   boot();

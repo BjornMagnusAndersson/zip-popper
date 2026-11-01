@@ -136,6 +136,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   const pointers = new Map(); // fingers (or the mouse) down on the scene: id -> {x, y}
   const timers = createPauseTimers(); // its short waits stand still while the game's Menu has the round paused (D48)
   let bubbleTimer = 0;
+  let bubbleAt = null; // where his bubble points (scene px, above his head), set by paint()
   let raf = 0;
   let last = performance.now();
   let disposed = false;
@@ -231,6 +232,7 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
   function say(text) {
     bubble.textContent = text;
     bubble.hidden = false;
+    placeBubble(); // its height is known now: keep it under the header (A9)
     timers.cancel(bubbleTimer);
     bubbleTimer = later(() => { bubble.hidden = true; }, BUBBLE_MS);
   }
@@ -372,8 +374,20 @@ export function createTorchlightScreen({ t, popOptions = {}, roundArgs, reducedM
     const topY = face.cy - face.ry * 1.05;
     zzz.style.left = `${face.cx + face.rx * 0.75}px`;
     zzz.style.top = `${topY}px`;
-    bubble.style.left = `${face.cx}px`;
-    bubble.style.top = `${Math.max(8, topY - face.ry * 0.25)}px`;
+    bubbleAt = { x: face.cx, y: topY - face.ry * 0.25 };
+    placeBubble();
+  }
+
+  /**
+   * Put his speech bubble above his head, but never over the header with the "n left" counter (A9: on a small phone
+   * his head is near the top): its top edge stays a little below the stage's top. The bubble hangs up from its point.
+   * @returns {void}
+   */
+  function placeBubble() {
+    if (!bubbleAt) return;
+    const floor = stageBox().y + 8 + (bubble.hidden ? 0 : bubble.offsetHeight); // the lowest top edge allowed, plus its height
+    bubble.style.left = `${bubbleAt.x}px`;
+    bubble.style.top = `${Math.max(floor, bubbleAt.y)}px`;
   }
 
   /** One frame: the meter follows the light and the time, his reactions fire, and the night is painted. @returns {void} */

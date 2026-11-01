@@ -2627,6 +2627,66 @@ function drawHelmet(ctx, f, armor) {
 }
 
 /**
+ * The visor slammed shut (A2, the chapter 2 escape): a steel plate over the whole open front of the helmet, with the
+ * dark eye slit, a middle ridge, breathing holes and the hinge rivets. Drawn on its own (pop-mode.js lays it over the
+ * face, bumps and all, just before he slides off), in the same face geometry as the helmet.
+ * @param {CanvasRenderingContext2D} ctx the context
+ * @param {object} f the face geometry
+ * @returns {void}
+ */
+export function drawVisorDown(ctx, f) {
+  const { cx, cy, rx, ry } = f;
+  // Turns a face x-unit (u) into a canvas x position.
+  const X = (u) => cx + u * rx;
+  // Turns a face y-unit (v) into a canvas y position.
+  const Y = (v) => cy + v * ry;
+  const top = HELMET.guardBottom;
+  const browU = HELMET.guard[0][1];
+  const brow = hairline(f, 0) + 0.03;
+  ctx.save();
+  // The plate: from where the lifted visor sat on the forehead (so that one is gone), down both cheek guards (a little
+  // over them) to a rounded point under the chin.
+  ctx.beginPath();
+  ctx.moveTo(X(-1.12), Y(-0.74));
+  ctx.quadraticCurveTo(cx, Y(-1.26), X(1.12), Y(-0.74));
+  ctx.quadraticCurveTo(X(browU + 0.2), Y(brow - 0.02), X(browU + 0.08), Y(brow));
+  for (let i = 0; i <= 20; i += 1) { const v = brow + ((top - brow) * i) / 20; ctx.lineTo(X(guardEdge(v) + 0.08), Y(v)); }
+  ctx.quadraticCurveTo(X(0.4), Y(top + 0.14), cx, Y(top + 0.16));
+  ctx.quadraticCurveTo(X(-0.4), Y(top + 0.14), X(-guardEdge(top) - 0.08), Y(top));
+  for (let i = 20; i >= 0; i -= 1) { const v = brow + ((top - brow) * i) / 20; ctx.lineTo(X(-guardEdge(v) - 0.08), Y(v)); }
+  ctx.quadraticCurveTo(X(-browU - 0.2), Y(brow - 0.02), X(-1.12), Y(-0.74));
+  ctx.closePath();
+  ctx.fillStyle = steelFill(ctx, X(-0.7), Y(-1.1), X(0.6), Y(top));
+  ctx.fill();
+  steelEdge(ctx, f);
+  // The middle ridge, with a light line beside it.
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(62,72,88,0.55)';
+  ctx.lineWidth = rx * 0.03;
+  ctx.beginPath(); ctx.moveTo(X(0.02), Y(-0.98)); ctx.lineTo(X(0.02), Y(top + 0.1)); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+  ctx.lineWidth = rx * 0.016;
+  ctx.beginPath(); ctx.moveTo(X(-0.03), Y(-0.97)); ctx.lineTo(X(-0.03), Y(top + 0.08)); ctx.stroke();
+  // The eye slit at eye height: a dark band across the plate.
+  ctx.strokeStyle = '#2b2f3a';
+  ctx.lineWidth = ry * 0.07;
+  ctx.beginPath(); ctx.moveTo(X(-0.62), Y(-0.16)); ctx.quadraticCurveTo(cx, Y(-0.08), X(0.62), Y(-0.16)); ctx.stroke();
+  // Two rows of breathing holes on each side, low on the plate.
+  ctx.fillStyle = '#2b2f3a';
+  for (const s of [-1, 1]) {
+    for (const [u, v] of [[0.18, 0.42], [0.3, 0.4], [0.42, 0.36], [0.2, 0.56], [0.32, 0.54], [0.44, 0.5]]) {
+      ctx.beginPath(); ctx.arc(X(s * u), Y(v), rx * 0.025, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // A shine stroke on the upper left, and the hinge rivets on both sides.
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = rx * 0.022;
+  ctx.beginPath(); ctx.moveTo(X(-0.6), Y(-0.38)); ctx.quadraticCurveTo(X(-0.45), Y(-0.52), X(-0.2), Y(-0.56)); ctx.stroke();
+  for (const s of [-1, 1]) rivet(ctx, X(s * 1.06), Y(-0.68), rx * 0.06);
+  ctx.restore();
+}
+
+/**
  * Laser cracks in the steel (the last boss, chapter 11): dark zigzags with a light edge, on the dome and both guards.
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {object} f the face geometry

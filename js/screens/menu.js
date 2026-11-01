@@ -21,13 +21,14 @@ import { mascotArt } from './mascot.js';
  *   the ending), with keepWorkingPercent (its pay) on its second line; onKeepWorking = its tap; showDaily = true adds
  *   "Daily challenge" under it (T8.5), dailySub = its second line as {key, vars} (today's goal and the streak, or
  *   "Done today"), onDaily = its tap; resumeOn = which button goes back to a round left with the round's Menu button
- *   (SPEC D48: 'continue', 'justPop', 'keepWorking' or 'daily'; null = none): its label says "Back to the face"
+ *   (SPEC D48: 'continue', 'justPop', 'keepWorking' or 'daily'; null = none): its label says "Back to the face";
+ *   continueKey = the main story button's label key ("Start the story" on a fresh save, A12; default "Continue")
  * @returns {{node: HTMLElement, update: (data: {playerName?: string, chapterTitleKey?: string}) => void, dispose: () => void}} the screen
  */
 export function createMenuScreen({
   t, playerName = '', chapterTitleKey, onContinue, onFreePlay, onComics, onGuide, onShop, onStudio, onSettings, onAbout, showShop = true,
   showStudio = false, reducedMotion = false, showKeepWorking = false, onKeepWorking, keepWorkingPercent = 60, onAlbum,
-  showDaily = false, dailySub = null, onDaily, resumeOn = null,
+  showDaily = false, dailySub = null, onDaily, resumeOn = null, continueKey = 'ui.menu.continue',
 }) {
   /** The label of a button that may go back to a paused round (D48). @param {string} path its path @param {string} key its own label key @returns {string} the label */
   const label = (path, key) => t(resumeOn === path ? 'ui.menu.backToFace' : key);
@@ -43,7 +44,7 @@ export function createMenuScreen({
 
   const cont = el('button', 'app-menubtn app-menubtn--main');
   cont.type = 'button';
-  const contLabel = el('span', 'app-menubtn__label', label('continue', 'ui.menu.continue'));
+  const contLabel = el('span', 'app-menubtn__label', label('continue', continueKey));
   const contSub = el('span', 'app-menubtn__sub');
   cont.append(contLabel, contSub);
   cont.addEventListener('click', () => onContinue?.(), { signal: shell.signal });

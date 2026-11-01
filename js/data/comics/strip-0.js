@@ -192,8 +192,11 @@ const PANELS = [
       layout: 'small',
       scene: { layers: [living(800, 600, { floorY: 520, windowX: 0.18, picture: false, plant: false, lamp: false }),
         { id: 'him', art: 'husband', x: 530, y: 640, scale: 1.25, pose: 'bust', expr: 'shocked', flip: true },
-        // the teeny chin bump from panel 5, just under his mouth (R8 Q16: it was missing in this close-up)
-        { shape: 'circle', x: 510, y: 482, r: 16, fill: '#ff9cb5', stroke: true, sw: 3 }] },
+        // the teeny chin bump from panel 5, just under his mouth (R8 Q16: it was missing in this close-up); audit A15: up
+        // on the chin beside the mouth (at the beard tip it read like a drop), on a small patch of skin as in strip 2 p2
+        { shape: 'circle', x: 522, y: 455, r: 20, fill: '#d29a6c' },
+        { shape: 'circle', x: 522, y: 455, r: 13, fill: '#ff9cb5', stroke: true, sw: 3 },
+        { shape: 'circle', x: 518, y: 451, r: 4, fill: '#ffffff' }] },
       camera: { move: 'pushIn', focus: [530, 300], amount: 0.16, ms: 700 },
       bubbles: [{ kind: 'shout', key: 'comic.s0.p7.him', at: [210, 130], to: 'him', w: 300 }],
     },
@@ -281,15 +284,18 @@ const PANELS = [
       camera: { move: 'pushIn', focus: [647, 700], amount: 0.08, ms: 3500 },
       bubbles: [
         { kind: 'caption', key: 'comic.s0.p11.cap', at: [450, 56], w: 600 },
-        { kind: 'whisper', key: 'comic.s0.p11.her', at: [600, 420], to: [680, 690], w: 400, sound: 'pop_small' },
-        { kind: 'whisper', key: 'comic.s0.p11.him', at: [230, 560], to: 'him', w: 260 },
+        // audit A17: his bubble up and left, off his forehead; hers right and higher, because in landscape (where the
+        // bubbles grow to stay readable) his is pushed down under hers, and should land above his head, not on it
+        { kind: 'whisper', key: 'comic.s0.p11.her', at: [700, 300], to: [680, 690], w: 400, sound: 'pop_small' },
+        { kind: 'whisper', key: 'comic.s0.p11.him', at: [150, 440], to: 'him', w: 260 },
         { kind: 'caption', key: 'comic.s0.p11.end', at: [450, 1140], w: 780 },
       ],
     },
 ];
 
 /** Part 1 (chapter 0's opening strip): panels 1 to 7, up to the moment before the pop. */
-export const STRIP = { id: 'strip0', title: 'comic.s0.title', panels: PANELS.slice(0, 7) };
+// endTitleKey: its own end card, the story goes on after the round (audit A13; not "That's the strip!")
+export const STRIP = { id: 'strip0', title: 'comic.s0.title', endTitleKey: 'comic.s0.endTitle', panels: PANELS.slice(0, 7) };
 
 /** Part 2 (after the husband round, SPEC D32a): panels 8 to 11, his NOOOO, the Great Popping Ban and that very night. */
 export const STRIP_BAN = { id: 'strip0b', title: 'comic.s0b.title', panels: PANELS.slice(7) };

@@ -120,13 +120,16 @@ export const STRIP = {
           { art: 'plant', x: 715, y: 590, scale: 0.6, eyes: 'happy', scarf: '#e8505b' },
           // The needles start in her raised fist (drawn first, so the fist grips them; story audit 2026-10-29: they used
           // to stand up on their own from the panel bottom).
-          { shape: 'path', d: 'M376 414 L446 316 M384 420 L494 316', fill: 'none', stroke: '#c9a46a', sw: 9 },
+          // B12: longer needles, so they visibly run from inside her fist up to the cape, which hangs from them near the
+          // tips (it used to float beside her hand, covering the short needles).
+          { shape: 'path', d: 'M380 414 L548 236 M390 420 L600 240', fill: 'none', stroke: true, sw: 13 },
+          { shape: 'path', d: 'M380 414 L548 236 M390 420 L600 240', fill: 'none', stroke: '#c9a46a', sw: 8 },
           { id: 'greta', art: 'greta', x: 230, y: 620, scale: 0.85, pose: 'bustLift', expr: 'bliss', look: 1 },
           { shape: 'path', d: 'M196 430 q-8 18 0 26 q8 -8 0 -26Z M268 430 q-8 18 0 26 q8 -8 0 -26Z', fill: '#8fd3ff', stroke: true, sw: 2.5 },
-          { shape: 'circle', x: 446, y: 312, r: 9, fill: '#e8505b', stroke: true, sw: 3 },
-          { shape: 'circle', x: 494, y: 312, r: 9, fill: '#e8505b', stroke: true, sw: 3 },
-          ...tinyCape(470, 330, 1),
-          { art: 'sparkles', x: 470, y: 380, r: 90 },
+          ...tinyCape(565, 262, 1),
+          { shape: 'circle', x: 548, y: 236, r: 9, fill: '#e8505b', stroke: true, sw: 3 },
+          { shape: 'circle', x: 600, y: 240, r: 9, fill: '#e8505b', stroke: true, sw: 3 },
+          { art: 'sparkles', x: 565, y: 320, r: 90 },
         ],
       },
       camera: { move: 'pushIn', focus: [400, 380], amount: 0.08, ms: 2400 },

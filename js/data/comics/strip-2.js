@@ -269,11 +269,12 @@ export const STRIP = {
         layers: [
           { art: 'rays', w: 1000, h: 1000, x: 520, y: 420, colors: ['#d6e6ff', '#b8d2ff'] },
           { art: 'burst', x: 220, y: 230, r: 170, color: '#ffe27a' },
-          { id: 'him', art: 'husband', x: 540, y: 1000, scale: 1.15, pose: 'hips', outfit: 'armor', visor: 'down', expr: 'proud', plumes: 1 },
-          ...patch(430, 560, 1),
-          { art: 'sparkles', x: 430, y: 560, r: 70, color: '#ffffff' },
+          // audit A14: he, the patch and the shield stand 90 lower, so the caption no longer hides his new second plume
+          { id: 'him', art: 'husband', x: 540, y: 1090, scale: 1.15, pose: 'hips', outfit: 'armor', visor: 'down', expr: 'proud', plumes: 1 },
+          ...patch(430, 650, 1),
+          { art: 'sparkles', x: 430, y: 650, r: 70, color: '#ffffff' },
           // the shield stands on the floor against his leg, his hand resting on its rim (R8 Q16: it floated)
-          ...shield(425, 760, 0.8),
+          ...shield(425, 850, 0.8),
           { id: 'her', art: 'heroine', x: 870, y: 1000, scale: 0.6, pose: 'stand', expr: 'sad', look: -1, hold: 'tweezers', holdScale: 2 },
         ],
       },

@@ -113,7 +113,7 @@ export const POSES = {
 };
 
 /** Things a figure can hold in the right hand. */
-export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'highlighter', 'book', 'key', 'pen', 'pipeJoint'];
+export const HOLDS = ['remote', 'torch', 'phone', 'snack', 'tweezers', 'clipboard', 'magnifier', 'gloves', 'glovesSealed', 'highlighter', 'book', 'key', 'pen', 'pipeJoint'];
 
 let gid = 0; // counter for unique gradient ids
 
@@ -455,6 +455,8 @@ function helmet(c) {
   const g = el('g');
   const steel = shading(g, '#c9d3de', 0.35, 0.3);
   const down = c.visor === 'down';
+  // Visor down: steel inside the dome's opening, under the dome's rim, so no forehead shows above the visor (audit A3).
+  if (down) g.appendChild(el('path', { d: 'M-106 0 C-106 -90 -60 -104 0 -104 C60 -104 106 -90 106 0Z', fill: steel }));
   g.appendChild(el('path', { d: 'M-128 70 C-140 -60 -90 -150 0 -152 C90 -150 140 -60 128 70 L104 70 C108 -20 70 -96 0 -98 C-70 -96 -108 -20 -104 70Z', fill: steel, ...ink() }));
   g.appendChild(el('path', { d: 'M-128 70 L-128 132 L-80 150 L-90 80Z M128 70 L128 132 L80 150 L90 80Z', fill: steel, ...ink() }));
   // c.plumes: extra plumes as the armor gets fancier (running gag), fanned out behind the first one.
@@ -830,8 +832,9 @@ function heldThing(what, at, k = 1) {
     g.appendChild(el('circle', { cx: 0, cy: -124, r: 66, fill: 'none', ...ink(4) }));
     g.appendChild(el('circle', { cx: 0, cy: -124, r: 50, fill: 'none', ...ink(3) }));
     g.appendChild(line('M-28 -146 Q-18 -164 4 -168', 6, { stroke: '#ffffff', opacity: 0.9 }));
-  } else if (what === 'gloves') {
-    g.appendChild(el('g', { transform: 'translate(0 18) scale(0.85)' }, [gloveBox()]));
+  } else if (what === 'gloves' || what === 'glovesSealed') {
+    // glovesSealed = the unopened box, taped shut (strip 5 p12: the scare says it was never opened, audit B5)
+    g.appendChild(el('g', { transform: 'translate(0 18) scale(0.85)' }, [gloveBox(what === 'glovesSealed')]));
   } else if (what === 'highlighter') {
     // A fat neon-yellow highlighter pen, chisel tip up (the psychology books, strip "books" on).
     g.appendChild(el('rect', { x: -14, y: -86, width: 28, height: 104, rx: 10, fill: '#e9f542', ...ink(4.5) }));
@@ -1163,6 +1166,8 @@ export const ROOMS = {
   // paint: true = the shop's wall paint (SPEC D47, the game's 'paint' layer): lavender walls with the white band of pink
   // dots, no water stains, peeling bits or cracks (the tiles stay). newSign: true = the shop's shiny sign hangs straight
   // on the same nail instead of the old crooked one (no stain). studioKit sets both once bought; false keeps the old look.
+  // signSmudge: true = the new sign has one small smudge (strip mlamp, B4). bulbOff: true = the bulb is dead (studioKit
+  // sets it with the ring light, B2).
   studio: {
     wall: ['#8e9b83', '#7b8872'], stripes: '#86937c', skirting: '#5f6a56', floor: '#4f5648', boards: '#3c4237',
     sky: ['#aab4bf', '#dde3e8'], cloud: true, curtains: '#a89a6a', picture: false, plant: true, lamp: true,
@@ -1353,16 +1358,19 @@ function shabbyFront(g, r, w, F) {
     g.appendChild(sg);
   }
   if (r.bulb) {
-    // A bare bulb on a cord from the ceiling, a weak yellow glow and little flicker marks.
+    // A bare bulb on a cord from the ceiling, a weak yellow glow and little flicker marks. bulbOff: true (the ring light
+    // is in, B2: "The old bulb has given up", as the game room draws it) = a dead grey bulb, no glow, no flicker.
     const bx = w * (r.bulbX ?? 0.32);
     const by = F * 0.2;
-    const gl = `cbg${gid += 1}`;
-    g.appendChild(el('defs', {}, [el('radialGradient', { id: gl }, [el('stop', { offset: 0, 'stop-color': '#ffe496', 'stop-opacity': 0.55 }), el('stop', { offset: 1, 'stop-color': '#ffe496', 'stop-opacity': 0 })])]));
-    g.appendChild(el('circle', { cx: bx, cy: by, r: 170 * k, fill: `url(#${gl})` }));
+    if (!r.bulbOff) {
+      const gl = `cbg${gid += 1}`;
+      g.appendChild(el('defs', {}, [el('radialGradient', { id: gl }, [el('stop', { offset: 0, 'stop-color': '#ffe496', 'stop-opacity': 0.55 }), el('stop', { offset: 1, 'stop-color': '#ffe496', 'stop-opacity': 0 })])]));
+      g.appendChild(el('circle', { cx: bx, cy: by, r: 170 * k, fill: `url(#${gl})` }));
+    }
     g.appendChild(line(`M${bx} 0 L${bx} ${by - 24 * k}`, 4));
     g.appendChild(el('rect', { x: bx - 11 * k, y: by - 34 * k, width: 22 * k, height: 18 * k, fill: '#8d9389', ...ink(3.5) }));
-    g.appendChild(el('ellipse', { cx: bx, cy: by, rx: 20 * k, ry: 24 * k, fill: '#fff2bf', ...ink(4) }));
-    for (const s of [-1, 1]) g.appendChild(line(`M${bx + s * 34 * k} ${by - 10 * k} l${s * 14 * k} ${-6 * k} l${-s * 4 * k} ${12 * k} l${s * 14 * k} ${-6 * k}`, 3.5, { stroke: '#e8b830' }));
+    g.appendChild(el('ellipse', { cx: bx, cy: by, rx: 20 * k, ry: 24 * k, fill: r.bulbOff ? '#c9c6b8' : '#fff2bf', ...ink(4) }));
+    if (!r.bulbOff) for (const s of [-1, 1]) g.appendChild(line(`M${bx + s * 34 * k} ${by - 10 * k} l${s * 14 * k} ${-6 * k} l${-s * 4 * k} ${12 * k} l${s * 14 * k} ${-6 * k}`, 3.5, { stroke: '#e8b830' }));
   }
 }
 
@@ -1397,6 +1405,9 @@ function shinySign(g, r, w, F, k) {
   }
   // A white shine streak on the top left corner of the board: it is brand new.
   g.appendChild(line(`M${x0 + sw * 0.06} ${top + sh * 0.42} Q${x0 + sw * 0.07} ${top + sh * 0.12} ${x0 + sw * 0.2} ${top + sh * 0.08}`, 6 * k, { stroke: '#ffffff', opacity: 0.9 }));
+  // signSmudge: true = one small smudge, low over the middle of the word (strip mlamp, B4: Nils still finds a stain on
+  // the new sign; where the old sign's stain was, so the strip's red ring still circles it).
+  if (r.signSmudge) g.appendChild(el('ellipse', { cx: sx + sw * 0.04, cy: top + sh * 0.76, rx: 20 * k, ry: 13 * k, fill: '#786834', opacity: 0.34 }));
   for (const [fx, fy, q] of [[0.52, 0.02, 20], [0.47, 0.98, 14], [-0.52, 0.06, 13]]) {
     const cx = sx + sw * fx;
     const cy = top + sh * fy;
@@ -2217,8 +2228,38 @@ function shopfront(l) {
   return { node: g };
 }
 
+/**
+ * A group of plain shape layers (rect, circle, ellipse, path, as comic.js draws them; an `art` entry is drawn with that
+ * art) that studioKit can switch with what she owns (SPEC D50): { art: 'shapes', layers: [...], hidden?, owned? }.
+ * hidden: true draws nothing (e.g. his cape until the books strip is seen: owned: { booksSeen: { hidden: false } }).
+ * rotate (degrees) turns the whole group round x, y (e.g. a banner leaning on a door frame).
+ * @param {object} l the layer
+ * @returns {{node: SVGElement}} the group (empty when hidden)
+ */
+function shapesProp(l) {
+  const g = el('g', { transform: l.rotate ? `rotate(${l.rotate} ${l.x ?? 0} ${l.y ?? 0})` : null });
+  if (l.hidden) return { node: g };
+  for (const s of l.layers ?? []) {
+    if (s.art && typeof ARTS[s.art] === 'function') {
+      const r = ARTS[s.art](s);
+      if (r?.node ?? r) g.appendChild(r?.node ?? r);
+      continue;
+    }
+    const a = {
+      fill: s.fill ?? 'none', stroke: s.stroke === true ? INK : s.stroke, 'stroke-width': s.stroke ? (s.sw ?? 10) : null,
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: s.opacity,
+      transform: s.rotate ? `rotate(${s.rotate} ${s.x ?? 0} ${s.y ?? 0})` : null,
+    };
+    if (s.shape === 'rect') g.appendChild(el('rect', { ...a, x: s.x, y: s.y, width: s.w, height: s.h, rx: s.rx }));
+    else if (s.shape === 'circle') g.appendChild(el('circle', { ...a, cx: s.x, cy: s.y, r: s.r }));
+    else if (s.shape === 'ellipse') g.appendChild(el('ellipse', { ...a, cx: s.x, cy: s.y, rx: s.rx, ry: s.ry }));
+    else g.appendChild(el('path', { ...a, d: s.d }));
+  }
+  return { node: g };
+}
+
 /** Props, rooms and effects by name. */
-export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront, pipe, ladder, signWord: signWordProp };
+export const PROPS = { sofa, bed, blanket, armor: armorStand, torch, burst, sparkles, room, rays, chair, urn, bucket, drip, gloves, plant, dog, plan, shopfront, pipe, ladder, signWord: signWordProp, shapes: shapesProp };
 
 /** Every art piece a strip can name with `art:` (characters and props). Each takes the layer and returns { node, mouth? }. */
 export const ARTS = {
@@ -2259,9 +2300,11 @@ export function dressHeroine(arts, outfit) {
  *   paint: false keeps the dingy wall).
  * - newSign: true = she bought the new sign (SPEC D47): a studio room's old crooked sign is the shiny new one (same
  *   nail; a room with newSign: false keeps the old sign, one with sign: false still has none).
+ * - booksSeen: true = the books strip has been seen (SPEC D50): only through layers' `owned.booksSeen` variants.
+ * Any layer can carry `owned: { <flag>: {...} }`: those fields are merged in when that flag is on (SPEC D50).
  * Without any of these the strips are drawn exactly as written (a player who bought nothing sees no change).
  * @param {Record<string, Function>} arts an art kit (usually ARTS, maybe already dressed)
- * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean, paint?: boolean, newSign?: boolean}|null} [o]
+ * @param {{gloves?: boolean, livingPlant?: boolean, leakFixed?: boolean, ringLight?: boolean, pinkChair?: boolean, paint?: boolean, newSign?: boolean, booksSeen?: boolean}|null} [o]
  *   what she has (null or nothing = the kit unchanged)
  * @returns {Record<string, Function>} the art kit to hand the comic player
  */
@@ -2282,8 +2325,8 @@ export function studioKit(arts, o = null) {
     if (typeof arts.drip === 'function') kit.drip = () => null; // no drop falls any more: the layer draws nothing
   }
   if (o.ringLight) {
-    const room = kit.room; // chained on top of the changes above
-    if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.ringLight === undefined ? { ...l, ringLight: true } : l, k);
+    const room = kit.room; // chained on top of the changes above; the old bulb is dead now (B2, as the game room draws it)
+    if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.ringLight === undefined ? { ...l, ringLight: true, bulbOff: l.bulbOff ?? true } : l, k);
   }
   if (o.paint) {
     const room = kit.room; // chained on top of the changes above
@@ -2294,7 +2337,26 @@ export function studioKit(arts, o = null) {
     if (typeof room === 'function') kit.room = (l, k) => room(l.kind === 'studio' && l.newSign === undefined ? { ...l, newSign: true } : l, k);
   }
   if (o.pinkChair && typeof arts.chair === 'function') kit.chair = (l, k) => arts.chair(l.wingback === undefined ? { ...l, wingback: true } : l, k);
+  // A layer's own variants (SPEC D50): `owned: { paint: {...}, newSign: {...}, booksSeen: {...} }` merges in the parts
+  // whose flag is on, last of all, so the changes above still see them (e.g. the dusty patch behind mapron's fallen sign).
+  const on = Object.keys(o).filter((key) => o[key] === true);
+  if (on.length) {
+    for (const [name, fn] of Object.entries(kit)) if (typeof fn === 'function') kit[name] = (l, k) => fn(withOwned(l, on), k);
+  }
   return kit;
+}
+
+/**
+ * A layer with its `owned` variants merged in for the flags that are on (studioKit, SPEC D50); the same layer when it
+ * has none.
+ * @param {object} l the layer @param {string[]} on the studioKit flags that are true
+ * @returns {object} the layer to draw
+ */
+function withOwned(l, on) {
+  if (!l?.owned) return l;
+  let out = l;
+  for (const key of on) if (l.owned[key]) out = { ...out, ...l.owned[key] };
+  return out;
 }
 
 /** Poses where she is relaxed, celebrating or seen close up: in a `dressed` strip her scrub cap is off there (T5.2b). */

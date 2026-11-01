@@ -78,3 +78,16 @@ export const HURRY_LINE_TIERS = {
   easy: { chance: 0.15, limitScale: 2.5, missPenalty: 0 }, // 0.15 of those who can roll it is about 1 in 20 of all Keep working customers (most carry a twist)
   hard: { chance: 0.25, limitScale: 1, missPenalty: 1 },
 };
+
+/**
+ * Lines that only fit when something is true in the save (C17); game/customer-lines.js lineFits leaves them out
+ * otherwise (unless nothing else is left to say).
+ * - music: only while the game's music is on ("Hums along to the music").
+ * - tool: only once she owns that tool (Cleo "juggles three cotton pads").
+ * - noLayer: only while that studio upgrade is NOT bought ("Same chair? I like that chair." is the old chair).
+ */
+export const LINE_NEEDS = {
+  'customer.walkin.aside.14': { music: true },
+  'customer.cleo.aside.1': { tool: 'cottonPad' },
+  'customer.walkin.back.3': { noLayer: 'chair' },
+};

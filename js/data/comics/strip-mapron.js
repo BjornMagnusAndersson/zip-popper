@@ -3,14 +3,15 @@
 // (a desk fan; the plant in Greta's scarf gets blasted), then strikes the hero pose with the strings streaming.
 // Visual surprise: the wind blows the "Clean!" sign off its nail, and behind it is the only clean bit of wall in the
 // studio (running gag: the sign that is never clean). Button: "Hang it back up. Nobody saw." The plant saw.
+// SPEC D50 (owner, INTERVIEW 39 a): once the wall paint is in, the painted wall stays and the patch behind the sign is
+// the only DUSTY bit instead (her line follows, app-logic.js apronSignKey); once the new sign is in, the new one falls.
 // Format: docs/COMIC-FORMAT.md.
 
 /**
- * The dingy studio (tier 0; the plant wears Greta's scarf). paint: false = always the dingy wall, even after the shop's
- * wall paint (SPEC D47): the joke is the only clean bit of wall behind the sign.
+ * Her studio (the plant wears Greta's scarf): dingy as written, or with the shop's wall paint once bought (SPEC D50).
  * @param {number} w width @param {number} h height @param {object} [o] room options @returns {object} layer
  */
-const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', lamp: false, paint: false, ...o });
+const studio = (w, h, o = {}) => ({ art: 'room', kind: 'studio', w, h, plantScarf: '#e8505b', lamp: false, ...o });
 
 /**
  * The wind machine: a little desk fan on a stand, blowing towards dir.
@@ -112,6 +113,22 @@ function cleanSpot(x, y, k) {
 }
 
 /**
+ * The same surprise on the painted wall (SPEC D50): where the sign hung, the only dusty patch left, grey-brown with
+ * specks of dust, a cobweb thread in its corner and a little dust cloud, with the bare nail.
+ * @param {number} x nail x @param {number} y nail y @param {number} k size @returns {object[]} shape layers
+ */
+function dustySpot(x, y, k) {
+  const specks = [[-90, 70], [-40, 120], [10, 80], [60, 140], [100, 90], [-100, 150], [30, 160], [-10, 120]];
+  return [
+    { shape: 'rect', x: x - 132 * k, y: y + 30 * k, w: 264 * k, h: 150 * k, rx: 10 * k, fill: '#b9ad97', opacity: 0.9, rotate: -7 },
+    ...specks.map(([dx, dy]) => ({ shape: 'circle', x: x + dx * k, y: y + dy * k, r: 5 * k, fill: '#7d725f', opacity: 0.7 })),
+    { shape: 'path', d: `M${x + 100 * k} ${y + 22 * k} q${10 * k} ${30 * k} ${30 * k} ${44 * k} M${x + 100 * k} ${y + 22 * k} q${24 * k} ${12 * k} ${38 * k} ${8 * k}`, fill: 'none', stroke: '#f4f1ea', sw: 3 },
+    ...[[-150, 120, 26], [-170, 160, 18], [150, 150, 22]].map(([dx, dy, r]) => ({ shape: 'circle', x: x + dx * k, y: y + dy * k, r: r * k, fill: '#cfc5b2', opacity: 0.75 })),
+    { shape: 'circle', x, y, r: 7 * k, fill: '#8a96a6', stroke: true, sw: 3 },
+  ];
+}
+
+/**
  * The "Clean!" sign lying on the floor after the wind took it (the painted word CLEAN! and a small tick on a cream
  * board, a stain, a string).
  * @param {number} x middle @param {number} y floor @param {number} k size @returns {object[]} shape layers
@@ -129,6 +146,30 @@ function fallenSign(x, y, k) {
     { art: 'signWord', x: wx, y: wy, w: 160 * k, size: 44 * k, rotate: 8 },
     { shape: 'path', d: `M${tx} ${ty} l${10 * k} ${16 * k} l${26 * k} ${-26 * k}`, fill: 'none', stroke: '#3fae8c', sw: 9 * k },
     { shape: 'ellipse', x: sx, y: sy, rx: 24 * k, ry: 11 * k, rotate: 8, fill: '#786834', opacity: 0.35 },
+    { shape: 'path', d: `M${x - 100 * k} ${y - 66 * k} q${-40 * k} ${-50 * k} ${-90 * k} ${-10 * k}`, fill: 'none', stroke: true, sw: 3.5 },
+  ];
+}
+
+/**
+ * The shop's new sign lying on the floor instead (SPEC D50, once she owns it): the same place and tilt, a clean cream
+ * board with a green inner frame, the word CLEAN! and a tick, a shine streak and no stain.
+ * @param {number} x middle @param {number} y floor @param {number} k size @returns {object[]} shape layers
+ */
+function fallenNewSign(x, y, k) {
+  const x0 = x - 125 * k;
+  const y0 = y - 70 * k;
+  // A point on the board (board units from its top-left corner) -> panel units, turned with the board.
+  const at = (lx, ly) => [x0 + (lx * Math.cos(0.14) - ly * Math.sin(0.14)) * k, y0 + (lx * Math.sin(0.14) + ly * Math.cos(0.14)) * k];
+  const [fx, fy] = at(7, 7);
+  const [wx, wy] = at(100, 54);
+  const [tx, ty] = at(196, 34);
+  const [hx, hy] = at(14, 40);
+  return [
+    { shape: 'rect', x: x0, y: y0, w: 250 * k, h: 70 * k, rx: 12 * k, fill: '#fffaf0', stroke: true, sw: 5, rotate: 8 },
+    { shape: 'rect', x: fx, y: fy, w: 236 * k, h: 56 * k, rx: 8 * k, fill: 'none', stroke: '#3fae8c', sw: 4 * k, rotate: 8 },
+    { art: 'signWord', x: wx, y: wy, w: 160 * k, size: 44 * k, rotate: 8 },
+    { shape: 'path', d: `M${tx} ${ty} l${10 * k} ${16 * k} l${26 * k} ${-26 * k}`, fill: 'none', stroke: '#3fae8c', sw: 9 * k },
+    { shape: 'path', d: `M${hx} ${hy} q${2 * k} ${-18 * k} ${18 * k} ${-24 * k}`, fill: 'none', stroke: '#ffffff', sw: 5 * k, opacity: 0.9 },
     { shape: 'path', d: `M${x - 100 * k} ${y - 66 * k} q${-40 * k} ${-50 * k} ${-90 * k} ${-10 * k}`, fill: 'none', stroke: true, sw: 3.5 },
   ];
 }
@@ -195,13 +236,14 @@ export const STRIP = {
     },
     {
       // 4. Button: fan off. The sign blew off its nail, and behind it is the only clean bit of wall. She hides it fast.
+      // SPEC D50: on the painted wall the patch is the only dusty bit; with the new sign owned, the new one fell.
       layout: 'square',
       scene: {
         layers: [
           studio(1000, 1000, { floorY: 640, door: false, windowX: 0.2, leakX: 0.5, bulb: false, sign: false, plantX: 0.88, plantEyes: 'smug' }),
-          ...cleanSpot(720, 77, 1),
+          { art: 'shapes', layers: cleanSpot(720, 77, 1), owned: { paint: { layers: dustySpot(720, 77, 1) } } },
           ...fan(110, 990, 0.8, 1, false),
-          ...fallenSign(770, 950, 0.9),
+          { art: 'shapes', layers: fallenSign(770, 950, 0.9), owned: { newSign: { layers: fallenNewSign(770, 950, 0.9) } } },
           { id: 'her', art: 'heroine', x: 400, y: 1000, scale: 0.85, pose: 'point', outfit: 'apron', expr: 'shocked', look: 1 },
         ],
       },

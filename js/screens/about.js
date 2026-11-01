@@ -22,7 +22,8 @@ export function createAboutScreen({ t, onBack, reducedMotion = false }) {
   note.append(noteHead, el('p', 'app-about__text', t('ui.about.disclaimer')));
   const credits = el('section', 'app-card app-setcard');
   credits.append(el('h2', 'app-setcard__title', t('ui.about.credits.title')), el('p', 'app-about__text', t('ui.about.credits.text')));
-  credits.append(el('p', 'app-about__version', t('ui.about.version', { version: VERSION })));
+  // "Version 110", not "Version v110" (C17): the version id starts with a v
+  credits.append(el('p', 'app-about__version', t('ui.about.version', { version: String(VERSION).replace(/^v/i, '') })));
   body.append(art, note, credits);
   shell.node.append(head, body);
   return { node: shell.node, dispose: shell.dispose };

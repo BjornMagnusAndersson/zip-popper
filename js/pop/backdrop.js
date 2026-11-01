@@ -1825,8 +1825,10 @@ export function drawDrip(ctx, w, h, time, reduced = false) {
 }
 
 /**
- * The leakFix upgrade's shiny new pipe joint (owner 2026-10-28): a bright chrome collar with two bolts, a shine and a
- * little sparkle, on the old pipe where the dripping joint was.
+ * The leakFix upgrade's shiny new pipe joint (owner 2026-10-28): a bright chrome sleeve round the old pipe where the
+ * dripping joint was, with a taller flange at each end held by bolts poking out above and below, two grooves round
+ * the sleeve, a shine along its top and a little sparkle. C15: no dots on its face (the old square box with two
+ * bolts in the middle read like a little face or a die up close in the scrub job).
  * @param {CanvasRenderingContext2D} ctx the context
  * @param {number} x joint centre x
  * @param {number} y pipe centre y
@@ -1834,17 +1836,28 @@ export function drawDrip(ctx, w, h, time, reduced = false) {
  * @returns {void}
  */
 function newJoint(ctx, x, y, r) {
-  const g = ctx.createLinearGradient(0, y - r * 1.5, 0, y + r * 1.5);
+  const g = ctx.createLinearGradient(0, y - r * 1.8, 0, y + r * 1.8); // round chrome, lit from above
   g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.45, '#cfd8de');
-  g.addColorStop(1, '#8e9aa3');
-  box(ctx, x - r * 1.5, y - r * 1.5, r * 3, r * 3, r * 0.5);
-  inked(ctx, g, Math.max(1, r * 0.18), INK);
-  ctx.fillStyle = '#7d8890'; // two bolts
-  for (const dx of [-0.85, 0.85]) { ctx.beginPath(); ctx.arc(x + dx * r, y, r * 0.28, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = 'rgba(255,255,255,0.85)'; // shine
-  ctx.fillRect(x - r * 1.1, y - r * 1.15, r * 2.2, r * 0.35);
-  sparkle(ctx, x + r * 1.7, y + r * 1.4, r * 1.1, '#ffffff', 0.95);
+  g.addColorStop(0.4, '#d6dee4');
+  g.addColorStop(1, '#86929b');
+  const lw = Math.max(1, r * 0.16);
+  box(ctx, x - r * 1.2, y - r * 1.28, r * 2.4, r * 2.56, r * 0.22); // the sleeve, a little thicker than the pipe
+  inked(ctx, g, lw, INK);
+  for (const s of [-1, 1]) { // a flange at each end: its bolts first (they poke out beyond it), then the flange
+    const fx = x + s * r * 1.2;
+    for (const dy of [-1, 1]) {
+      box(ctx, fx - r * 0.15, y + dy * r * 1.78 - r * 0.2, r * 0.3, r * 0.4, r * 0.06);
+      inked(ctx, '#9aa5ad', lw * 0.7, INK);
+    }
+    box(ctx, fx - r * 0.3, y - r * 1.7, r * 0.6, r * 3.4, r * 0.18);
+    inked(ctx, g, lw, INK);
+  }
+  ctx.strokeStyle = 'rgba(60,70,80,0.45)'; // two grooves round the sleeve
+  ctx.lineWidth = lw * 0.8;
+  for (const dx of [-0.42, 0.42]) { ctx.beginPath(); ctx.moveTo(x + dx * r, y - r * 1.2); ctx.lineTo(x + dx * r, y + r * 1.2); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; // the shine along the top
+  ctx.fillRect(x - r * 0.85, y - r * 0.95, r * 1.7, r * 0.26);
+  sparkle(ctx, x + r * 1.8, y + r * 1.5, r * 1.1, '#ffffff', 0.95);
 }
 
 /**

@@ -237,12 +237,14 @@ function bossMixOf(boss) {
 /**
  * The tip on the hint line while a nose strip is on the face (optional, it pays a bonus): shown when she owns the
  * nose strip, the strip is still on (not peeled) and not stuck on yet, and the strip is not the tool in hand (that
- * tool's own hint says how it works).
- * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string}} o the face and the tool bar now
+ * tool's own hint says how it works). In free play (free: no stars, no coins) the tip says nothing about stars (C5).
+ * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string, free?: boolean}} o the face and
+ *   the tool bar now; free = free play
  * @returns {string|null} the string key, or null for no strip tip
  */
-export function stripHintKey({ stripOnFace, stuck = false, owned, toolInHand }) {
-  return stripOnFace && !stuck && owned && toolInHand !== 'noseStrip' ? 'pop.hint.stripBonus' : null;
+export function stripHintKey({ stripOnFace, stuck = false, owned, toolInHand, free = false }) {
+  if (!(stripOnFace && !stuck && owned && toolInHand !== 'noseStrip')) return null;
+  return free ? 'pop.hint.stripBonusFree' : 'pop.hint.stripBonus';
 }
 
 /**
@@ -251,14 +253,15 @@ export function stripHintKey({ stripOnFace, stuck = false, owned, toolInHand }) 
  * tip; the nose strip in hand = its own hint. Otherwise the wipe hint (with the cotton pad tip when she owns the pad
  * but holds something else, B13 round 2b). With no goo to wipe (goo false: the step only waits for the strip,
  * B110(7)) nothing says "wipe": a stuck strip gets the peel tip without "then wipe", else the cream line.
- * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string, padOwned?: boolean, goo?: boolean}} o
- *   the face and the tool bar now (owned = she owns the nose strip; goo = there is goo to wipe)
+ * @param {{stripOnFace: boolean, stuck?: boolean, owned: boolean, toolInHand: string, padOwned?: boolean, goo?: boolean,
+ *   free?: boolean}} o the face and the tool bar now (owned = she owns the nose strip; goo = there is goo to wipe;
+ *   free = free play, C5)
  * @returns {string} the string key
  */
-export function wipeHintKey({ stripOnFace, stuck = false, owned, toolInHand, padOwned = false, goo = true }) {
+export function wipeHintKey({ stripOnFace, stuck = false, owned, toolInHand, padOwned = false, goo = true, free = false }) {
   if (stripOnFace && stuck) return goo ? 'pop.hint.stripPeel' : 'pop.hint.stripPeelLast';
   if (stripOnFace && owned && toolInHand === 'noseStrip') return 'tool.noseStrip.hint';
-  const strip = stripHintKey({ stripOnFace, stuck, owned, toolInHand });
+  const strip = stripHintKey({ stripOnFace, stuck, owned, toolInHand, free });
   if (strip) return strip;
   if (!goo) return 'pop.hint.cream';
   return padOwned && toolInHand !== 'cottonPad' ? 'pop.hint.wipePad' : 'pop.hint.wipe';

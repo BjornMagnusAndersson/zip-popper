@@ -102,7 +102,8 @@
 .ps-side { grid-area: side; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; min-height: 0; }
 @media (orientation: landscape) { .ps-side { justify-content: center; } }
 .ps-tea { position: relative; display: flex; flex-direction: column; align-items: center; }.ps-tea__mug { width: 64px; height: 64px; margin-bottom: -6px; position: relative; z-index: 1; }
-.ps-tea__stand { width: 110px; height: 14px; border-radius: 4px; border: 2px solid var(--ink); background: #6b4a3a; }
+/* B9: the tea stands on the sofa's armrest, as in strips 4 and 4b (the night sofa's teal, a soft seam on top) */
+.ps-tea__stand { width: 110px; height: 22px; border-radius: 12px; border: 2px solid var(--ink); background: #2f8a70; box-shadow: inset 0 4px 0 #5cc3a2; }
 .ps-tea__bubble {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 170px; margin-bottom: 4px;
   padding: 5px 9px; border-radius: 12px; border: 2px solid var(--ink); background: var(--cream); color: var(--ink);

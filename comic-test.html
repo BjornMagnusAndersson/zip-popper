@@ -152,15 +152,16 @@ function open(strip) {
   }));
   log.textContent = problems.length ? problems.join('\n') : '';
   // The strip's extra placeholders as the game fills them, for a save Skilled at &kind= (default whitehead)
-  // (and with the studio upgrades the &ring &pinkchair &paint &newsign flags say she owns, for the books caption, D47)
+  // (and with the studio upgrades the &ring &pinkchair &paint &newsign flags say she owns, for the books caption, D47,
+  // and the apron strip's sign line, D50; &ranaway = some customers stormed off, for the books strip's first line, D50)
   const owned = [['ring', 'lamp'], ['pinkchair', 'chair'], ['paint', 'wallPaint'], ['newsign', 'sign']].filter(([f]) => params.has(f)).map(([, id]) => id);
-  const sv = stripVars(strip.id, { ...defaultSave(0), mastery: { [params.get('kind') ?? 'whitehead']: 70 }, studioLayers: owned });
+  const sv = stripVars(strip.id, { ...defaultSave(0), mastery: { [params.get('kind') ?? 'whitehead']: 70 }, studioLayers: owned, stormOffs: params.has('ranaway') ? 2 : 0 });
   const vars = { ...sv.values };
   for (const [k, key] of Object.entries(sv.keys)) vars[k] = t(key);
   return playComic(strip, {
     name: nameBox.value.trim(), vars, reducedMotion: stillBox.checked || undefined, sound,
     // &gloves = her blue gloves in dressed strips, &studio=bare = no living plant yet (as the game does, SPEC D32e, D32j),
-    // &leak=fixed = "Fix the leak" bought: no drip or leak stain, the bucket stays (story audit R2; not strip 5 or mleak)
+    // &leak=fixed = "Fix the leak" bought: no drip, no leak stain and no bucket (story audit R2, D38; not strip 5 or mleak)
     arts: studioKit(dressHeroine(ARTS, strip.dressed ? params.get('outfit') : null), {
       gloves: params.has('gloves') && !!(strip.dressed || strip.gloves) && !strip.bareHands, // mapron has its own gloves flag (R8 2026-10-29)
       livingPlant: strip.studio === 'owned' && params.get('studio') === 'bare' ? false : undefined,
@@ -171,6 +172,8 @@ function open(strip) {
       // &paint = the wall paint bought, &newsign = the new sign bought (SPEC D47, only in studio strips, as the game does)
       paint: strip.studio === 'owned' && params.has('paint'),
       newSign: strip.studio === 'owned' && params.has('newsign'),
+      // &books = the books strip has been seen: mleak's husband keeps six plumes and the cape (SPEC D50)
+      booksSeen: strip.studio === 'owned' && params.has('books'),
     }),
     onSeen: (id, info) => { log.textContent += `seen: ${id}${info.skipped ? ' (skipped)' : ''}\n`; },
   });

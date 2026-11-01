@@ -53,10 +53,11 @@ const libraryCard = (x, y, k) => [
 ];
 
 /**
- * His new cape (the armor gets fancier again): purple with gold trim and little hearts, worn behind him.
+ * His new cape (the armor gets fancier again): purple with gold trim and little hearts, worn behind him. Shared with
+ * strip mleak, which shows it on a replay after this strip (SPEC D50).
  * @param {number} x his floor x @param {number} y his floor y @param {number} s his scale @returns {object[]} shape layers
  */
-const cape = (x, y, s) => [
+export const cape = (x, y, s) => [
   { shape: 'path', d: `M${x - 120 * s} ${y - 380 * s} L${x + 120 * s} ${y - 380 * s} Q${x + 200 * s} ${y - 160 * s} ${x + 250 * s} ${y - 30 * s} Q${x} ${y + 10 * s} ${x - 250 * s} ${y - 30 * s} Q${x - 200 * s} ${y - 160 * s} ${x - 120 * s} ${y - 380 * s}Z`, fill: '#8e5bd0', stroke: true, sw: 6 },
   { shape: 'path', d: `M${x - 244 * s} ${y - 44 * s} Q${x} ${y - 6 * s} ${x + 244 * s} ${y - 44 * s}`, fill: 'none', stroke: '#ffd25a', sw: 10 },
   ...[[-180, -90], [190, -110]].map(([dx, dy]) => ({ shape: 'path', d: `M${x + dx * s} ${y + dy * s} c-10 -13 -28 0 0 18 c28 -18 10 -31 0 -18Z`, fill: '#ffd8e6', stroke: true, sw: 3 })),
@@ -88,7 +89,8 @@ export const STRIP = {
       scene: {
         layers: [
           studio(1600, 900, { floorY: 600, doorX: 0.08, windowX: 0.42, leakX: 0.62, bulbX: 0.3, signX: 0.9, plantX: 0.2, plantEyes: 'sad', lamp: false }),
-          ...freshPaint(1090, 150, 200, 260),
+          // The patch only on the dingy wall: on the shop's lavender paint it looked like a stain (B6, SPEC D50).
+          { art: 'shapes', layers: freshPaint(1090, 150, 200, 260), owned: { paint: { hidden: true } } },
           night(1600, 900),
           { art: 'bucket', x: 992, y: 820, scale: 0.55 },
           { art: 'chair', x: 1250, y: 860, scale: 0.75, color: '#9a8f6a' },
@@ -129,7 +131,8 @@ export const STRIP = {
           studio(1600, 900, { floorY: 600, doorX: 0.1, doorOpen: true, windowX: 0.5, leakX: 0.36, bulbX: 0.7, signX: 0.87, plant: false, lamp: false }), // B9: in from the edge so the whole word CLEAN! shows
           night(1600, 900),
           ...bookTower(1000, 880, 11, 0.9),
-          ...banner(220, 880, 0.95),
+          // B11: the banner pole leans on the open door's frame (it used to stand up on its own).
+          { art: 'shapes', layers: banner(200, 880, 0.95), rotate: -15, x: 200, y: 880 },
           ...cape(400, 880, 0.8),
           knight(400, 880, 0.8, { pose: 'hips', expr: 'proud', visor: 'up', look: 1 }),
           { id: 'her', art: 'heroine', x: 1320, y: 880, scale: 0.8, pose: 'wave', expr: 'bliss', look: -1 },

@@ -86,6 +86,20 @@ function helmetBowl(x, y, k) {
 }
 
 /**
+ * Greta's pink knitted hat (strip 3 p10) standing on the table at breakfast, before he pulls it over the helmet in
+ * panel 2 (audit B15): knit body with rows, a ribbed band and a pompom, the same colours as comic-art's `cozy`.
+ * @param {number} x middle @param {number} y table top @param {number} k size @returns {object[]} shape layers
+ */
+function knitHat(x, y, k) {
+  const out = [{ shape: 'path', d: `M${x - 66 * k} ${y - 20 * k} C${x - 72 * k} ${y - 96 * k} ${x - 36 * k} ${y - 118 * k} ${x} ${y - 118 * k} C${x + 36 * k} ${y - 118 * k} ${x + 72 * k} ${y - 96 * k} ${x + 66 * k} ${y - 20 * k}Z`, fill: '#f27eb2', stroke: true, sw: 5 }];
+  for (const dy of [-50, -76, -100]) out.push({ shape: 'path', d: `M${x - (62 + (dy + 50) * 0.4) * k} ${y + dy * k} Q${x} ${y + (dy - 10) * k} ${x + (62 + (dy + 50) * 0.4) * k} ${y + dy * k}`, fill: 'none', stroke: '#d9659a', sw: 3.5 });
+  out.push({ shape: 'rect', x: x - 74 * k, y: y - 34 * k, w: 148 * k, h: 30 * k, rx: 12 * k, fill: '#f7a5c9', stroke: true, sw: 4 });
+  for (let dx = -60; dx <= 60; dx += 20) out.push({ shape: 'path', d: `M${x + dx * k} ${y - 29 * k} l0 ${20 * k}`, stroke: '#e58bb4', sw: 3 });
+  out.push({ shape: 'circle', x, y: y - 132 * k, r: 22 * k, fill: '#f9bcd6', stroke: true, sw: 4 });
+  return out;
+}
+
+/**
  * Her phone held up big, the screen a grid of tiny pop-video thumbnails (all 212 of them, more or less).
  * @param {number} x middle @param {number} y middle @param {number} k size @returns {object[]} shape layers
  */
@@ -295,6 +309,7 @@ export const STRIP = {
           { shape: 'ellipse', x: 1022, y: 616, rx: 24, ry: 26, fill: '#aeb9c6', stroke: true, sw: 5 },
           { shape: 'ellipse', x: 1186, y: 622, rx: 24, ry: 26, fill: '#aeb9c6', stroke: true, sw: 5 },
           ...helmetBowl(1430, 640, 0.9),
+          ...knitHat(870, 640, 1), // audit B15: Greta's hat waits on the table, he pulls it over the helmet in p2
           { shape: 'rect', x: 640, y: 560, w: 64, h: 78, rx: 12, fill: '#e66a8f', stroke: true, sw: 5 },
           { shape: 'path', d: 'M704 576 q34 4 30 26 q-4 20 -30 18', fill: 'none', stroke: true, sw: 6 },
           { shape: 'path', d: 'M660 546 q-12 -24 0 -46 M684 546 q12 -24 0 -46', stroke: '#ffffff', sw: 6, opacity: 0.8 },

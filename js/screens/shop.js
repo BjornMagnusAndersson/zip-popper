@@ -12,13 +12,14 @@ import { studioCapStart } from '../game/studio.js';
 /**
  * Build the shop screen.
  * @param {{t: (key: string, vars?: object) => string, state: object, tab?: string, onBuy?: (itemId: string) => void,
- *   onBack?: () => void, onStudio?: () => void, reducedMotion?: boolean}} opts
+ *   onBack?: () => void, onStudio?: () => void, reducedMotion?: boolean, showSoon?: boolean}} opts
  *   t = string function; state = the economy state (money, reputation, items ...); tab = which tab to start on;
  *   onBuy = Buy was tapped for an item id; onBack = Back; onStudio = "See your studio" on the Studio tab (T5.1c; left
- *   out = no such button)
+ *   out = no such button); showSoon = the "Coming soon" card at the end of the Tools tab (C7: only once a customer
+ *   has asked for more services; default on)
  * @returns {{node: HTMLElement, update: (data: {state?: object, tab?: string}) => void, dispose: () => void}} the screen
  */
-export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStudio, reducedMotion = false }) {
+export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStudio, reducedMotion = false, showSoon = true }) {
   const shell = screenShell('shop', { label: t('ui.shop.title'), reducedMotion });
   let current = state;
   let activeTab = SHOP_TABS.some((x) => x.id === tab) ? tab : 'tools';
@@ -132,7 +133,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     } else if (item.story) {
       const why = el('p', 'app-item__why');
       why.append(icon('lock'), el('span', '', t('ui.shop.why.story')));
-      side.append(why);
+      text.append(why); // under the name and line, like the other notes (C10: in the side column it sat on the words at 320 px)
     } else {
       const price = coinPill(String(item.price));
       price.setAttribute('aria-label', t('ui.coins', { n: item.price }));
@@ -184,7 +185,7 @@ export function createShopScreen({ t, state, tab = 'tools', onBuy, onBack, onStu
     if (activeTab === 'studio' && onStudio) extras.append(button('app-btn app-shop-studio', t('ui.shop.seeStudio'), () => onStudio(), shell.signal));
     if (entries.length === 0) panel.append(el('p', 'app-empty', t('ui.shop.empty')));
     for (const item of entries) panel.append(itemCard(item, kindIcon));
-    if (activeTab === 'tools') panel.append(soonCard()); // more is coming (SPEC D42)
+    if (activeTab === 'tools' && showSoon) panel.append(soonCard()); // more is coming (SPEC D42), once a customer asked (C7)
     panel.scrollTop = keep;
     updateMore();
   }

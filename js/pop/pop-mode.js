@@ -46,7 +46,7 @@
 import { faceGeometry, faceMap, faceMood, FACE_BUMPS, loadPopSoundOn, savePopSoundOn, ZOOM_MAX, ZOOM_STEP } from './logic.js';
 import { createPopScene } from './engine.js';
 import { createSound } from '../core/sound.js';
-import { drawFace, randomFaceSpec, faceLayerCanvases, renewFaceLife } from './face.js';
+import { drawFace, randomFaceSpec, faceLayerCanvases, renewFaceLife, drawVisorDown } from './face.js';
 import { makeCanvas } from './art.js';
 import { faceLayout, roundInputs, buildKey, copyLayout } from './prep-logic.js';
 import { sceneRatio } from './perf-logic.js';
@@ -405,6 +405,7 @@ export function createPopMode({
     const stripKey = step === 'pop' && newOk ? stripHintKey({
       stripOnFace: Boolean(current?.hasStrip && !current.stripPeeled && current.scene?.stripOn?.()),
       stuck: Boolean(current?.scene?.stripStuck?.()), owned: toolIds.includes('noseStrip'), toolInHand: toolId,
+      free: cfg.failMode === 'free', // free play: no stars to lose (C5)
     }) : null;
     if (stripKey) return t(stripKey); // "Dotty nose: try the nose strip for a bonus!" (the strip is optional)
     if (step === 'wipe') { // the nose strip tip while it is still on (B55), else the wipe hint (pad tip: B13 round 2b)
@@ -412,6 +413,7 @@ export function createPopMode({
         stripOnFace: Boolean(current?.hasStrip && !current.stripPeeled && current.scene?.stripOn?.()),
         stuck: Boolean(current?.scene?.stripStuck?.()), owned: toolIds.includes('noseStrip'), toolInHand: toolId,
         padOwned: toolIds.includes('cottonPad'), goo: !current?.scene?.wipeEmpty?.(), // no goo: never "wipe" (B110(7))
+        free: cfg.failMode === 'free', // free play: no stars to lose (C5)
       }));
     }
     if (step === 'cream' || step === 'done') return t('pop.hint.cream');
@@ -555,17 +557,51 @@ export function createPopMode({
     c.round = registerFail(c.round);
     c.popEnd ??= elapsedFor(c);
     timers.cancel(c.winceTimer);
+    c.scene?.halt();
     sound.play('splat'); // CLANK
     buzz([40, 30, 90]);
-    c.canvas.classList.add('pop-canvas--storm');
-    foot.hidden = true;
-    bar.hidden = true;
+    const visor = slamVisor(c); // A2: the visor snaps down first, then he slides off with it
+    // The tool bar and hint line only go invisible for now: hiding them would make the stage taller and move the face
+    // away from the visor picture while it slams and slides.
+    foot.style.visibility = 'hidden';
+    bar.style.visibility = 'hidden';
     zoomBox.hidden = true;
+    const slam = still() ? 0 : 450; // the visor drops and bounces before he goes
     c.failTimer = timers.later(() => {
       if (current !== c) return;
-      escape.hidden = false;
-      escape.querySelector('button')?.focus({ preventScroll: true });
-    }, still() ? 250 : 700);
+      c.canvas.classList.add('pop-canvas--storm');
+      visor?.classList.add('pop-canvas--storm');
+      c.failTimer = timers.later(() => {
+        if (current !== c) return;
+        foot.style.visibility = '';
+        bar.style.visibility = '';
+        foot.hidden = true;
+        bar.hidden = true;
+        escape.hidden = false;
+        escape.querySelector('button')?.focus({ preventScroll: true });
+      }, still() ? 250 : 700);
+    }, slam);
+  }
+
+  /**
+   * The visor slams shut over his face (A2, chapter 2): a picture of the closed visor (face.js drawVisorDown) laid over
+   * the face canvas at the same zoom, dropping into place from his forehead (no drop with reduced motion).
+   * @param {object} c the current face
+   * @returns {HTMLCanvasElement|null} the visor picture (it slides off with the face), or null without a scene
+   */
+  function slamVisor(c) {
+    if (!c.scene) return null;
+    const o = c.scene.toScreen(0, 0);
+    const z = c.scene.toScreen(1, 0).x - o.x || 1; // the zoom: scene px to screen px
+    const { canvas, ctx } = makeCanvas(c.w, c.h, c.dpr);
+    canvas.className = `pop-canvas pop-visor${still() ? '' : ' pop-visor--slam'}`;
+    canvas.setAttribute('aria-hidden', 'true');
+    sizeCanvas(canvas, c.w, c.h);
+    ctx.translate(o.x, o.y);
+    ctx.scale(z, z);
+    drawVisorDown(ctx, c.face);
+    stage.append(canvas);
+    return canvas;
   }
 
   /** After a fail: take the reputation hit (a hook for now) and show the next customer. @returns {void} */
@@ -668,7 +704,7 @@ export function createPopMode({
     const scene = current?.scene;
     if (!scene || scene.step() !== 'pop') { count_.textContent = ''; return; }
     const ows = current.round?.owCount ?? 0;
-    count_.textContent = ows ? t('pop.leftOws', { left: scene.left(), ows }) : t('pop.left', { n: scene.left() });
+    count_.textContent = ows ? t('pop.leftOws', { left: scene.left(), ows, n: ows }) : t('pop.left', { n: scene.left() }); // n: "1 Ow" but "6 Ows" (C17)
   }
 
   /**
@@ -1145,6 +1181,8 @@ export function createPopMode({
     done.hidden = true;
     foot.hidden = false;
     bar.hidden = false;
+    foot.style.visibility = ''; // an armor escape cut short (A2) may have left them invisible
+    bar.style.visibility = '';
     showWarmth(0);
     timers.cancel(current?.winceTimer);
     const round = cfg.kind === 'round';
