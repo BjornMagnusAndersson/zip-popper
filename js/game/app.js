@@ -948,7 +948,10 @@ export function startApp(root, { search = globalThis.location?.search ?? '' } = 
     } else if (step.type === 'customer') showIntro(step);
     else {
       persist(L.finishStep(save, step)); // the end: v1 is finished (Continue shows this screen again)
-      show(createEndScreen({ t, reducedMotion: still(), textKey: step.textKey, playerName: save.playerName, onMenu: showMenu }), { back: showMenu });
+      /** Show the end screen; the feedback form's Back comes back here (SPEC D52). @returns {void} */
+      const showEnd = () => show(createEndScreen({ t, reducedMotion: still(), textKey: step.textKey, playerName: save.playerName,
+        onMenu: showMenu, onFeedback: () => showFeedback(showEnd) }), { back: showMenu });
+      showEnd();
     }
   }
 

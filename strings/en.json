@@ -1329,6 +1329,7 @@
   "ui.end.title": "Thank you for playing, {name}!",
   "ui.end.text": "More chapters are on their way.",
   "ui.end.menu": "Back to menu",
+  "ui.end.feedback": "Tell us what you thought (2 minutes)",
   "ui.settings.fileName": "zit-happens-save.json",
   "comic.scare.title": "The hygiene scare",
   "comic.scare.p1.cap": "Fifteen customers later, the door creaked again.",
